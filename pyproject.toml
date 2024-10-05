@@ -1,0 +1,32 @@
+[tool.poetry]
+name = "agentpress"
+version = "0.1.0"
+description = "A set of tools and abstractions for building AI agents"
+authors = ["marko-kraemer <markokraemer.mail@gmail.com>"]
+readme = "README.md"
+packages = [
+    { include = "core" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+streamlit = "^1.37.1"
+streamlit-quill = "^0.0.3"
+sqlalchemy = "^2.0.32"
+pydantic-settings = "^2.5.2"
+aiosqlite = "^0.20.0"
+greenlet = "^3.0.3"
+python-dotenv = "^1.0.1"
+litellm = "^1.44.4"
+pytest = "^8.3.2"
+pytest-asyncio = "^0.24.0"
+agentops = "^0.3.10"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.3"
+pytest-asyncio = "^0.24.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
