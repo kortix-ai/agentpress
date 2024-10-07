@@ -1,17 +1,19 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, JSON
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, JSON, Boolean
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from core.config import settings  # Changed from Settings to settings
 import os
 from contextlib import asynccontextmanager
+import uuid
+from datetime import datetime
 
 Base = declarative_base()
 
 class Thread(Base):
     __tablename__ = 'threads'
 
-    thread_id = Column(Integer, primary_key=True)
+    thread_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     messages = Column(Text)
     creation_date = Column(String)
     last_updated_date = Column(String)
@@ -22,25 +24,31 @@ class Thread(Base):
 class ThreadRun(Base):
     __tablename__ = 'thread_runs'
 
-    run_id = Column(Integer, primary_key=True)
-    thread_id = Column(Integer, ForeignKey('threads.thread_id'))
-    messages = Column(Text)
-    creation_date = Column(String)
-    status = Column(String) 
-    error_message = Column(Text, nullable=True) 
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    thread_id = Column(String(36), ForeignKey('threads.thread_id'))
+    created_at = Column(Integer)
+    status = Column(String)
+    last_error = Column(Text, nullable=True)
+    started_at = Column(Integer, nullable=True)
+    cancelled_at = Column(Integer, nullable=True)
+    failed_at = Column(Integer, nullable=True)
+    completed_at = Column(Integer, nullable=True)
+    model = Column(String)
+    system_message = Column(Text)
+    tools = Column(JSON, nullable=True)
+    usage = Column(JSON, nullable=True)
+    temperature = Column(Float, nullable=True)
+    top_p = Column(Float, nullable=True)
+    max_tokens = Column(Integer, nullable=True)
+    tool_choice = Column(String, nullable=True)
+    execute_tools_async = Column(Boolean)
+    response_format = Column(JSON, nullable=True)
 
     thread = relationship("Thread", back_populates="thread_runs")
 
-class Agent(Base):
-    __tablename__ = 'agents'
-
-    id = Column(Integer, primary_key=True)
-    model = Column(String, nullable=False)
-    name = Column(String, nullable=False)
-    system_prompt = Column(Text, nullable=False)
-    selected_tools = Column(JSON)  # Changed from ARRAY to JSON
-    temperature = Column(Float, default=0.5)
-    created_at = Column(String, nullable=False)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.created_at = int(datetime.utcnow().timestamp())
 
 # class MemoryModule(Base):
 #     __tablename__ = 'memory_modules'

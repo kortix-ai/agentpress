@@ -1,7 +1,7 @@
 import os
 import asyncio
 from typing import Dict, Any
-from core.tools.tool import Tool, ToolResult
+from core.tool import Tool, ToolResult
 from core.config import settings
 
 class FilesTool(Tool):

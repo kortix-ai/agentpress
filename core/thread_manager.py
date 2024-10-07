@@ -5,19 +5,18 @@ from typing import List, Dict, Any, Optional, Callable, AsyncGenerator, Union
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.db import Database, Thread, ThreadRun
-from core.tools.tool import Tool, ToolResult
+from core.tool import Tool, ToolResult
 from core.llm import make_llm_api_call
 # from core.working_memory_manager import WorkingMemory
 from datetime import datetime
-from core.tools.tool_registry import ToolRegistry
+from core.tool_registry import ToolRegistry
 import re
-from core.agent_manager import AgentManager
+import uuid
 
 class ThreadManager:
     def __init__(self, db: Database):
         self.db = db
         self.tool_registry = ToolRegistry()
-        self.agent_manager = AgentManager(db)
 
     async def create_thread(self) -> int:
         async with self.db.get_async_session() as session:
@@ -197,84 +196,176 @@ class ThreadManager:
 
     async def run_thread(
         self,
-        thread_id: int,
-        agent_id: Optional[int] = None,
-        system_message: Optional[Dict[str, Any]] = None,
-        model_name: Optional[str] = None,
-        temperature: Optional[float] = None,
+        thread_id: str,
+        system_message: Dict[str, Any],
+        model_name: str,
+        temperature: float = 0.5,
         max_tokens: Optional[int] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
-        additional_instructions: Optional[str] = None,
+        tools: Optional[List[str]] = None,
+        additional_system_message: Optional[str] = None,
         hide_tool_msgs: bool = False,
         execute_tools_async: bool = True,
         use_tool_parser: bool = False,
-        stream: bool = False
-    ) -> AsyncGenerator[Union[Dict[str, Any], str], None]:
-        if agent_id is not None:
-            agent = await self.agent_manager.get_agent(agent_id)
-            if not agent:
-                raise ValueError(f"Agent with id {agent_id} not found")
-            system_message = {"role": "system", "content": agent.system_prompt}
-            model_name = agent.model
-            temperature = agent.temperature
-            tools = [self.tool_registry.get_tool(tool).schema()[0] for tool in agent.selected_tools] if agent.selected_tools else None
-        elif system_message is None or model_name is None:
-            raise ValueError("Either agent_id or system_message and model_name must be provided")
+        top_p: Optional[float] = None,
+        tool_choice: str = "auto",
+        response_format: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        run_id = str(uuid.uuid4())
+        
+        # Fetch full tool objects based on the provided tool names
+        full_tools = None
+        if tools:
+            full_tools = [self.tool_registry.get_tool(tool_name)['schema'] for tool_name in tools if self.tool_registry.get_tool(tool_name)]
+        
+        thread_run = ThreadRun(
+            id=run_id,
+            thread_id=thread_id,
+            status="queued",
+            model=model_name,
+            system_message=json.dumps(system_message),
+            tools=json.dumps(full_tools) if full_tools else None,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_tokens,
+            tool_choice=tool_choice,
+            execute_tools_async=execute_tools_async,
+            response_format=json.dumps(response_format) if response_format else None
+        )
 
-        if await self.should_stop(thread_id):
-            yield {"status": "stopped", "message": "Session cancelled"}
-            return
+        async with self.db.get_async_session() as session:
+            session.add(thread_run)
+            await session.commit()
 
-        if use_tool_parser:
-            hide_tool_msgs = True
-        
-        await self.cleanup_incomplete_tool_calls(thread_id)
-        
-        # Prepare messages
-        messages = await self.list_messages(thread_id, hide_tool_msgs=hide_tool_msgs)
-        prepared_messages = [system_message] + messages
-        
-        if additional_instructions:
-            additional_instruction_message = {
-                "role": "user",
-                "content": additional_instructions
-            }
-            prepared_messages.append(additional_instruction_message)
-        
         try:
-            response_stream = make_llm_api_call(
+            thread_run.status = "in_progress"
+            thread_run.started_at = int(datetime.utcnow().timestamp())
+            await self.update_thread_run(thread_run)
+
+            if await self.should_stop(thread_id):
+                thread_run.status = "cancelled"
+                thread_run.cancelled_at = int(datetime.utcnow().timestamp())
+                await self.update_thread_run(thread_run)
+                return {"status": "stopped", "message": "Session cancelled"}
+
+            if use_tool_parser:
+                hide_tool_msgs = True
+            
+            await self.cleanup_incomplete_tool_calls(thread_id)
+            
+            # Prepare messages
+            messages = await self.list_messages(thread_id, hide_tool_msgs=hide_tool_msgs)
+            prepared_messages = [system_message] + messages
+            
+            if additional_system_message:
+                additional_instruction_message = {
+                    "role": "user",
+                    "content": additional_system_message
+                }
+                prepared_messages.append(additional_instruction_message)
+            
+            response = await make_llm_api_call(
                 prepared_messages, 
                 model_name, 
                 temperature=temperature, 
                 max_tokens=max_tokens,
-                tools=tools, 
-                tool_choice="auto",
-                stream=stream
+                tools=full_tools,
+                tool_choice=tool_choice,
+                stream=False,
+                top_p=top_p,
+                response_format=response_format
             )
 
-            async for partial_response in response_stream:
-                if stream:
-                    yield partial_response
-                else:
-                    response = partial_response
+            usage = response.usage if hasattr(response, 'usage') else None
+            usage_dict = self.serialize_usage(usage) if usage else None
+            thread_run.usage = usage_dict
 
-            if not stream:
-                if tools is None or use_tool_parser:
-                    await self.handle_response_without_tools(thread_id, response, use_tool_parser)
-                else:
-                    await self.handle_response_with_tools(thread_id, response, execute_tools_async)
+            # Add the assistant's message to the thread
+            assistant_message = {
+                "role": "assistant",
+                "content": response.choices[0].message['content']
+            }
+            if 'tool_calls' in response.choices[0].message:
+                assistant_message['tool_calls'] = response.choices[0].message['tool_calls']
+            
+            await self.add_message(thread_id, assistant_message)
 
-                if await self.should_stop(thread_id):
-                    yield {"status": "stopped", "message": "Session cancelled"}
-                else:
-                    await self.save_thread_run(thread_id)
-                    yield response
+            if tools is None or use_tool_parser:
+                await self.handle_response_without_tools(thread_id, response, use_tool_parser)
+            else:
+                await self.handle_response_with_tools(thread_id, response, execute_tools_async)
+
+            thread_run.status = "completed"
+            thread_run.completed_at = int(datetime.utcnow().timestamp())
+            await self.update_thread_run(thread_run)
+
+            return {
+                "id": thread_run.id,
+                "choices": [self.serialize_choice(choice) for choice in response.choices],
+                "usage": usage_dict,
+                "model": model_name,
+                "object": "chat.completion",
+                "created": int(datetime.utcnow().timestamp())
+            }
 
         except Exception as e:
             error_message = f"Error in API call: {str(e)}\n\nFull error: {repr(e)}"
             logging.error(error_message)
-            await self.update_thread_run_with_error(thread_id, error_message)
-            yield {"status": "error", "message": error_message}
+            thread_run.status = "failed"
+            thread_run.failed_at = int(datetime.utcnow().timestamp())
+            thread_run.last_error = error_message
+            await self.update_thread_run(thread_run)
+            return {"status": "error", "message": error_message}
+
+    def serialize_usage(self, usage):
+        return {
+            "completion_tokens": usage.completion_tokens,
+            "prompt_tokens": usage.prompt_tokens,
+            "total_tokens": usage.total_tokens,
+            "completion_tokens_details": self.serialize_completion_tokens_details(usage.completion_tokens_details),
+            "prompt_tokens_details": self.serialize_prompt_tokens_details(usage.prompt_tokens_details)
+        }
+
+    def serialize_completion_tokens_details(self, details):
+        return {
+            "audio_tokens": details.audio_tokens,
+            "reasoning_tokens": details.reasoning_tokens
+        }
+
+    def serialize_prompt_tokens_details(self, details):
+        return {
+            "audio_tokens": details.audio_tokens,
+            "cached_tokens": details.cached_tokens
+        }
+
+    def serialize_choice(self, choice):
+        return {
+            "finish_reason": choice.finish_reason,
+            "index": choice.index,
+            "message": self.serialize_message(choice.message)
+        }
+
+    def serialize_message(self, message):
+        return {
+            "content": message.content,
+            "role": message.role,
+            "tool_calls": [self.serialize_tool_call(tc) for tc in message.tool_calls] if message.tool_calls else None
+        }
+
+    def serialize_tool_call(self, tool_call):
+        return {
+            "id": tool_call.id,
+            "type": tool_call.type,
+            "function": {
+                "name": tool_call.function.name,
+                "arguments": tool_call.function.arguments
+            }
+        }
+
+    async def update_thread_run(self, thread_run: ThreadRun):
+        async with self.db.get_async_session() as session:
+            session.add(thread_run)
+            await session.commit()
+            await session.refresh(thread_run)
 
     async def handle_response_without_tools(self, thread_id: int, response: Any, use_tool_parser: bool):
         response_content = response.choices[0].message['content']
@@ -282,8 +373,8 @@ class ThreadManager:
         if use_tool_parser:
             await self.handle_tool_parser_response(thread_id, response_content)
         else:
-            logging.info("Adding assistant message to thread.")
-            await self.add_message(thread_id, {"role": "assistant", "content": response_content})
+            # The message has already been added in the run_thread method, so we don't need to add it again here
+            pass
 
     async def handle_tool_parser_response(self, thread_id: int, response_content: str):
         tool_call_match = re.search(r'\{[\s\S]*"function_calls"[\s\S]*\}', response_content)
@@ -325,9 +416,8 @@ class ThreadManager:
             response_message = response.choices[0].message
             tool_calls = response_message.get('tool_calls', [])
             
-            assistant_message = self.create_assistant_message_with_tools(response_message)
-            await self.add_message(thread_id, assistant_message)
-
+            # The assistant message has already been added in the run_thread method
+            
             available_functions = self.get_available_functions()
             
             if await self.should_stop(thread_id):
@@ -348,9 +438,7 @@ class ThreadManager:
         
         except AttributeError as e:
             logging.error(f"AttributeError: {e}")
-            content = response_message.get('content', '')
-            if content:
-                await self.add_message(thread_id, {"role": "assistant", "content": content})
+            # No need to add the message here as it's already been added in the run_thread method
 
     def create_assistant_message_with_tools(self, response_message: Any) -> Dict[str, Any]:
         message = {
@@ -452,7 +540,7 @@ class ThreadManager:
             result = await session.execute(stmt)
             return result.scalar_one_or_none() is not None
 
-    async def save_thread_run(self, thread_id: int):
+    async def save_thread_run(self, thread_id: str):
         async with self.db.get_async_session() as session:
             thread = await session.get(Thread, thread_id)
             if not thread:
@@ -461,14 +549,26 @@ class ThreadManager:
             messages = json.loads(thread.messages)
             creation_date = datetime.now().isoformat()
             
-            new_thread_run = ThreadRun(
-                thread_id=thread_id,
-                messages=json.dumps(messages),
-                creation_date=creation_date,
-                status='completed'
-            )
-            session.add(new_thread_run)
-            await session.commit()
+            # Get the latest ThreadRun for this thread
+            stmt = select(ThreadRun).where(ThreadRun.thread_id == thread_id).order_by(ThreadRun.created_at.desc()).limit(1)
+            result = await session.execute(stmt)
+            latest_thread_run = result.scalar_one_or_none()
+
+            if latest_thread_run:
+                # Update the existing ThreadRun
+                latest_thread_run.messages = json.dumps(messages)
+                latest_thread_run.last_updated_date = creation_date
+                await session.commit()
+            else:
+                # Create a new ThreadRun if none exists
+                new_thread_run = ThreadRun(
+                    thread_id=thread_id,
+                    messages=json.dumps(messages),
+                    creation_date=creation_date,
+                    status='completed'
+                )
+                session.add(new_thread_run)
+                await session.commit()
 
     async def get_thread(self, thread_id: int) -> Optional[Thread]:
         async with self.db.get_async_session() as session:
@@ -489,11 +589,92 @@ class ThreadManager:
             result = await session.execute(select(Thread).order_by(Thread.thread_id.desc()))
             return result.scalars().all()
 
-    async def get_latest_thread_run(self, thread_id: int):
+    async def get_latest_thread_run(self, thread_id: str):
         async with self.db.get_async_session() as session:
-            stmt = select(ThreadRun).where(ThreadRun.thread_id == thread_id).order_by(ThreadRun.run_id.desc()).limit(1)
+            stmt = select(ThreadRun).where(ThreadRun.thread_id == thread_id).order_by(ThreadRun.created_at.desc()).limit(1)
             result = await session.execute(stmt)
-            return result.scalar_one_or_none()
+            latest_run = result.scalar_one_or_none()
+            if latest_run:
+                return {
+                    "id": latest_run.id,
+                    "status": latest_run.status,
+                    "error_message": latest_run.last_error,
+                    "created_at": latest_run.created_at,
+                    "started_at": latest_run.started_at,
+                    "completed_at": latest_run.completed_at,
+                    "cancelled_at": latest_run.cancelled_at,
+                    "failed_at": latest_run.failed_at,
+                    "model": latest_run.model,
+                    "usage": latest_run.usage
+                }
+            return None
+
+    async def get_run(self, thread_id: str, run_id: str) -> Optional[Dict[str, Any]]:
+        async with self.db.get_async_session() as session:
+            run = await session.get(ThreadRun, run_id)
+            if run and run.thread_id == thread_id:
+                return {
+                    "id": run.id,
+                    "thread_id": run.thread_id,
+                    "status": run.status,
+                    "created_at": run.created_at,
+                    "started_at": run.started_at,
+                    "completed_at": run.completed_at,
+                    "cancelled_at": run.cancelled_at,
+                    "failed_at": run.failed_at,
+                    "model": run.model,
+                    "system_message": json.loads(run.system_message) if run.system_message else None,
+                    "tools": json.loads(run.tools) if run.tools else None,
+                    "usage": run.usage,
+                    "temperature": run.temperature,
+                    "top_p": run.top_p,
+                    "max_tokens": run.max_tokens,
+                    "tool_choice": run.tool_choice,
+                    "execute_tools_async": run.execute_tools_async,
+                    "response_format": json.loads(run.response_format) if run.response_format else None,
+                    "last_error": run.last_error
+                }
+        return None
+
+    async def cancel_run(self, thread_id: str, run_id: str) -> Optional[Dict[str, Any]]:
+        async with self.db.get_async_session() as session:
+            run = await session.get(ThreadRun, run_id)
+            if run and run.thread_id == thread_id and run.status == "in_progress":
+                run.status = "cancelled"
+                run.cancelled_at = int(datetime.utcnow().timestamp())
+                await session.commit()
+                return await self.get_run(thread_id, run_id)
+        return None
+
+    async def list_runs(self, thread_id: str, limit: int) -> List[Dict[str, Any]]:
+        async with self.db.get_async_session() as session:
+            stmt = select(ThreadRun).where(ThreadRun.thread_id == thread_id).order_by(ThreadRun.created_at.desc()).limit(limit)
+            result = await session.execute(stmt)
+            runs = result.scalars().all()
+            return [
+                {
+                    "id": run.id,
+                    "thread_id": run.thread_id,
+                    "status": run.status,
+                    "created_at": run.created_at,
+                    "started_at": run.started_at,
+                    "completed_at": run.completed_at,
+                    "cancelled_at": run.cancelled_at,
+                    "failed_at": run.failed_at,
+                    "model": run.model,
+                    "system_message": json.loads(run.system_message) if run.system_message else None,
+                    "tools": json.loads(run.tools) if run.tools else None,
+                    "usage": run.usage,
+                    "temperature": run.temperature,
+                    "top_p": run.top_p,
+                    "max_tokens": run.max_tokens,
+                    "tool_choice": run.tool_choice,
+                    "execute_tools_async": run.execute_tools_async,
+                    "response_format": json.loads(run.response_format) if run.response_format else None,
+                    "last_error": run.last_error
+                }
+                for run in runs
+            ]
 
 if __name__ == "__main__":
     import asyncio
@@ -518,7 +699,5 @@ if __name__ == "__main__":
         response = await manager.run_thread(thread_id, system_message, "gpt-4o") 
         
         print(f"Response: {response}")
-
-    asyncio.run(main())
 
     asyncio.run(main())

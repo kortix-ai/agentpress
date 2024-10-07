@@ -1,4 +1,4 @@
-from typing import Union, AsyncGenerator
+from typing import Union, Dict, Any
 import litellm
 import os
 import json
@@ -26,24 +26,13 @@ os.environ['GROQ_API_KEY'] = GROQ_API_KEY
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def make_llm_api_call(messages, model_name, json_mode=False, temperature=0, max_tokens=None, tools=None, tool_choice="auto", use_tool_parser=False, api_key=None, api_base=None, agentops_session=None, stream=False) -> AsyncGenerator[Union[dict, str], None]:
+async def make_llm_api_call(messages, model_name, json_mode=False, temperature=0, max_tokens=None, tools=None, tool_choice="auto", use_tool_parser=False, api_key=None, api_base=None, agentops_session=None, stream=False, top_p=None, response_format=None) -> Union[Dict[str, Any], str]:
     litellm.set_verbose = True
 
     async def attempt_api_call(api_call_func, max_attempts=3):
         for attempt in range(max_attempts):
             try:
-                response = await api_call_func()
-                if stream:
-                    async for chunk in response:
-                        yield chunk
-                else:
-                    response_content = response.choices[0].message['content'] if json_mode else response
-                    if json_mode:
-                        if not json.loads(response_content):
-                            logger.info(f"Invalid JSON received, retrying attempt {attempt + 1}")
-                            continue
-                    yield response
-                return
+                return await api_call_func()
             except litellm.exceptions.RateLimitError as e:
                 logger.warning(f"Rate limit exceeded. Waiting for 30 seconds before retrying...")
                 await asyncio.sleep(30)
@@ -60,7 +49,9 @@ async def make_llm_api_call(messages, model_name, json_mode=False, temperature=0
             "model": model_name,
             "messages": messages,
             "temperature": temperature,
-            "response_format": {"type": "json_object"} if json_mode else None,
+            "response_format": response_format or ({"type": "json_object"} if json_mode else None),
+            "top_p": top_p,
+            "stream": stream,
         }
 
         # Add api_key and api_base if provided
@@ -88,12 +79,9 @@ async def make_llm_api_call(messages, model_name, json_mode=False, temperature=0
                 api_call_params["tool_choice"] = tool_choice
 
         if "claude" in model_name.lower() or "anthropic" in model_name.lower():
-            # if messages[0]["role"] != "user":
-            #     api_call_params["messages"] = [{"role": "user", "content": "."}] + messages
             api_call_params["extra_headers"] = {
                 "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
             }
-            # # "anthropic-beta": "prompt-caching-2024-07-31"
         
         # Log the API request
         logger.info(f"Sending API request: {json.dumps(api_call_params, indent=2)}")
@@ -101,20 +89,49 @@ async def make_llm_api_call(messages, model_name, json_mode=False, temperature=0
         if agentops_session:
             response = await agentops_session.patch(litellm.acompletion)(**api_call_params)
         else:
-            if stream:
-                response = await litellm.acompletion(**api_call_params, stream=True)
-            else:
-                response = await litellm.acompletion(**api_call_params)
+            response = await litellm.acompletion(**api_call_params)
 
         # Log the API response
         logger.info(f"Received API response: {response}")
 
         return response
 
-    async for result in attempt_api_call(api_call):
-        yield result
+    return await attempt_api_call(api_call)
 
 # Sample Usage
 if __name__ == "__main__":
+    import asyncio
+    async def test_llm_api_call(stream=True):
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Complex essay on economics"}
+        ]
+        model_name = "gpt-4o"
 
-    pass
+        response = await make_llm_api_call(messages, model_name, stream=stream)
+
+        if stream:
+            print("Streaming response:")
+            async for chunk in response:
+                if isinstance(chunk, dict) and 'choices' in chunk:
+                    content = chunk['choices'][0]['delta'].get('content', '')
+                    print(content, end='', flush=True)
+                else:
+                    # For non-dict responses (like ModelResponse objects)
+                    content = chunk.choices[0].delta.content
+                    if content:
+                        print(content, end='', flush=True)
+            print("\nStream completed.")
+        else:
+            print("Non-streaming response:")
+            if isinstance(response, dict) and 'choices' in response:
+                print(response['choices'][0]['message']['content'])
+            else:
+                # For non-dict responses (like ModelResponse objects)
+                print(response.choices[0].message.content)
+
+    # Example usage:
+    # asyncio.run(test_llm_api_call(stream=True))  # For streaming
+    # asyncio.run(test_llm_api_call(stream=False))  # For non-streaming
+
+    asyncio.run(test_llm_api_call())

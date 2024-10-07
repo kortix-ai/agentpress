@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from core.tools.tool import Tool, ToolResult
+from core.tool import Tool, ToolResult
 
 class ExampleTool(Tool):
     description = "An example tool for demonstration purposes."

@@ -1,66 +1,16 @@
 import streamlit as st
 import requests
-import json
-from core.ui.utils import API_BASE_URL, AI_MODELS, STANDARD_SYSTEM_MESSAGE
+from core.ui.utils import API_BASE_URL
+from datetime import datetime
 
-def display_thread_runner(thread_id):
-    st.write("## ⚙️ Run Thread")
-    
-    manual_config = display_manual_setup_tab()
-    
-    # Common settings
-    additional_instructions = st.text_area("Additional Instructions", key="additional_instructions", height=100)
-    stream = st.checkbox("📡 Stream Responses", key="stream_responses")
-
-    # Prepare the run thread data
-    run_thread_data = prepare_run_thread_data(manual_config, additional_instructions, stream)
-
-    # Display the preview of the request payload in an expander
-    with st.expander("📤 Preview Request Payload", expanded=False):
-        st.json(run_thread_data)
-
-    # Center the run button and make it more prominent
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("▶️ Run Thread", key="run_thread_button", use_container_width=True):
-            run_thread(thread_id, run_thread_data)
-
-    display_thread_run_status(thread_id)
-
-def display_manual_setup_tab():
-    model_name = st.selectbox("Model", AI_MODELS, key="model_name")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        temperature = st.slider("Temperature", 0.0, 1.0, 0.5, key="temperature")
-    with col2:
-        max_tokens = st.number_input("Max Tokens", min_value=1, max_value=10000, value=500, key="max_tokens")
-    
-    system_message = st.text_area("System Message", value=STANDARD_SYSTEM_MESSAGE, key="system_message", height=100)
-    
-    tool_options = list(st.session_state.tools.keys())
-    selected_tools = st.multiselect("Select Tools", options=tool_options, key="selected_tools")
-
-    manual_config = {
+def prepare_run_thread_data(model_name, temperature, max_tokens, system_message, additional_system_message, selected_tools):
+    return {
+        "system_message": {"role": "system", "content": system_message},
         "model_name": model_name,
         "temperature": temperature,
         "max_tokens": max_tokens,
-        "system_message": system_message,
-        "selected_tools": selected_tools
-    }
-
-    return manual_config
-
-def prepare_run_thread_data(manual_config, additional_instructions, stream):
-    tools = [st.session_state.tools[tool]['schema'] for tool in manual_config['selected_tools'] if tool in st.session_state.tools]
-    return {
-        "system_message": {"role": "system", "content": manual_config['system_message']},
-        "model_name": manual_config['model_name'],
-        "temperature": manual_config['temperature'],
-        "max_tokens": manual_config['max_tokens'],
-        "tools": tools,
-        "additional_instructions": additional_instructions,
-        "stream": stream
+        "tools": selected_tools,
+        "additional_system_message": additional_system_message
     }
 
 def run_thread(thread_id, run_thread_data):
@@ -73,49 +23,77 @@ def run_thread(thread_id, run_thread_data):
             response_data = run_thread_response.json()
             st.success("Thread run completed successfully!")
             
-            # Display the return payload in an expander
-            with st.expander("📥 Return Payload", expanded=False):
-                st.json(response_data)
+            if 'id' in response_data:
+                st.session_state.latest_run_id = response_data['id']
             
-            # Display the actual response content
-            st.write("### 📬 Response Content")
+            st.subheader("Response Content")
             display_response_content(response_data)
-            
             st.rerun()
         else:
-            st.error("Failed to run thread.")
-            with st.expander("❌ Error Response", expanded=True):
-                st.json(run_thread_response.json())
+            st.error(f"Failed to run thread. Status code: {run_thread_response.status_code}")
+            st.text("Response content:")
+            st.text(run_thread_response.text)
 
 def display_response_content(response_data):
-    if isinstance(response_data, dict) and 'response' in response_data:
-        for item in response_data['response']:
-            if isinstance(item, dict):
-                if 'content' in item:
-                    st.markdown(item['content'])
-                elif 'tool_calls' in item:
-                    st.write("**Tool Calls:**")
-                    for tool_call in item['tool_calls']:
-                        st.write(f"- Function: `{tool_call['function']['name']}`")
-                        st.code(tool_call['function']['arguments'], language="json")
-            elif isinstance(item, str):
-                st.markdown(item)
+    if isinstance(response_data, dict) and 'choices' in response_data:
+        message = response_data['choices'][0]['message']
+        st.write(f"**Role:** {message['role']}")
+        st.write(f"**Content:** {message['content']}")
+        
+        if 'tool_calls' in message:
+            st.write("**Tool Calls:**")
+            for tool_call in message['tool_calls']:
+                st.write(f"- Function: `{tool_call['function']['name']}`")
+                st.code(tool_call['function']['arguments'], language="json")
     else:
         st.json(response_data)
 
-def display_thread_run_status(thread_id):
-    status_response = requests.get(f"{API_BASE_URL}/threads/{thread_id}/run/status/")
-    if status_response.status_code == 200:
-        status_data = status_response.json()
-        st.write("### ⚙️ Thread Run Status")
-        status = status_data.get('status')
-        if status == 'completed':
-            st.success(f"**Status:** {status}")
-        elif status == 'error':
-            st.error(f"**Status:** {status}")
-            with st.expander("Error Details", expanded=True):
-                st.code(status_data.get('error_message'), language="")
-        else:
-            st.info(f"**Status:** {status}")
+def fetch_thread_runs(thread_id, limit):
+    response = requests.get(f"{API_BASE_URL}/threads/{thread_id}/runs?limit={limit}")
+    if response.status_code == 200:
+        return response.json()
     else:
-        st.warning("Could not retrieve thread run status.")
+        st.error("Failed to retrieve runs.")
+        return []
+
+def format_timestamp(timestamp):
+    if timestamp:
+        return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    return 'N/A'
+
+def display_runs(runs):
+    for run in runs:
+        with st.expander(f"Run {run['id']} - Status: {run['status']}", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**Created At:** {format_timestamp(run['created_at'])}")
+                st.write(f"**Started At:** {format_timestamp(run['started_at'])}")
+                st.write(f"**Completed At:** {format_timestamp(run['completed_at'])}")
+                st.write(f"**Cancelled At:** {format_timestamp(run['cancelled_at'])}")
+                st.write(f"**Failed At:** {format_timestamp(run['failed_at'])}")
+            with col2:
+                st.write(f"**Model:** {run['model']}")
+                st.write(f"**Temperature:** {run['temperature']}")
+                st.write(f"**Top P:** {run['top_p']}")
+                st.write(f"**Max Tokens:** {run['max_tokens']}")
+                st.write(f"**Tool Choice:** {run['tool_choice']}")
+                st.write(f"**Execute Tools Async:** {run['execute_tools_async']}")
+            
+            st.write("**System Message:**")
+            st.json(run['system_message'])
+            
+            if run['tools']:
+                st.write("**Tools:**")
+                st.json(run['tools'])
+            
+            if run['usage']:
+                st.write("**Usage:**")
+                st.json(run['usage'])
+            
+            if run['response_format']:
+                st.write("**Response Format:**")
+                st.json(run['response_format'])
+            
+            if run['last_error']:
+                st.error("**Last Error:**")
+                st.code(run['last_error'])

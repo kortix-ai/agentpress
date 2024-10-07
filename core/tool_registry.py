@@ -1,5 +1,5 @@
-from typing import Dict, Type, Any
-from core.tools.tool import Tool
+from typing import Dict, Type, Any, Optional
+from core.tool import Tool
 from core.config import settings
 import importlib.util
 import os
@@ -39,7 +39,7 @@ class ToolRegistry:
 
         print(f"Registered tools: {list(self.tools.keys())}")  # Debug print
 
-    def get_tool(self, tool_name: str) -> Dict[str, Any]:
+    def get_tool(self, tool_name: str) -> Optional[Dict[str, Any]]:
         return self.tools.get(tool_name)
 
     def get_all_tools(self) -> Dict[str, Dict[str, Any]]:
