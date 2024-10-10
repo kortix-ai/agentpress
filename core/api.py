@@ -82,6 +82,7 @@ async def run_thread(thread_id: str, request: RunThreadRequest):
         additional_system_message=request.additional_system_message,
         top_p=request.top_p,
         tool_choice=request.tool_choice,
+        stream=request.stream,
         response_format=request.response_format)
         
     return {"status": "success", "response": response}
