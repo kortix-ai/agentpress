@@ -5,7 +5,7 @@ description = "A set of tools and abstractions for building AI agents"
 authors = ["marko-kraemer <markokraemer.mail@gmail.com>"]
 readme = "README.md"
 packages = [
-    { include = "core" },
+    { include = "agentpress" },
 ]
 
 [tool.poetry.dependencies]

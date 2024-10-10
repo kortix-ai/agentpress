@@ -1,6 +1,6 @@
 from typing import Dict, Type, Any, Optional
-from core.tool import Tool
-from core.config import settings
+from agentpress.tool import Tool
+from agentpress.config import settings
 import importlib.util
 import os
 import inspect

@@ -6,7 +6,7 @@ import openai
 from openai import OpenAIError
 import asyncio
 import logging
-from core.config import settings  # Import the settings
+from agentpress.config import settings  # Import the settings
 
 # Import agentops
 import agentops

@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, JSON, B
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from core.config import settings  # Changed from Settings to settings
+from agentpress.config import settings  # Changed from Settings to settings
 import os
 from contextlib import asynccontextmanager
 import uuid
@@ -15,36 +15,62 @@ class Thread(Base):
 
     thread_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     messages = Column(Text)
-    creation_date = Column(String)
-    last_updated_date = Column(String)
+    created_at = Column(Integer)
 
-    thread_runs = relationship("ThreadRun", back_populates="thread")
-    # memory_modules = relationship("MemoryModule", back_populates="thread")
+    runs = relationship("ThreadRun", back_populates="thread")
+    agent_runs = relationship("AgentRun", back_populates="thread")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.created_at = int(datetime.utcnow().timestamp())
 
 class ThreadRun(Base):
-    __tablename__ = 'thread_runs'
+    __tablename__ = "thread_runs"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    thread_id = Column(String(36), ForeignKey('threads.thread_id'))
+    id = Column(String, primary_key=True)
+    thread_id = Column(String, ForeignKey("threads.thread_id"))
+    status = Column(String, default="queued")
+    last_error = Column(String, nullable=True)
     created_at = Column(Integer)
-    status = Column(String)
-    last_error = Column(Text, nullable=True)
     started_at = Column(Integer, nullable=True)
     cancelled_at = Column(Integer, nullable=True)
     failed_at = Column(Integer, nullable=True)
     completed_at = Column(Integer, nullable=True)
     model = Column(String)
-    system_message = Column(Text)
+    temperature = Column(Float)
+    max_tokens = Column(Integer, nullable=True)
+    top_p = Column(Float, nullable=True)
+    tool_choice = Column(String)
+    execute_tools_async = Column(Boolean)
+    system_message = Column(JSON)
     tools = Column(JSON, nullable=True)
     usage = Column(JSON, nullable=True)
-    temperature = Column(Float, nullable=True)
-    top_p = Column(Float, nullable=True)
-    max_tokens = Column(Integer, nullable=True)
-    tool_choice = Column(String, nullable=True)
-    execute_tools_async = Column(Boolean)
     response_format = Column(JSON, nullable=True)
 
-    thread = relationship("Thread", back_populates="thread_runs")
+    thread = relationship("Thread", back_populates="runs")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.created_at = int(datetime.utcnow().timestamp())
+
+class AgentRun(Base):
+    __tablename__ = "agent_runs"
+
+    id = Column(String, primary_key=True)
+    thread_id = Column(String, ForeignKey("threads.thread_id"))
+    status = Column(String, default="queued")
+    last_error = Column(String, nullable=True)
+    created_at = Column(Integer)
+    started_at = Column(Integer, nullable=True)
+    cancelled_at = Column(Integer, nullable=True)
+    failed_at = Column(Integer, nullable=True)
+    completed_at = Column(Integer, nullable=True)
+    autonomous_iterations_amount = Column(Integer)
+    iterations_count = Column(Integer, default=0)  # Add this line
+    continue_instructions = Column(String, nullable=True)
+    iterations = Column(JSON, nullable=True)
+
+    thread = relationship("Thread", back_populates="agent_runs")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

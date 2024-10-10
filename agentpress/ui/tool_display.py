@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-from core.ui.utils import API_BASE_URL
+from agentpress.ui.utils import API_BASE_URL
 
 def display_tools():
     st.header("Available Tools")

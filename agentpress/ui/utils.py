@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-from core.constants import AI_MODELS, STANDARD_SYSTEM_MESSAGE
+from agentpress.constants import AI_MODELS, STANDARD_SYSTEM_MESSAGE
 
 API_BASE_URL = "http://localhost:8000"
 

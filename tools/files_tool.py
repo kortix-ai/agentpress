@@ -1,8 +1,8 @@
 import os
 import asyncio
 from typing import Dict, Any
-from core.tool import Tool, ToolResult
-from core.config import settings
+from agentpress.tool import Tool, ToolResult
+from agentpress.config import settings
 
 class FilesTool(Tool):
     def __init__(self):

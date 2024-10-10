@@ -1,0 +1,2 @@
+
+[] BUG on Agent Run: For some reason it creates 1 more run thread than it should on the first iteration (on start). On 10 iterations it created 11 for some reason. I think the first one is maybe created double accidently? ANALYSE & FIX
