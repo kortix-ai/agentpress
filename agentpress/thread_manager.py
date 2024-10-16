@@ -1,137 +1,22 @@
 import json
 import logging
 import asyncio
-from typing import List, Dict, Any, Optional, Callable, AsyncGenerator, Union, Coroutine
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-from agentpress.db import Database, Thread, ThreadRun, AgentRun
-from agentpress.tool import Tool, ToolResult
+from typing import List, Dict, Any, Optional, Callable
+from sqlalchemy import select
+from agentpress.db import Database, Thread, ThreadRun
 from agentpress.llm import make_llm_api_call
-from datetime import datetime
+from datetime import datetime, UTC
+from agentpress.tool import ToolResult
 from agentpress.tool_registry import ToolRegistry
-import re
 import uuid
-
-class ThreadAgent:
-    def __init__(self, thread_manager, thread_id: str, agent_run: AgentRun, **kwargs):
-        self.thread_manager = thread_manager
-        self.thread_id = thread_id
-        self.agent_run = agent_run
-        self.system_message = kwargs.get('system_message', {"role": "system", "content": ""})
-        self.model_name = kwargs.get('model_name', "gpt-4")
-        self.temperature = kwargs.get('temperature', 0.5)
-        self.max_tokens = kwargs.get('max_tokens')
-        self.tools = kwargs.get('tools')
-        self.additional_system_message = kwargs.get('additional_system_message')
-        self.additional_message = kwargs.get('additional_message')
-        self.execute_tools_async = kwargs.get('execute_tools_async', True)
-        self.top_p = kwargs.get('top_p')
-        self.tool_choice = kwargs.get('tool_choice', "auto")
-        self.response_format = kwargs.get('response_format')
-        self.autonomous_iterations_amount = kwargs.get('autonomous_iterations_amount', 5)
-        self.continue_instructions = kwargs['continue_instructions']  # Make this required
-        
-        self.initializer = kwargs.get('initializer')
-        self.pre_iteration = kwargs.get('pre_iteration')
-        self.after_iteration = kwargs.get('after_iteration')
-        self.finalizer = kwargs.get('finalizer')
-
-    async def run(self) -> Dict[str, Any]:
-        if self.agent_run.status == "queued":
-            self.agent_run.status = "in_progress"
-        self.agent_run.started_at = int(datetime.utcnow().timestamp())
-        await self.thread_manager.update_agent_run(self.agent_run)
-
-        iteration_results = []
-        final_status = "completed"
-
-        if self.initializer:
-            await self.initializer(self)
-
-        try:
-            for iteration in range(self.autonomous_iterations_amount):
-                if await self.thread_manager.should_stop(self.thread_id, self.agent_run.id):
-                    final_status = "stopped"
-                    break
-
-                if self.pre_iteration:
-                    await self.pre_iteration(iteration, self)
-
-                # Add continue_instructions as a user message after the first iteration
-                if iteration > 0 and self.continue_instructions:
-                    await self.thread_manager.add_message(
-                        self.thread_id,
-                        {"role": "user", "content": self.continue_instructions}
-                    )
-
-                # Create a new ThreadRun for this iteration
-                thread_run_kwargs = {k: v for k, v in self.__dict__.items() if k not in ['thread_id', 'thread_manager', 'agent_run'] and not k.startswith('_') and not callable(v)}
-                thread_run = await self.thread_manager.create_thread_run(self.thread_id, **thread_run_kwargs)
-
-                result = await self.thread_manager.run_thread(
-                    thread_id=self.thread_id,
-                    thread_run=thread_run,
-                    system_message=self.system_message,
-                    model_name=self.model_name,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
-                    tools=self.tools,
-                    additional_system_message=self.additional_system_message,
-                    additional_message=self.additional_message,
-                    execute_tools_async=self.execute_tools_async,
-                    top_p=self.top_p,
-                    tool_choice=self.tool_choice,
-                    response_format=self.response_format
-                )
-
-                iteration_results.append(result)
-                self.agent_run.iterations_count += 1
-                await self.thread_manager.update_agent_run(self.agent_run)
-
-                if self.after_iteration:
-                    await self.after_iteration(iteration, result, self)
-
-                if result.get("status") == "error" or result.get("status") == "stopped":
-                    final_status = result["status"]
-                    break
-
-                if await self.thread_manager.should_stop(self.thread_id, self.agent_run.id):
-                    final_status = "stopped"
-                    break
-
-        except Exception as e:
-            final_status = "failed"
-            self.agent_run.last_error = str(e)
-            logging.error(f"Error in thread agent run: {str(e)}")
-        
-        finally:
-            if self.finalizer:
-                await self.finalizer(final_status, self)
-
-            self.agent_run.status = final_status
-            if final_status == "completed":
-                self.agent_run.completed_at = int(datetime.utcnow().timestamp())
-            elif final_status in ["stopped", "cancelled"]:
-                self.agent_run.cancelled_at = int(datetime.utcnow().timestamp())
-            elif final_status == "failed":
-                self.agent_run.failed_at = int(datetime.utcnow().timestamp())
-            
-            await self.thread_manager.update_agent_run(self.agent_run)
-
-        return {
-            "status": final_status,
-            "iterations": iteration_results,
-            "total_iterations": self.agent_run.iterations_count,
-            "final_config": {
-                k: v for k, v in self.__dict__.items()
-                if not k.startswith('_') and not callable(v) and not isinstance(v, (ThreadManager, AgentRun))
-            }
-        }
+from tools.files_tool import FilesTool
 
 class ThreadManager:
     def __init__(self, db: Database):
         self.db = db
         self.tool_registry = ToolRegistry()
+        self.run_config: Dict[str, Any] = {}
+        self.current_iteration: int = 0
 
     async def create_thread(self) -> int:
         async with self.db.get_async_session() as session:
@@ -303,147 +188,150 @@ class ThreadManager:
                 return True
         return False
 
-    async def run_thread(self, thread_id: str, thread_run: ThreadRun, **kwargs) -> Dict[str, Any]:
+    async def run_thread(self, settings: Dict[str, Any]) -> Dict[str, Any]:
         try:
+            thread_run = ThreadRun(
+                id=str(uuid.uuid4()),
+                thread_id=settings['thread_id'],
+                status="queued",
+                model=settings['model_name'],
+                temperature=settings.get('temperature', 0.7),
+                max_tokens=settings.get('max_tokens'),
+                top_p=settings.get('top_p'),
+                tool_choice=settings.get('tool_choice', 'auto'),
+                execute_tools_async=settings.get('execute_tools_async', True),
+                system_message=json.dumps(settings['system_message']),
+                tools=json.dumps(settings.get('tools')),
+                response_format=json.dumps(settings.get('response_format')),
+                autonomous_iterations_amount=settings.get('autonomous_iterations_amount', 1),
+                continue_instructions=settings.get('continue_instructions')
+            )
+            
+            async with self.db.get_async_session() as session:
+                session.add(thread_run)
+                await session.commit()
+
             thread_run.status = "in_progress"
-            thread_run.started_at = int(datetime.utcnow().timestamp())
+            thread_run.started_at = int(datetime.now(UTC).timestamp())
             await self.update_thread_run(thread_run)
 
-            if await self.should_stop(thread_id, thread_run.id):
-                thread_run.status = "stopped"
-                thread_run.cancelled_at = int(datetime.utcnow().timestamp())
-                await self.update_thread_run(thread_run)
-                return {"status": "stopped", "message": "Thread run cancelled"}
+            self.run_config = {k: v for k, v in thread_run.__dict__.items() if not k.startswith('_')}
+            self.run_config['iterations'] = []
 
-            # Fetch full tool objects based on the provided tool names
+            if settings.get('initializer'):
+                settings['initializer']()
+                # Update thread_run with changes from run_config
+                for key, value in self.run_config.items():
+                    setattr(thread_run, key, value)
+                await self.update_thread_run(thread_run)
+
             full_tools = None
-            if kwargs.get('tools'):
-                full_tools = [self.tool_registry.get_tool(tool_name)['schema'] for tool_name in kwargs['tools'] if self.tool_registry.get_tool(tool_name)]
-            
-            # Modify the system message if additional_system_message is provided
-            if kwargs.get('additional_system_message'):
-                kwargs['system_message']['content'] += f"\n\n{kwargs['additional_system_message']}"
+            if settings.get('tools'):
+                full_tools = [self.tool_registry.get_tool(tool_name)['schema'] for tool_name in settings['tools'] if self.tool_registry.get_tool(tool_name)]
 
-            if await self.should_stop(thread_id, thread_run.id):
-                thread_run.status = "stopped"
-                thread_run.cancelled_at = int(datetime.utcnow().timestamp())
+            self.current_iteration = 0
+            for iteration in range(settings.get('autonomous_iterations_amount', 1)):
+                self.current_iteration = iteration + 1
+                
+                if await self.should_stop(settings['thread_id'], thread_run.id):
+                    thread_run.status = "stopped"
+                    thread_run.cancelled_at = int(datetime.now(UTC).timestamp())
+                    await self.update_thread_run(thread_run)
+                    return {"status": "stopped", "message": "Thread run cancelled"}
+
+                if settings.get('pre_iteration'):
+                    settings['pre_iteration']()
+                    # Update thread_run with changes from run_config
+                    for key, value in self.run_config.items():
+                        setattr(thread_run, key, value)
+                    await self.update_thread_run(thread_run)
+
+                if iteration > 0 and settings.get('continue_instructions'):
+                    await self.add_message(settings['thread_id'], {"role": "user", "content": settings['continue_instructions']})
+
+                messages = await self.list_messages(settings['thread_id'], hide_tool_msgs=settings.get('hide_tool_msgs', False))
+                prepared_messages = [settings['system_message']] + messages
+                
+                if settings.get('additional_message'):
+                    prepared_messages.append(settings['additional_message'])
+                
+                response = await make_llm_api_call(
+                    prepared_messages, 
+                    settings['model_name'], 
+                    temperature=thread_run.temperature, 
+                    max_tokens=thread_run.max_tokens,
+                    tools=full_tools,
+                    tool_choice=thread_run.tool_choice,
+                    stream=False,
+                    top_p=thread_run.top_p,
+                    response_format=json.loads(thread_run.response_format) if thread_run.response_format else None
+                )
+
+                usage = response.usage if hasattr(response, 'usage') else None
+                usage_dict = self.serialize_usage(usage) if usage else None
+                thread_run.usage = usage_dict
+
+                assistant_message = {
+                    "role": "assistant",
+                    "content": response.choices[0].message['content']
+                }
+                if 'tool_calls' in response.choices[0].message:
+                    assistant_message['tool_calls'] = response.choices[0].message['tool_calls']
+                
+                await self.add_message(settings['thread_id'], assistant_message)
+
+                if settings.get('tools') is None or settings.get('use_tool_parser', False):
+                    await self.handle_response_without_tools(settings['thread_id'], response, settings.get('use_tool_parser', False))
+                else:
+                    await self.handle_response_with_tools(settings['thread_id'], response, settings.get('execute_tools_async', True))
+
+                self.run_config['iterations'].append({
+                    "iteration": self.current_iteration,
+                    "response": self.serialize_choice(response.choices[0]),
+                    "usage": usage_dict
+                })
+
+                if settings.get('after_iteration'):
+                    settings['after_iteration']()
+                    # Update thread_run with changes from run_config
+                    for key, value in self.run_config.items():
+                        setattr(thread_run, key, value)
+
+                thread_run.iterations = json.dumps(self.run_config['iterations'])
                 await self.update_thread_run(thread_run)
-                return {"status": "stopped", "message": "Thread run cancelled"}
-
-            if kwargs.get('use_tool_parser'):
-                hide_tool_msgs = True
-            
-            await self.cleanup_incomplete_tool_calls(thread_id)
-            
-            # Prepare messages
-            messages = await self.list_messages(thread_id, hide_tool_msgs=kwargs.get('hide_tool_msgs', False))
-            prepared_messages = [kwargs['system_message']] + messages
-            
-            # Add the additional_message if provided
-            if kwargs.get('additional_message'):
-                prepared_messages.append(kwargs['additional_message'])
-            
-            response = await make_llm_api_call(
-                prepared_messages, 
-                kwargs['model_name'], 
-                temperature=kwargs.get('temperature', 0.5), 
-                max_tokens=kwargs.get('max_tokens'),
-                tools=full_tools,
-                tool_choice=kwargs.get('tool_choice', "auto"),
-                stream=False,
-                top_p=kwargs.get('top_p'),
-                response_format=kwargs.get('response_format')
-            )
-
-            usage = response.usage if hasattr(response, 'usage') else None
-            usage_dict = self.serialize_usage(usage) if usage else None
-            thread_run.usage = usage_dict
-
-            # Add the assistant's message to the thread
-            assistant_message = {
-                "role": "assistant",
-                "content": response.choices[0].message['content']
-            }
-            if 'tool_calls' in response.choices[0].message:
-                assistant_message['tool_calls'] = response.choices[0].message['tool_calls']
-            
-            await self.add_message(thread_id, assistant_message)
-
-            if kwargs.get('tools') is None or kwargs.get('use_tool_parser'):
-                await self.handle_response_without_tools(thread_id, response, kwargs.get('use_tool_parser', False))
-            else:
-                await self.handle_response_with_tools(thread_id, response, kwargs.get('execute_tools_async', True))
-
-            if await self.should_stop(thread_id, thread_run.id):
-                thread_run.status = "stopped"
-                thread_run.cancelled_at = int(datetime.utcnow().timestamp())
-                await self.update_thread_run(thread_run)
-                return {"status": "stopped", "message": "Thread run cancelled"}
 
             thread_run.status = "completed"
-            thread_run.completed_at = int(datetime.utcnow().timestamp())
+            thread_run.completed_at = int(datetime.now(UTC).timestamp())
             await self.update_thread_run(thread_run)
+
+            self.run_config.update({k: v for k, v in thread_run.__dict__.items() if not k.startswith('_')})
+
+            if settings.get('finalizer'):
+                settings['finalizer']()
+                # Update thread_run with final changes from run_config
+                for key, value in self.run_config.items():
+                    setattr(thread_run, key, value)
+                await self.update_thread_run(thread_run)
 
             return {
                 "id": thread_run.id,
                 "status": thread_run.status,
-                "choices": [self.serialize_choice(choice) for choice in response.choices],
-                "usage": usage_dict,
-                "model": kwargs['model_name'],
+                "iterations": self.run_config['iterations'],
+                "total_iterations": len(self.run_config['iterations']),
+                "usage": thread_run.usage,
+                "model": settings['model_name'],
                 "object": "chat.completion",
-                "created": int(datetime.utcnow().timestamp())
+                "created": int(datetime.now(UTC).timestamp())
             }
         except Exception as e:
             thread_run.status = "failed"
-            thread_run.failed_at = int(datetime.utcnow().timestamp())
+            thread_run.failed_at = int(datetime.now(UTC).timestamp())
             thread_run.last_error = str(e)
             await self.update_thread_run(thread_run)
+            self.run_config.update({k: v for k, v in thread_run.__dict__.items() if not k.startswith('_')})
+            if settings.get('finalizer'):
+                settings['finalizer']()
             raise
-
-    def serialize_usage(self, usage):
-        return {
-            "completion_tokens": usage.completion_tokens,
-            "prompt_tokens": usage.prompt_tokens,
-            "total_tokens": usage.total_tokens,
-            "completion_tokens_details": self.serialize_completion_tokens_details(usage.completion_tokens_details),
-            "prompt_tokens_details": self.serialize_prompt_tokens_details(usage.prompt_tokens_details)
-        }
-
-    def serialize_completion_tokens_details(self, details):
-        return {
-            "audio_tokens": details.audio_tokens,
-            "reasoning_tokens": details.reasoning_tokens
-        }
-
-    def serialize_prompt_tokens_details(self, details):
-        return {
-            "audio_tokens": details.audio_tokens,
-            "cached_tokens": details.cached_tokens
-        }
-
-    def serialize_choice(self, choice):
-        return {
-            "finish_reason": choice.finish_reason,
-            "index": choice.index,
-            "message": self.serialize_message(choice.message)
-        }
-
-    def serialize_message(self, message):
-        return {
-            "content": message.content,
-            "role": message.role,
-            "tool_calls": [self.serialize_tool_call(tc) for tc in message.tool_calls] if message.tool_calls else None
-        }
-
-    def serialize_tool_call(self, tool_call):
-        return {
-            "id": tool_call.id,
-            "type": tool_call.type,
-            "function": {
-                "name": tool_call.function.name,
-                "arguments": tool_call.function.arguments
-            }
-        }
 
     async def update_thread_run(self, thread_run: ThreadRun):
         async with self.db.get_async_session() as session:
@@ -564,8 +452,20 @@ class ThreadManager:
                 return {"status": "stopped", "message": "Session cancelled"}
 
             function_name = tool_call.function.name
-            function_args = json.loads(tool_call.function.arguments)
             tool_call_id = tool_call.id
+
+            try:
+                function_args = json.loads(tool_call.function.arguments)
+            except json.JSONDecodeError as e:
+                error_message = f"Error parsing arguments for {function_name}: {str(e)}"
+                logging.error(error_message)
+                logging.error(f"Problematic JSON: {tool_call.function.arguments}")
+                return {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "name": function_name,
+                    "content": str(ToolResult(success=False, output=error_message)),
+                }
 
             function_to_call = available_functions.get(function_name)
             if function_to_call:
@@ -617,7 +517,7 @@ class ThreadManager:
 
     async def should_stop(self, thread_id: str, run_id: str) -> bool:
         async with self.db.get_async_session() as session:
-            run = await session.get(AgentRun, run_id)
+            run = await session.get(ThreadRun, run_id)
             if run and run.status in ["stopped", "cancelled", "queued"]:
                 return True
         return False
@@ -629,41 +529,6 @@ class ThreadManager:
                 run.status = "stopping"
                 await session.commit()
                 return self.serialize_thread_run(run)
-        return None
-
-    async def stop_agent_run(self, thread_id: str, run_id: str) -> Dict[str, Any]:
-        async with self.db.get_async_session() as session:
-            agent_run = await session.get(AgentRun, run_id)
-            if agent_run and agent_run.thread_id == thread_id and agent_run.status in ["in_progress", "queued"]:
-                agent_run.status = "stopped"
-                agent_run.cancelled_at = int(datetime.utcnow().timestamp())
-                
-                # Update all associated ThreadRuns
-                associated_thread_runs = await session.execute(
-                    select(ThreadRun).where(
-                        (ThreadRun.thread_id == thread_id) & 
-                        (ThreadRun.created_at >= agent_run.created_at) &
-                        (ThreadRun.status.in_(["queued", "in_progress"]))
-                    )
-                )
-                for thread_run in associated_thread_runs.scalars():
-                    thread_run.status = "stopped"
-                    thread_run.cancelled_at = int(datetime.utcnow().timestamp())
-                
-                # Update all associated AgentRuns that are still queued
-                associated_agent_runs = await session.execute(
-                    select(AgentRun).where(
-                        (AgentRun.thread_id == thread_id) & 
-                        (AgentRun.created_at >= agent_run.created_at) &
-                        (AgentRun.status == "queued")
-                    )
-                )
-                for assoc_agent_run in associated_agent_runs.scalars():
-                    assoc_agent_run.status = "stopped"
-                    assoc_agent_run.cancelled_at = int(datetime.utcnow().timestamp())
-                
-                await session.commit()
-                return self.serialize_agent_run(agent_run)
         return None
 
     async def save_thread_run(self, thread_id: str):
@@ -767,7 +632,7 @@ class ThreadManager:
             run = await session.get(ThreadRun, run_id)
             if run and run.thread_id == thread_id and run.status == "in_progress":
                 run.status = "cancelled"
-                run.cancelled_at = int(datetime.utcnow().timestamp())
+                run.cancelled_at = int(datetime.now(UTC).timestamp())
                 await session.commit()
                 return await self.get_run(thread_id, run_id)
         return None
@@ -775,37 +640,9 @@ class ThreadManager:
     async def list_runs(self, thread_id: str, limit: int) -> List[Dict[str, Any]]:
         async with self.db.get_async_session() as session:
             thread_runs_stmt = select(ThreadRun).where(ThreadRun.thread_id == thread_id).order_by(ThreadRun.created_at.desc()).limit(limit)
-            agent_runs_stmt = select(AgentRun).where(AgentRun.thread_id == thread_id).order_by(AgentRun.created_at.desc()).limit(limit)
-            
             thread_runs_result = await session.execute(thread_runs_stmt)
-            agent_runs_result = await session.execute(agent_runs_stmt)
-            
             thread_runs = thread_runs_result.scalars().all()
-            agent_runs = agent_runs_result.scalars().all()
-            
-            all_runs = [self.serialize_thread_run(run) for run in thread_runs] + [self.serialize_agent_run(run) for run in agent_runs]
-            all_runs.sort(key=lambda x: x['created_at'], reverse=True)
-            
-            return all_runs[:limit]
-
-    async def create_agent_run(self, thread_id: str, **kwargs) -> AgentRun:
-        run_id = str(uuid.uuid4())
-        agent_run = AgentRun(
-            id=run_id,
-            thread_id=thread_id,
-            status="queued",
-            autonomous_iterations_amount=kwargs.get('autonomous_iterations_amount'),
-            continue_instructions=kwargs.get('continue_instructions')
-        )
-        async with self.db.get_async_session() as session:
-            session.add(agent_run)
-            await session.commit()
-        return agent_run
-
-    async def update_agent_run(self, run: AgentRun):
-        async with self.db.get_async_session() as session:
-            await session.merge(run)
-            await session.commit()
+            return [self.serialize_thread_run(run) for run in thread_runs]
 
     async def create_thread_run(self, thread_id: str, **kwargs) -> ThreadRun:
         run_id = str(uuid.uuid4())
@@ -821,12 +658,13 @@ class ThreadManager:
             execute_tools_async=kwargs.get('execute_tools_async', True),
             system_message=json.dumps(kwargs.get('system_message')),
             tools=json.dumps(kwargs.get('tools')),
-            response_format=json.dumps(kwargs.get('response_format'))
+            response_format=json.dumps(kwargs.get('response_format')),
+            autonomous_iterations_amount=kwargs.get('autonomous_iterations_amount'),
+            continue_instructions=kwargs.get('continue_instructions')
         )
         async with self.db.get_async_session() as session:
             session.add(thread_run)
             await session.commit()
-        logging.info(f"Created ThreadRun {run_id} for thread {thread_id}. Total ThreadRuns: {await self.get_thread_run_count(thread_id)}")
         return thread_run
 
     async def get_thread_run_count(self, thread_id: str) -> int:
@@ -834,103 +672,11 @@ class ThreadManager:
             result = await session.execute(select(ThreadRun).filter_by(thread_id=thread_id))
             return len(result.all())
 
-    async def run_thread_agent(self, thread_id: str, **kwargs) -> Dict[str, Any]:
-        if 'continue_instructions' not in kwargs or not kwargs['continue_instructions']:
-            raise ValueError("continue_instructions is required for running a thread agent")
-
-        agent_run = await self.create_agent_run(thread_id, **kwargs)
-        agent = ThreadAgent(self, thread_id, agent_run, **kwargs)  # Remove None argument
-        
-        try:
-            result = await agent.run()
-            return result
-        except Exception as e:
-            agent_run.status = "failed"
-            agent_run.failed_at = int(datetime.utcnow().timestamp())
-            agent_run.last_error = str(e)
-            await self.update_agent_run(agent_run)
-            raise
-
-    async def list_agent_runs(self, thread_id: str, limit: int) -> List[Dict[str, Any]]:
-        async with self.db.get_async_session() as session:
-            stmt = select(AgentRun).where(AgentRun.thread_id == thread_id).order_by(AgentRun.created_at.desc()).limit(limit)
-            result = await session.execute(stmt)
-            runs = result.scalars().all()
-            return [
-                {
-                    "id": run.id,
-                    "thread_id": run.thread_id,
-                    "status": run.status,
-                    "created_at": run.created_at,
-                    "started_at": run.started_at,
-                    "completed_at": run.completed_at,
-                    "cancelled_at": run.cancelled_at,
-                    "failed_at": run.failed_at,
-                    "autonomous_iterations_amount": run.autonomous_iterations_amount,
-                    "iterations_count": run.iterations_count,
-                    "continue_instructions": run.continue_instructions,
-                    "iterations": json.loads(run.iterations) if run.iterations else None,
-                    "last_error": run.last_error
-                }
-                for run in runs
-            ]
-
-    async def stop_thread_run(self, thread_id: str, run_id: str) -> Dict[str, Any]:
-        async with self.db.get_async_session() as session:
-            run = await session.get(ThreadRun, run_id)
-            if run and run.thread_id == thread_id and run.status == "in_progress":
-                run.status = "stopping"
-                await session.commit()
-                return self.serialize_thread_run(run)
-        return None
-
-    async def stop_agent_run(self, thread_id: str, run_id: str) -> Dict[str, Any]:
-        async with self.db.get_async_session() as session:
-            agent_run = await session.get(AgentRun, run_id)
-            if agent_run and agent_run.thread_id == thread_id and agent_run.status in ["in_progress", "queued"]:
-                agent_run.status = "stopped"
-                agent_run.cancelled_at = int(datetime.utcnow().timestamp())
-                
-                # Update all associated ThreadRuns
-                associated_thread_runs = await session.execute(
-                    select(ThreadRun).where(
-                        (ThreadRun.thread_id == thread_id) & 
-                        (ThreadRun.created_at >= agent_run.created_at) &
-                        (ThreadRun.status.in_(["queued", "in_progress"]))
-                    )
-                )
-                for thread_run in associated_thread_runs.scalars():
-                    thread_run.status = "stopped"
-                    thread_run.cancelled_at = int(datetime.utcnow().timestamp())
-                
-                # Update all associated AgentRuns that are still queued
-                associated_agent_runs = await session.execute(
-                    select(AgentRun).where(
-                        (AgentRun.thread_id == thread_id) & 
-                        (AgentRun.created_at >= agent_run.created_at) &
-                        (AgentRun.status == "queued")
-                    )
-                )
-                for assoc_agent_run in associated_agent_runs.scalars():
-                    assoc_agent_run.status = "stopped"
-                    assoc_agent_run.cancelled_at = int(datetime.utcnow().timestamp())
-                
-                await session.commit()
-                return self.serialize_agent_run(agent_run)
-        return None
-
     async def get_thread_run_status(self, thread_id: str, run_id: str) -> Dict[str, Any]:
         async with self.db.get_async_session() as session:
             run = await session.get(ThreadRun, run_id)
             if run and run.thread_id == thread_id:
                 return self.serialize_thread_run(run)
-        return None
-
-    async def get_agent_run_status(self, thread_id: str, run_id: str) -> Dict[str, Any]:
-        async with self.db.get_async_session() as session:
-            run = await session.get(AgentRun, run_id)
-            if run and run.thread_id == thread_id:
-                return self.serialize_agent_run(run)
         return None
 
     def serialize_thread_run(self, run: ThreadRun) -> Dict[str, Any]:
@@ -954,71 +700,108 @@ class ThreadManager:
             "usage": run.usage,
             "response_format": json.loads(run.response_format) if run.response_format else None,
             "last_error": run.last_error,
-            "is_agent_run": False  # Add this line
+            "autonomous_iterations_amount": run.autonomous_iterations_amount,
+            "continue_instructions": run.continue_instructions,
+            "iterations": json.loads(run.iterations) if run.iterations else None
         }
 
-    def serialize_agent_run(self, run: AgentRun) -> Dict[str, Any]:
+    def serialize_usage(self, usage):
         return {
-            "id": run.id,
-            "thread_id": run.thread_id,
-            "status": run.status,
-            "created_at": run.created_at,
-            "started_at": run.started_at,
-            "completed_at": run.completed_at,
-            "cancelled_at": run.cancelled_at,
-            "failed_at": run.failed_at,
-            "autonomous_iterations_amount": run.autonomous_iterations_amount,
-            "iterations_count": run.iterations_count,
-            "continue_instructions": run.continue_instructions,
-            "iterations": json.loads(run.iterations) if run.iterations else None,
-            "last_error": run.last_error,
-            "is_agent_run": True  # Add this line
+            "completion_tokens": usage.completion_tokens,
+            "prompt_tokens": usage.prompt_tokens,
+            "total_tokens": usage.total_tokens,
+            "completion_tokens_details": self.serialize_completion_tokens_details(usage.completion_tokens_details),
+            "prompt_tokens_details": self.serialize_prompt_tokens_details(usage.prompt_tokens_details)
+        }
+
+    def serialize_completion_tokens_details(self, details):
+        return {
+            "audio_tokens": details.audio_tokens,
+            "reasoning_tokens": details.reasoning_tokens
+        }
+
+    def serialize_prompt_tokens_details(self, details):
+        return {
+            "audio_tokens": details.audio_tokens,
+            "cached_tokens": details.cached_tokens
+        }
+
+    def serialize_choice(self, choice):
+        return {
+            "finish_reason": choice.finish_reason,
+            "index": choice.index,
+            "message": self.serialize_message(choice.message)
+        }
+
+    def serialize_message(self, message):
+        return {
+            "content": message.content,
+            "role": message.role,
+            "tool_calls": [self.serialize_tool_call(tc) for tc in message.tool_calls] if message.tool_calls else None
+        }
+
+    def serialize_tool_call(self, tool_call):
+        return {
+            "id": tool_call.id,
+            "type": tool_call.type,
+            "function": {
+                "name": tool_call.function.name,
+                "arguments": tool_call.function.arguments
+            }
         }
 
 if __name__ == "__main__":
     import asyncio
     from agentpress.db import Database
+    from tools.files_tool import FilesTool
 
     async def main():
         db = Database()
         manager = ThreadManager(db)
         
         thread_id = await manager.create_thread()
-        await manager.add_message(thread_id, {"role": "user", "content": "Let's have a conversation about artificial intelligence."})
+        await manager.add_message(thread_id, {"role": "user", "content": "Let's have a conversation about artificial intelligence and create a file summarizing our discussion."})
         
-        async def initializer(agent):
-            print("Initializing thread agent...")
-            agent.temperature = 0.8
-
-        async def pre_iteration(iteration: int, agent: ThreadAgent):
-            print(f"Preparing iteration {iteration + 1}...")
-            agent.max_tokens = 200 if iteration > 1 else 150
-
-        async def after_iteration(iteration: int, result: Dict[str, Any], agent: ThreadAgent):
-            print(f"Completed iteration {iteration + 1}. Status: {result.get('status')}")
-            if "AI ethics" in result.get("content", ""):
-                agent.continue_instructions = "Let's focus more on AI ethics in the next iteration."
-
-        async def finalizer(status: str, agent: ThreadAgent):
-            print(f"Thread agent finished with status: {status}")
-            print(f"Final configuration: {agent.__dict__}")
-
-        system_message = {"role": "system", "content": "You are an AI expert engaging in a conversation about artificial intelligence."}
-        response = await manager.run_thread_agent(
-            thread_id=thread_id,
-            system_message=system_message,
-            model_name="gpt-4o",
-            temperature=0.7,
-            max_tokens=150,
-            autonomous_iterations_amount=3,
-            continue_instructions="Continue the conversation about AI, introducing new aspects or asking thought-provoking questions.",
-            initializer=initializer,
-            pre_iteration=pre_iteration,
-            after_iteration=after_iteration,
-            finalizer=finalizer
-        )
+        system_message = {"role": "system", "content": "You are an AI expert engaging in a conversation about artificial intelligence. You can also create and manage files."}
         
-        print(f"Thread agent response: {response}")
+        files_tool = FilesTool()
+        tool_schemas = files_tool.get_schemas()
+
+        def initializer():
+            print("Initializing thread run...")
+            manager.run_config['temperature'] = 0.8
+
+        def pre_iteration():
+            print(f"Preparing iteration {manager.current_iteration}...")
+            manager.run_config['max_tokens'] = 200 if manager.current_iteration > 3 else 150
+
+        def after_iteration():
+            print(f"Completed iteration {manager.current_iteration}. Status: {manager.run_config['status']}")
+            manager.run_config['continue_instructions'] = "Let's focus more on AI ethics in the next iteration and update our summary file."
+
+        def finalizer():
+            print(f"Thread run finished with status: {manager.run_config['status']}")
+            print(f"Final configuration: {manager.run_config}")
+
+        settings = {
+            "thread_id": thread_id,
+            "system_message": system_message,
+            "model_name": "gpt-4o",
+            "temperature": 0.7,
+            "max_tokens": 150,
+            "autonomous_iterations_amount": 3,
+            "continue_instructions": "Continue the conversation about AI, introducing new aspects or asking thought-provoking questions. Don't forget to update our summary file.",
+            "initializer": initializer,
+            "pre_iteration": pre_iteration,
+            "after_iteration": after_iteration,
+            "finalizer": finalizer,
+            "tools": list(tool_schemas.keys()),
+            "tool_choice": "auto"
+        }
+
+        response = await manager.run_thread(settings)
+        
+        print(f"Thread run response: {response}")
 
         messages = await manager.list_messages(thread_id)
         print("\nFinal conversation:")

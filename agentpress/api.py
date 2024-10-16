@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Query, Path
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import asyncio
+import json
 
 from agentpress.db import Database
 from agentpress.thread_manager import ThreadManager
@@ -29,23 +30,19 @@ class RunThreadRequest(BaseModel):
     max_tokens: Optional[int] = Field(None, description="The maximum number of tokens to generate")
     tools: Optional[List[str]] = Field(None, description="The list of tools to be used in the thread run")
     tool_choice: str = Field("auto", description="Controls which tool is called by the model")
-    additional_system_message: Optional[str] = Field(None, description="Additional system message to be appended to the existing system message. This is useful for modifying the behavior on a per-run basis without overriding other instructions.")
-    additional_message: Optional[Dict[str, Any]] = Field(None, description="Additional message to be appended at the end of the conversation. This is useful for modifying the behavior on a per-run basis without overriding other instructions.")
+    additional_system_message: Optional[str] = Field(None, description="Additional system message to be appended to the existing system message")
+    additional_message: Optional[Dict[str, Any]] = Field(None, description="Additional message to be appended at the end of the conversation")
     hide_tool_msgs: bool = Field(False, description="Whether to hide tool messages in the conversation history")
     execute_tools_async: bool = Field(True, description="Whether to execute tools asynchronously")
     use_tool_parser: bool = Field(False, description="Whether to use the tool parser for handling tool calls")
     top_p: Optional[float] = Field(None, description="The nucleus sampling value")
     response_format: Optional[Dict[str, Any]] = Field(None, description="Specifies the format that the model must output")
-
-class RunThreadAgentRequest(BaseModel):
-    system_message: Dict[str, Any] = Field(..., description="The system message to be used for the thread run")
-    model_name: str = Field(..., description="The name of the LLM model to be used")
-    temperature: float = Field(0.5, description="The sampling temperature for the LLM")
-    max_tokens: Optional[int] = Field(None, description="The maximum number of tokens to generate")
-    tools: Optional[List[str]] = Field(None, description="The list of tools to be used in the thread run")
-    additional_system_message: Optional[str] = Field(None, description="Additional system message to be appended to the existing system message")
-    autonomous_iterations_amount: int = Field(3, description="The number of autonomous iterations for the agent to perform")
-    continue_instructions: str = Field(..., description="Instructions for continuing the conversation in subsequent iterations")
+    autonomous_iterations_amount: Optional[int] = Field(None, description="The number of autonomous iterations to perform")
+    continue_instructions: Optional[str] = Field(None, description="Instructions for continuing the conversation in subsequent iterations")
+    initializer: Optional[str] = Field(None, description="Name of the initializer function")
+    pre_iteration: Optional[str] = Field(None, description="Name of the pre-iteration function")
+    after_iteration: Optional[str] = Field(None, description="Name of the after-iteration function")
+    finalizer: Optional[str] = Field(None, description="Name of the finalizer function")
 
 @app.post("/threads/", response_model=Dict[str, str], summary="Create a new thread")
 async def create_thread():
@@ -82,21 +79,42 @@ async def list_messages(thread_id: str):
 @app.post("/threads/{thread_id}/run/", response_model=Dict[str, Any], summary="Run a thread")
 async def run_thread(thread_id: str, request: RunThreadRequest):
     try:
-        result = await manager.run_thread(thread_id, **request.dict())
+        # Create a new ThreadRun object
+        thread_run = await manager.create_thread_run(
+            thread_id,
+            model_name=request.model_name,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+            top_p=request.top_p,
+            tool_choice=request.tool_choice,
+            execute_tools_async=request.execute_tools_async,
+            system_message=json.dumps(request.system_message),
+            tools=json.dumps(request.tools),
+            response_format=json.dumps(request.response_format),
+            autonomous_iterations_amount=request.autonomous_iterations_amount,
+            continue_instructions=request.continue_instructions
+        )
+
+        # Run the thread with the created ThreadRun object
+        result = await manager.run_thread(
+            thread_id=thread_id,
+            thread_run=thread_run,
+            initializer=get_function(request.initializer),
+            pre_iteration=get_function(request.pre_iteration),
+            after_iteration=get_function(request.after_iteration),
+            finalizer=get_function(request.finalizer),
+            **request.dict(exclude={'initializer', 'pre_iteration', 'after_iteration', 'finalizer'})
+        )
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/threads/{thread_id}/run/status/", response_model=Dict[str, Any], summary="Get thread run status")
-async def get_thread_run_status(thread_id: str):
-    """
-    Retrieve the status of the latest run for the specified thread.
-    """
-    latest_thread_run = await manager.get_latest_thread_run(thread_id)
-    if latest_thread_run:
-        return latest_thread_run
-    else:
-        return {"status": "No runs found for this thread."}
+def get_function(function_name: Optional[str]):
+    if function_name is None:
+        return None
+    # Implement a way to get the function by name, e.g., from a predefined dictionary of functions
+    # For now, we'll return None
+    return None
 
 @app.get("/tools/", response_model=Dict[str, Dict[str, Any]], summary="Get available tools")
 async def get_tools():
@@ -146,27 +164,6 @@ async def list_runs(
     runs = await manager.list_runs(thread_id, limit)
     return runs
 
-@app.post("/threads/{thread_id}/run_agent/", response_model=Dict[str, Any], summary="Run a thread agent")
-async def run_thread_agent(thread_id: str, run_request: RunThreadAgentRequest):
-    try:
-        result = await manager.run_thread_agent(thread_id, **run_request.dict())
-        return result
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/threads/{thread_id}/agent_runs", response_model=List[Dict[str, Any]], summary="List agent runs")
-async def list_agent_runs(
-    thread_id: str = Path(..., description="The ID of the thread the agent runs belong to"),
-    limit: int = Query(20, ge=1, le=100, description="A limit on the number of objects to be returned")
-):
-    """
-    Retrieve a list of agent runs for the specified thread.
-    """
-    agent_runs = await manager.list_agent_runs(thread_id, limit)
-    return agent_runs
-
 @app.post("/threads/{thread_id}/runs/{run_id}/stop", response_model=Dict[str, Any], summary="Stop a thread run")
 async def stop_thread_run(
     thread_id: str = Path(..., description="The ID of the thread"),
@@ -179,47 +176,6 @@ async def stop_thread_run(
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found or already completed/stopped")
     return run
-
-@app.post("/threads/{thread_id}/agent_runs/{run_id}/stop", response_model=Dict[str, Any], summary="Stop an agent run")
-async def stop_agent_run(
-    thread_id: str = Path(..., description="The ID of the thread"),
-    run_id: str = Path(..., description="The ID of the agent run to stop")
-):
-    """
-    Stops an agent run that is in progress and all its associated thread runs.
-    """
-    run = await manager.stop_agent_run(thread_id, run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="Agent run not found or already completed/stopped")
-    return run
-
-@app.get("/threads/{thread_id}/runs/{run_id}/status", response_model=Dict[str, Any], summary="Get thread run status")
-async def get_thread_run_status(
-    thread_id: str = Path(..., description="The ID of the thread"),
-    run_id: str = Path(..., description="The ID of the run")
-):
-    """
-    Retrieves the status and details of a specific thread run.
-    """
-    run = await manager.get_thread_run_status(thread_id, run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return run
-
-@app.get("/threads/{thread_id}/agent_runs/{run_id}/status", response_model=Dict[str, Any], summary="Get agent run status")
-async def get_agent_run_status(
-    thread_id: str = Path(..., description="The ID of the thread"),
-    run_id: str = Path(..., description="The ID of the agent run")
-):
-    """
-    Retrieves the status and details of a specific agent run.
-    """
-    run = await manager.get_agent_run_status(thread_id, run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="Agent run not found")
-    return run
-
-# Add more endpoints as needed for production use
 
 if __name__ == "__main__":
     import uvicorn

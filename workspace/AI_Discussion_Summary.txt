@@ -1,0 +1,5 @@
+Artificial Intelligence (AI) is a branch of computer science that aims to create systems capable of performing tasks that would typically require human intelligence. These tasks include learning, reasoning, problem-solving, perception, and language understanding.
+
+AI can be categorized into Narrow AI, designed for a specific task like facial recognition, and General AI, which should be able to perform any intellectual task a human can do.
+
+AI has a broad range of applications, from healthcare (where it can predict disease outbreaks) to finance (where can be used to detect fraudulent transactions).

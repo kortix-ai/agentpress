@@ -55,7 +55,6 @@ def display_run_history(thread_id):
     
     # Fetch thread runs
     thread_runs = fetch_thread_runs(thread_id)
-    agent_runs = fetch_agent_runs(thread_id)
     
     # Display thread runs
     st.write("### Thread Runs")
@@ -63,6 +62,7 @@ def display_run_history(thread_id):
         with st.expander(f"Run {run['id']} - Status: {run['status']}"):
             st.write(f"Created At: {format_timestamp(run['created_at'])}")
             st.write(f"Status: {run['status']}")
+            st.write(f"Iterations: {len(run.get('iterations', []))} / {run.get('autonomous_iterations_amount', 1)}")
             
             if run['status'] == "in_progress":
                 if st.button(f"Stop Run {run['id']}", key=f"stop_thread_run_{run['id']}"):
@@ -74,25 +74,6 @@ def display_run_history(thread_id):
                 if updated_run:
                     run.update(updated_run)
                     st.rerun()
-    
-    # Display agent runs
-    st.write("### Agent Runs")
-    for run in agent_runs:
-        with st.expander(f"Agent Run {run['id']} - Status: {run['status']}"):
-            st.write(f"Created At: {format_timestamp(run['created_at'])}")
-            st.write(f"Status: {run['status']}")
-            st.write(f"Iterations: {run['iterations_count']} / {run['autonomous_iterations_amount']}")
-            
-            if run['status'] == "in_progress":
-                if st.button(f"Stop Agent Run {run['id']}", key=f"stop_agent_run_{run['id']}"):
-                    stop_agent_run(thread_id, run['id'])
-                    st.rerun()
-            
-            if st.button(f"Refresh Status for Agent Run {run['id']}", key=f"refresh_agent_run_{run['id']}"):
-                updated_run = get_agent_run_status(thread_id, run['id'])
-                if updated_run:
-                    run.update(updated_run)
-                    st.rerun()
 
 def fetch_thread_runs(thread_id):
     response = requests.get(f"{API_BASE_URL}/threads/{thread_id}/runs")
@@ -100,14 +81,6 @@ def fetch_thread_runs(thread_id):
         return response.json()
     else:
         st.error("Failed to fetch thread runs.")
-        return []
-
-def fetch_agent_runs(thread_id):
-    response = requests.get(f"{API_BASE_URL}/threads/{thread_id}/agent_runs")
-    if response.status_code == 200:
-        return response.json()
-    else:
-        st.error("Failed to fetch agent runs.")
         return []
 
 def format_timestamp(timestamp):

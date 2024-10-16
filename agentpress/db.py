@@ -18,7 +18,6 @@ class Thread(Base):
     created_at = Column(Integer)
 
     runs = relationship("ThreadRun", back_populates="thread")
-    agent_runs = relationship("AgentRun", back_populates="thread")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -46,31 +45,11 @@ class ThreadRun(Base):
     tools = Column(JSON, nullable=True)
     usage = Column(JSON, nullable=True)
     response_format = Column(JSON, nullable=True)
-
-    thread = relationship("Thread", back_populates="runs")
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.created_at = int(datetime.utcnow().timestamp())
-
-class AgentRun(Base):
-    __tablename__ = "agent_runs"
-
-    id = Column(String, primary_key=True)
-    thread_id = Column(String, ForeignKey("threads.thread_id"))
-    status = Column(String, default="queued")
-    last_error = Column(String, nullable=True)
-    created_at = Column(Integer)
-    started_at = Column(Integer, nullable=True)
-    cancelled_at = Column(Integer, nullable=True)
-    failed_at = Column(Integer, nullable=True)
-    completed_at = Column(Integer, nullable=True)
-    autonomous_iterations_amount = Column(Integer)
-    iterations_count = Column(Integer, default=0)  # Add this line
+    autonomous_iterations_amount = Column(Integer, nullable=True)
     continue_instructions = Column(String, nullable=True)
     iterations = Column(JSON, nullable=True)
 
-    thread = relationship("Thread", back_populates="agent_runs")
+    thread = relationship("Thread", back_populates="runs")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

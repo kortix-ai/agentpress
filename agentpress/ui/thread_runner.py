@@ -47,7 +47,7 @@ def run_thread(thread_id, run_thread_data):
             st.subheader("Full Response Data")
             st.json(response_data)
             
-            return response_data
+            return response_data  # Return the response data
         except requests.exceptions.RequestException as e:
             st.error(f"Failed to run thread. Error: {str(e)}")
             if hasattr(e, 'response') and e.response is not None:
@@ -55,6 +55,8 @@ def run_thread(thread_id, run_thread_data):
                 st.text(e.response.text)
         except Exception as e:
             st.error(f"An unexpected error occurred: {str(e)}")
+        
+        return None  # Return None if there was an error
 
 def run_thread_agent(thread_id, run_thread_agent_data):
     with st.spinner("Running thread agent..."):
@@ -124,7 +126,7 @@ def format_timestamp(timestamp):
 
 def display_runs(runs):
     for run in runs:
-        with st.expander(f"{'Agent ' if run.get('is_agent_run', False) else ''}Run {run['id']} - Status: {run['status']}", expanded=False):
+        with st.expander(f"Run {run['id']} - Status: {run['status']}", expanded=False):
             col1, col2 = st.columns(2)
             with col1:
                 st.write(f"**Created At:** {format_timestamp(run['created_at'])}")
@@ -133,55 +135,44 @@ def display_runs(runs):
                 st.write(f"**Cancelled At:** {format_timestamp(run['cancelled_at'])}")
                 st.write(f"**Failed At:** {format_timestamp(run['failed_at'])}")
             with col2:
-                if run.get('is_agent_run', False):
-                    st.write(f"**Autonomous Iterations:** {run['autonomous_iterations_amount']}")
-                    st.write(f"**Completed Iterations:** {run['iterations_count']}")
-                else:
-                    st.write(f"**Model:** {run['model']}")
-                    st.write(f"**Temperature:** {run['temperature']}")
-                    st.write(f"**Top P:** {run['top_p']}")
-                    st.write(f"**Max Tokens:** {run['max_tokens']}")
-                    st.write(f"**Tool Choice:** {run['tool_choice']}")
-                    st.write(f"**Execute Tools Async:** {run['execute_tools_async']}")
+                st.write(f"**Model:** {run['model']}")
+                st.write(f"**Temperature:** {run['temperature']}")
+                st.write(f"**Top P:** {run['top_p']}")
+                st.write(f"**Max Tokens:** {run['max_tokens']}")
+                st.write(f"**Tool Choice:** {run['tool_choice']}")
+                st.write(f"**Execute Tools Async:** {run['execute_tools_async']}")
+                st.write(f"**Autonomous Iterations:** {run['autonomous_iterations_amount']}")
             
-            if not run.get('is_agent_run', False):
-                st.write("**System Message:**")
-                st.json(run['system_message'])
-                
-                if run['tools']:
-                    st.write("**Tools:**")
-                    st.json(run['tools'])
-                
-                if run['usage']:
-                    st.write("**Usage:**")
-                    st.json(run['usage'])
-                
-                if run['response_format']:
-                    st.write("**Response Format:**")
-                    st.json(run['response_format'])
+            st.write("**System Message:**")
+            st.json(run['system_message'])
+            
+            if run['tools']:
+                st.write("**Tools:**")
+                st.json(run['tools'])
+            
+            if run['usage']:
+                st.write("**Usage:**")
+                st.json(run['usage'])
+            
+            if run['response_format']:
+                st.write("**Response Format:**")
+                st.json(run['response_format'])
             
             if run['last_error']:
                 st.error("**Last Error:**")
                 st.code(run['last_error'])
 
-            if run.get('is_agent_run', False):
-                if run['continue_instructions']:
-                    st.write("**Continue Instructions:**")
-                    st.text(run['continue_instructions'])
+            if run['continue_instructions']:
+                st.write("**Continue Instructions:**")
+                st.text(run['continue_instructions'])
 
             if run['status'] == "in_progress":
-                if st.button(f"Stop {'Agent ' if run.get('is_agent_run', False) else ''}Run {run['id']}", key=f"stop_button_{run['id']}"):
-                    if run.get('is_agent_run', False):
-                        stop_agent_run(run['thread_id'], run['id'])
-                    else:
-                        stop_thread_run(run['thread_id'], run['id'])
+                if st.button(f"Stop Run {run['id']}", key=f"stop_button_{run['id']}"):
+                    stop_thread_run(run['thread_id'], run['id'])
                     st.rerun()
 
-            if st.button(f"Refresh Status for {'Agent ' if run.get('is_agent_run', False) else ''}Run {run['id']}", key=f"refresh_button_{run['id']}"):
-                if run.get('is_agent_run', False):
-                    updated_run = get_agent_run_status(run['thread_id'], run['id'])
-                else:
-                    updated_run = get_thread_run_status(run['thread_id'], run['id'])
+            if st.button(f"Refresh Status for Run {run['id']}", key=f"refresh_button_{run['id']}"):
+                updated_run = get_thread_run_status(run['thread_id'], run['id'])
                 if updated_run:
                     run.update(updated_run)
                     st.rerun()
@@ -195,27 +186,10 @@ def stop_thread_run(thread_id, run_id):
         st.error(f"Failed to stop thread run. Status code: {response.status_code}")
         return None
 
-def stop_agent_run(thread_id, run_id):
-    response = requests.post(f"{API_BASE_URL}/threads/{thread_id}/agent_runs/{run_id}/stop")
-    if response.status_code == 200:
-        st.success("Agent run and all associated thread runs stopped successfully.")
-        return response.json()
-    else:
-        st.error(f"Failed to stop agent run. Status code: {response.status_code}")
-        return None
-
 def get_thread_run_status(thread_id, run_id):
     response = requests.get(f"{API_BASE_URL}/threads/{thread_id}/runs/{run_id}/status")
     if response.status_code == 200:
         return response.json()
     else:
         st.error(f"Failed to get thread run status. Status code: {response.status_code}")
-        return None
-
-def get_agent_run_status(thread_id, run_id):
-    response = requests.get(f"{API_BASE_URL}/threads/{thread_id}/agent_runs/{run_id}/status")
-    if response.status_code == 200:
-        return response.json()
-    else:
-        st.error(f"Failed to get agent run status. Status code: {response.status_code}")
         return None
