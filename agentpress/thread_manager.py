@@ -417,6 +417,7 @@ class ThreadManager:
             "role": "assistant",
             "content": response_message.get('content') or "",
         }
+
         tool_calls = response_message.get('tool_calls')
         if tool_calls:
             message["tool_calls"] = [
@@ -430,7 +431,7 @@ class ThreadManager:
                 } for tool_call in tool_calls
             ]
         return message
-
+    
     def get_available_functions(self) -> Dict[str, Callable]:
         available_functions = {}
         for tool_name, tool_info in self.tool_registry.get_all_tools().items():
