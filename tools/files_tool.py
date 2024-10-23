@@ -1,7 +1,7 @@
 import os
 import asyncio
 from typing import Dict, Any
-from agentpress.tool import Tool, ToolResult
+from agentpress.tool import Tool, ToolResult, tool_schema
 from agentpress.config import settings
 
 class FilesTool(Tool):
@@ -10,6 +10,18 @@ class FilesTool(Tool):
         self.workspace = settings.workspace_dir
         os.makedirs(self.workspace, exist_ok=True)
 
+    @tool_schema({
+        "name": "create_file",
+        "description": "Create a new file in the workspace",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "The relative path of the file to create"},
+                "content": {"type": "string", "description": "The content to write to the file"}
+            },
+            "required": ["file_path", "content"]
+        }
+    })
     async def create_file(self, file_path: str, content: str) -> ToolResult:
         try:
             full_path = os.path.join(self.workspace, file_path)
@@ -22,6 +34,17 @@ class FilesTool(Tool):
         except Exception as e:
             return self.fail_response(f"Error creating file: {str(e)}")
 
+    @tool_schema({
+        "name": "read_file",
+        "description": "Read the contents of a file in the workspace",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "The relative path of the file to read"}
+            },
+            "required": ["file_path"]
+        }
+    })
     async def read_file(self, file_path: str) -> ToolResult:
         try:
             full_path = os.path.join(self.workspace, file_path)
@@ -31,6 +54,18 @@ class FilesTool(Tool):
         except Exception as e:
             return self.fail_response(f"Error reading file: {str(e)}")
 
+    @tool_schema({
+        "name": "update_file",
+        "description": "Update the contents of a file in the workspace",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "The relative path of the file to update"},
+                "content": {"type": "string", "description": "The new content to write to the file"}
+            },
+            "required": ["file_path", "content"]
+        }
+    })
     async def update_file(self, file_path: str, content: str) -> ToolResult:
         try:
             full_path = os.path.join(self.workspace, file_path)
@@ -40,6 +75,18 @@ class FilesTool(Tool):
         except Exception as e:
             return self.fail_response(f"Error updating file: {str(e)}")
 
+
+    @tool_schema({
+        "name": "delete_file",
+        "description": "Delete a file from the workspace",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "The relative path of the file to delete"}
+            },
+            "required": ["file_path"]
+        }
+    })
     async def delete_file(self, file_path: str) -> ToolResult:
         try:
             full_path = os.path.join(self.workspace, file_path)
@@ -48,74 +95,6 @@ class FilesTool(Tool):
         except Exception as e:
             return self.fail_response(f"Error deleting file: {str(e)}")
 
-    def get_schemas(self) -> Dict[str, Dict[str, Any]]:
-        schemas = {
-            "create_file": {
-                "name": "create_file",
-                "description": "Create a new file in the workspace",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "The relative path of the file to create"
-                        },
-                        "content": {
-                            "type": "string",
-                            "description": "The content to write to the file"
-                        }
-                    },
-                    "required": ["file_path", "content"]
-                }
-            },
-            "read_file": {
-                "name": "read_file",
-                "description": "Read the contents of a file in the workspace",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "The relative path of the file to read"
-                        }
-                    },
-                    "required": ["file_path"]
-                }
-            },
-            "update_file": {
-                "name": "update_file",
-                "description": "Update the contents of a file in the workspace",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "The relative path of the file to update"
-                        },
-                        "content": {
-                            "type": "string",
-                            "description": "The new content to write to the file"
-                        }
-                    },
-                    "required": ["file_path", "content"]
-                }
-            },
-            "delete_file": {
-                "name": "delete_file",
-                "description": "Delete a file from the workspace",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "The relative path of the file to delete"
-                        }
-                    },
-                    "required": ["file_path"]
-                }
-            }
-        }
-        return {name: self.format_schema(schema) for name, schema in schemas.items()}
 
 if __name__ == "__main__":
     async def test_files_tool():

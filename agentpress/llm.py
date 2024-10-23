@@ -26,7 +26,7 @@ os.environ['GROQ_API_KEY'] = GROQ_API_KEY
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def make_llm_api_call(messages, model_name, json_mode=False, temperature=0, max_tokens=None, tools=None, tool_choice="auto", api_key=None, api_base=None, agentops_session=None, stream=False, top_p=None, response_format=None) -> Union[Dict[str, Any], str]:
+async def make_llm_api_call(messages, model_name, response_format=None, temperature=0, max_tokens=None, tools=None, tool_choice="auto", api_key=None, api_base=None, agentops_session=None, stream=False, top_p=None):
     litellm.set_verbose = True
 
     async def attempt_api_call(api_call_func, max_attempts=3):
@@ -49,7 +49,7 @@ async def make_llm_api_call(messages, model_name, json_mode=False, temperature=0
             "model": model_name,
             "messages": messages,
             "temperature": temperature,
-            "response_format": response_format or ({"type": "json_object"} if json_mode else None),
+            "response_format": response_format,
             "top_p": top_p,
             "stream": stream,
         }
