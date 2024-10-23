@@ -40,6 +40,7 @@ async def run_agent(
                     tool_choice="auto",
                     additional_message=None,            
                     execute_tools_async=False,
+                    use_tools=True
                     execute_model_tool_calls=True                    
                 )
 
