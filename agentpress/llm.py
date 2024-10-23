@@ -11,10 +11,13 @@ import agentops
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+AGENTOPS_API_KEY = os.environ.get('AGENTOPS_API_KEY')
 
 os.environ['OPENAI_API_KEY'] = OPENAI_API_KEY
 os.environ['ANTHROPIC_API_KEY'] = ANTHROPIC_API_KEY
 os.environ['GROQ_API_KEY'] = GROQ_API_KEY
+
+# agentops.init(AGENTOPS_API_KEY)
 # os.environ['LITELLM_LOG'] = 'DEBUG'
 
 # Setup logging
