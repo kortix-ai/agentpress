@@ -1,6 +1,5 @@
 import os
 import asyncio
-from typing import Dict, Any
 from agentpress.tool import Tool, ToolResult, tool_schema
 
 class FilesTool(Tool):

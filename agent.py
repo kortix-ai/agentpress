@@ -1,5 +1,4 @@
 import asyncio
-from typing import Dict, Any
 from agentpress.thread_manager import ThreadManager
 from tools.files_tool import FilesTool
 
@@ -8,7 +7,7 @@ async def run_agent(
     thread_id: int,
     max_iterations: int = 10
 ):
-    
+
     async def init():
         pass
 
@@ -53,7 +52,6 @@ if __name__ == "__main__":
     async def main():
         thread_manager = ThreadManager()
         thread_id = await thread_manager.create_thread()
-
         await thread_manager.add_message(thread_id, {"role": "user", "content": "Please create a file with a random name with the content 'Hello, world!'"})
 
         thread_manager.add_tool(FilesTool)

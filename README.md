@@ -1,4 +1,4 @@
-# AgentPress: LLM Messages[] API on Steroids with Threads & Automatic Tool Execution
+# AgentPress: LLM Messages[] API on Steroids called "Threads" with easy Tool Definition & Tool Execution
 
 AgentPress is a lightweight, powerful utility for kickstarting your LLM App or AI Agent. It provides a simple way to manage message threads, execute LLM calls, and automatically handle tool interactions.
 
@@ -12,18 +12,28 @@ AgentPress is a lightweight, powerful utility for kickstarting your LLM App or A
 
 1. Clone the repository:
    ```
-   git clone https://github.com/your-username/agentpress.git
+   git clone https://github.com/kortix-ai/agentpress
    cd agentpress
    ```
 
-2. Install dependencies:
+2. Install Poetry (if not already installed):
    ```
-   pip install -r requirements.txt
+   pip install poetry
    ```
 
-3. Set up your environment variables (API keys, etc.) in a `.env` file.
+3. Install dependencies using Poetry:
+   ```
+   poetry install
+   ```
 
-4. Create a simple tool:
+4. Run with poetry:
+   ```
+   poetry run python agent.py 
+   ```
+
+5. Set up your environment variables (API keys, etc.) in a `.env` file.
+
+6. Create a simple tool:
    ```python
    from agentpress.tool import Tool, ToolResult, tool_schema
 
@@ -44,7 +54,7 @@ AgentPress is a lightweight, powerful utility for kickstarting your LLM App or A
            return self.success_response(f"The sum is {a + b}")
    ```
 
-5. Use the ThreadManager to run a conversation:
+7. Use the ThreadManager to run a conversation:
    ```python
    import asyncio
    from agentpress.thread_manager import ThreadManager
@@ -67,7 +77,7 @@ AgentPress is a lightweight, powerful utility for kickstarting your LLM App or A
    ```
 
 
-6. Create an autonomous agent with multiple iterations:
+8. Create an autonomous agent with multiple iterations:
    ```python
    import asyncio
    from agentpress.thread_manager import ThreadManager
