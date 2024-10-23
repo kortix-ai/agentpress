@@ -1,9 +1,8 @@
 import json
 import logging
 import asyncio
+import os
 from typing import List, Dict, Any, Optional, Callable, Type
-from sqlalchemy import select
-from agentpress.db import Database, Thread
 from agentpress.llm import make_llm_api_call
 from datetime import datetime, UTC
 from agentpress.tool import Tool, ToolResult
@@ -11,9 +10,10 @@ from agentpress.tool_registry import ToolRegistry
 import uuid
 
 class ThreadManager:
-    def __init__(self, db: Optional[Database] = None):
-        self.db = db if db is not None else Database()
+    def __init__(self, threads_dir: str = 'threads'):
+        self.threads_dir = threads_dir
         self.tool_registry = ToolRegistry()
+        os.makedirs(self.threads_dir, exist_ok=True)
 
     def add_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None):
         """
@@ -23,71 +23,71 @@ class ThreadManager:
         """
         self.tool_registry.register_tool(tool_class, function_names)
 
-    async def create_thread(self) -> int:
-        async with self.db.get_async_session() as session:
-            new_thread = Thread(
-                messages=json.dumps([])
-            )
-            session.add(new_thread)
-            await session.commit()
-            await session.refresh(new_thread)
-            return new_thread.thread_id
+    async def create_thread(self) -> str:
+        thread_id = str(uuid.uuid4())
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        with open(thread_path, 'w') as f:
+            json.dump({"messages": []}, f)
+        return thread_id
 
-    async def add_message(self, thread_id: int, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
+    async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
         logging.info(f"Adding message to thread {thread_id} with images: {images}")
-        async with self.db.get_async_session() as session:
-            thread = await session.get(Thread, thread_id)
-            if not thread:
-                raise ValueError(f"Thread with id {thread_id} not found")
-
-            try:
-                messages = json.loads(thread.messages)
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        
+        try:
+            with open(thread_path, 'r') as f:
+                thread_data = json.load(f)
+            
+            messages = thread_data["messages"]
+            
+            if message_data['role'] == 'user':
+                last_assistant_index = next((i for i in reversed(range(len(messages))) if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
                 
-                if message_data['role'] == 'user':
-                    last_assistant_index = next((i for i in reversed(range(len(messages))) if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
+                if last_assistant_index is not None:
+                    tool_call_count = len(messages[last_assistant_index]['tool_calls'])
+                    tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] if msg['role'] == 'tool')
                     
-                    if last_assistant_index is not None:
-                        tool_call_count = len(messages[last_assistant_index]['tool_calls'])
-                        tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] if msg['role'] == 'tool')
-                        
-                        if tool_call_count != tool_response_count:
-                            await self.cleanup_incomplete_tool_calls(thread_id)
+                    if tool_call_count != tool_response_count:
+                        await self.cleanup_incomplete_tool_calls(thread_id)
 
-                for key, value in message_data.items():
-                    if isinstance(value, ToolResult):
-                        message_data[key] = str(value)
+            for key, value in message_data.items():
+                if isinstance(value, ToolResult):
+                    message_data[key] = str(value)
 
-                if images:
-                    if isinstance(message_data['content'], str):
-                        message_data['content'] = [{"type": "text", "text": message_data['content']}]
-                    elif not isinstance(message_data['content'], list):
-                        message_data['content'] = []
+            if images:
+                if isinstance(message_data['content'], str):
+                    message_data['content'] = [{"type": "text", "text": message_data['content']}]
+                elif not isinstance(message_data['content'], list):
+                    message_data['content'] = []
 
-                    for image in images:
-                        image_content = {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{image['content_type']};base64,{image['base64']}",
-                                "detail": "high"
-                            }
+                for image in images:
+                    image_content = {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{image['content_type']};base64,{image['base64']}",
+                            "detail": "high"
                         }
-                        message_data['content'].append(image_content)
+                    }
+                    message_data['content'].append(image_content)
 
-                messages.append(message_data)
-                thread.messages = json.dumps(messages)
-                await session.commit()
-                logging.info(f"Message added to thread {thread_id}: {message_data}")
-            except Exception as e:
-                await session.rollback()
-                logging.error(f"Failed to add message to thread {thread_id}: {e}")
-                raise e
+            messages.append(message_data)
+            thread_data["messages"] = messages
+            
+            with open(thread_path, 'w') as f:
+                json.dump(thread_data, f)
+            
+            logging.info(f"Message added to thread {thread_id}: {message_data}")
+        except Exception as e:
+            logging.error(f"Failed to add message to thread {thread_id}: {e}")
+            raise e
 
-    async def list_messages(self, thread_id: int, hide_tool_msgs: bool = False, only_latest_assistant: bool = False, regular_list: bool = True) -> List[Dict[str, Any]]:
-        async with self.db.get_async_session() as session:
-            thread = await session.get(Thread, thread_id)
-            if not thread:
-                return []
-            messages = json.loads(thread.messages)
+    async def list_messages(self, thread_id: str, hide_tool_msgs: bool = False, only_latest_assistant: bool = False, regular_list: bool = True) -> List[Dict[str, Any]]:
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        
+        try:
+            with open(thread_path, 'r') as f:
+                thread_data = json.load(f)
+            messages = thread_data["messages"]
             
             if only_latest_assistant:
                 for msg in reversed(messages):
@@ -111,8 +111,10 @@ class ThreadManager:
                 ]
             
             return filtered_messages
+        except FileNotFoundError:
+            return []
 
-    async def cleanup_incomplete_tool_calls(self, thread_id: int):
+    async def cleanup_incomplete_tool_calls(self, thread_id: str):
         messages = await self.list_messages(thread_id)
         last_assistant_message = next((m for m in reversed(messages) if m['role'] == 'assistant' and 'tool_calls' in m), None)
 
@@ -134,16 +136,14 @@ class ThreadManager:
                 assistant_index = messages.index(last_assistant_message)
                 messages[assistant_index+1:assistant_index+1] = failed_tool_results
 
-                async with self.db.get_async_session() as session:
-                    thread = await session.get(Thread, thread_id)
-                    if thread:
-                        thread.messages = json.dumps(messages)
-                        await session.commit()
+                thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+                with open(thread_path, 'w') as f:
+                    json.dump({"messages": messages}, f)
 
                 return True
         return False
 
-    async def run_thread(self, thread_id: int, system_message: Dict[str, Any], model_name: str, temperature: float = 0, max_tokens: Optional[int] = None, tool_choice: str = "auto", additional_message: Optional[Dict[str, Any]] = None, execute_tools_async: bool = True, execute_model_tool_calls: bool = True, use_tools: bool = True) -> Dict[str, Any]:
+    async def run_thread(self, thread_id: str, system_message: Dict[str, Any], model_name: str, temperature: float = 0, max_tokens: Optional[int] = None, tool_choice: str = "auto", additional_message: Optional[Dict[str, Any]] = None, execute_tools_async: bool = True, execute_model_tool_calls: bool = True, use_tools: bool = True) -> Dict[str, Any]:
         
         messages = await self.list_messages(thread_id)
         prepared_messages = [system_message] + messages
@@ -203,11 +203,11 @@ class ThreadManager:
             }
         }
 
-    async def handle_response_without_tools(self, thread_id: int, response: Any):
+    async def handle_response_without_tools(self, thread_id: str, response: Any):
         response_content = response.choices[0].message['content']
         await self.add_message(thread_id, {"role": "assistant", "content": response_content})
 
-    async def handle_response_with_tools(self, thread_id: int, response: Any, execute_tools_async: bool):
+    async def handle_response_with_tools(self, thread_id: str, response: Any, execute_tools_async: bool):
         try:
             response_message = response.choices[0].message
             tool_calls = response_message.get('tool_calls', [])
@@ -306,9 +306,13 @@ class ThreadManager:
             "content": str(function_response),
         }
 
-    async def get_thread(self, thread_id: int) -> Optional[Thread]:
-        async with self.db.get_async_session() as session:
-            return await session.get(Thread, thread_id)
+    async def get_thread(self, thread_id: str) -> Optional[Dict[str, Any]]:
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        try:
+            with open(thread_path, 'r') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return None
 
 if __name__ == "__main__":
     import asyncio

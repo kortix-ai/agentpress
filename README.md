@@ -1,171 +1,107 @@
-# AgentPress
+# AgentPress: Messages[] API on Steroids with Threads & Automatic Tool Execution
 
-AgentPress is a powerful framework for creating AI agents, with the ThreadManager at its core. This system simplifies the process of building, configuring, and running AI agents that can engage in conversations, perform tasks, and interact with various tools.
+AgentPress is a lightweight, powerful utility for kickstarting your LLM App or AI Agent. It provides a simple way to manage message threads, execute LLM calls, and automatically handle tool interactions.
 
-## Key Concept: ThreadManager
+## Key Features
 
-The ThreadManager is the central component of AgentPress. It manages conversation threads, handles tool integrations, and coordinates the execution of AI models. Here's why it's crucial:
+- **Thread Management**: Easily create, update, and manage message threads.
+- **Automatic Tool Execution**: Define tools as Python classes and have them automatically called by the LLM.
+- **Flexible LLM Integration**: Uses LiteLLM under the hood, allowing easy switching between different LLM providers.
 
-1. **Conversation Management**: It creates and manages threads, allowing for coherent multi-turn conversations.
-2. **Tool Integration**: It integrates various tools that the AI can use to perform tasks.
-3. **Model Execution**: It handles the execution of AI models, managing the context and responses.
-4. **State Management**: It maintains the state of conversations and tool executions across multiple turns.
+## Quick Start
 
-## How It Works
+1. Clone the repository:
+   ```
+   git clone https://github.com/your-username/agentpress.git
+   cd agentpress
+   ```
 
-1. **Create a ThreadManager**: This is your first step in using AgentPress.
-2. **Add Tools**: Register any tools your agent might need.
-3. **Create a Thread**: Each conversation or task execution is managed in a thread.
-4. **Run the Thread**: Execute the AI model within the context of the thread, optionally using tools.
+2. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
 
-## Standalone Example
+3. Set up your environment variables (API keys, etc.) in a `.env` file.
 
-Here's how to use the ThreadManager standalone:
+4. Create a simple tool:
+   ```python
+   from agentpress.tool import Tool, ToolResult, tool_schema
 
-```python
-import asyncio
-from agentpress.thread_manager import ThreadManager
-from tools.files_tool import FilesTool
+   class CalculatorTool(Tool):
+       @tool_schema({
+           "name": "add",
+           "description": "Add two numbers",
+           "parameters": {
+               "type": "object",
+               "properties": {
+                   "a": {"type": "number"},
+                   "b": {"type": "number"}
+               },
+               "required": ["a", "b"]
+           }
+       })
+       async def add(self, a: float, b: float) -> ToolResult:
+           return self.success_response(f"The sum is {a + b}")
+   ```
 
-async def main():
-    # Create a ThreadManager instance
-    thread_manager = ThreadManager()
+5. Use the ThreadManager to run a conversation:
+   ```python
+   import asyncio
+   from agentpress.thread_manager import ThreadManager
 
-    # Add a tool
-    thread_manager.add_tool(FilesTool)
+   async def main():
+       manager = ThreadManager()
+       manager.add_tool(CalculatorTool)
+       thread_id = await manager.create_thread()
+       await manager.add_message(thread_id, {"role": "user", "content": "What's 2 + 2?"})
+       system_message = {"role": "system", "content": "You are a helpful assistant with calculation abilities."}
+       response = await manager.run_thread(
+           thread_id=thread_id,
+           system_message=system_message,
+           model_name="gpt-4o",
+           execute_model_tool_calls=True
+       )
+       print("Response:", response)
 
-    # Create a new thread
-    thread_id = await thread_manager.create_thread()
+   asyncio.run(main())
+   ```
 
-    # Add an initial message to the thread
-    await thread_manager.add_message(thread_id, {"role": "user", "content": "Create a file named 'hello.txt' with the content 'Hello, World!'"})
 
-    # Run the thread
-    response = await thread_manager.run_thread(
-        thread_id=thread_id,
-        system_message={"role": "system", "content": "You are a helpful assistant that can create and manage files."},
-        model_name="gpt-4",
-        temperature=0.7,
-        max_tokens=150,
-        tool_choice="auto"
-    )
+6. Create an autonomous agent with multiple iterations:
+   ```python
+   import asyncio
+   from agentpress.thread_manager import ThreadManager
+   from tools.files_tool import FilesTool
 
-    # Print the response
-    print(response)
+   async def run_autonomous_agent(max_iterations=5):
+       thread_manager = ThreadManager()
+       thread_id = await thread_manager.create_thread()
+       thread_manager.add_tool(FilesTool)
 
-    # You can continue the conversation by adding more messages and running the thread again
-    await thread_manager.add_message(thread_id, {"role": "user", "content": "Now read the contents of 'hello.txt'"})
+       system_message = {"role": "system", "content": "You are a helpful assistant that can create, read, update, and delete files."}
 
-    response = await thread_manager.run_thread(
-        thread_id=thread_id,
-        system_message={"role": "system", "content": "You are a helpful assistant that can create and manage files."},
-        model_name="gpt-4",
-        temperature=0.7,
-        max_tokens=150,
-        tool_choice="auto"
-    )
+       for iteration in range(max_iterations):
+           print(f"Iteration {iteration + 1}/{max_iterations}")
+           
+            await thread_manager.add_message(thread_id, {"role": "user", "content": "Continue!"})
 
-    print(response)
+           response = await thread_manager.run_thread(
+               thread_id=thread_id,
+               system_message=system_message,
+               model_name="anthropic/claude-3-5-sonnet-20240620",
+               temperature=0.7,
+               max_tokens=4096,
+               tool_choice="auto",
+               execute_tools_async=False,
+               execute_model_tool_calls=True
+           )
 
-if __name__ == "__main__":
-    asyncio.run(main())
-```
+   if __name__ == "__main__":
+       asyncio.run(run_autonomous_agent())
+   ```
 
-This example demonstrates how to:
-1. Create a ThreadManager
-2. Add a tool (FilesTool)
-3. Create a new thread
-4. Add messages to the thread
-5. Run the thread, which executes the AI model and potentially uses tools
-6. Continue the conversation with additional messages and thread runs
+   This example demonstrates how to create an autonomous agent that runs for a specified number of iterations. It uses the `FilesTool` to interact with the file system and showcases how to control the behavior of `run_thread` by adjusting parameters like `temperature`, `max_tokens`, and `tool_choice`. The agent creates files autonomously.
 
-## Building More Complex Agents
-
-While the ThreadManager can be used standalone, it's also the foundation for building more complex agents. You can create custom agent behaviors by defining initialization, pre-iteration, post-iteration, and finalization steps, setting up loops for autonomous iterations, and implementing custom logic for when and how to run threads.
-
-Here's an example of a more complex agent implementation using the `run_agent` function:
-
-```python
-async def run_agent(
-    thread_manager: ThreadManager,
-    thread_id: int,
-    max_iterations: int = 10
-):
-    async def init():
-        # Initialization code here
-        pass
-
-    async def pre_iteration():
-        # Pre-iteration code here
-        pass
-
-    async def after_iteration():
-        # Post-iteration code here
-        await thread_manager.add_message(thread_id, {"role": "user", "content": "CREATE MORE RANDOM FILES WITH RANDOM CONTENTS. JUST CREATE IT – NO QUESTIONS PLEASE."})
-
-    async def finalizer():
-        # Finalization code here
-        pass    
-
-    await init()
-
-    iteration = 0
-    while iteration < max_iterations:
-        iteration += 1
-        await pre_iteration()
-
-        system_message = {"role": "system", "content": "You are a helpful assistant that can create, read, update, and delete files."}
-        model_name = "gpt-4"
-
-        response = await thread_manager.run_thread(
-            thread_id=thread_id,
-            system_message=system_message,
-            model_name=model_name,
-            temperature=0.7,
-            max_tokens=150,
-            tool_choice="auto",
-            additional_message=None,            
-            execute_tools_async=False,
-            execute_model_tool_calls=True                    
-        )
-
-        await after_iteration()
-
-    await finalizer()
-
-# Usage
-if __name__ == "__main__":
-    async def main():
-        thread_manager = ThreadManager()
-        thread_id = await thread_manager.create_thread()
-
-        await thread_manager.add_message(thread_id, {"role": "user", "content": "Please create a file with a random name with the content 'Hello, world!'"})
-
-        thread_manager.add_tool(FilesTool)
-        
-        await run_agent(
-            thread_manager=thread_manager,
-            thread_id=thread_id,
-            max_iterations=5
-        )
-
-    asyncio.run(main())
-```
-
-This more complex example shows how to:
-1. Define custom behavior for different stages of the agent's execution
-2. Set up a loop for multiple iterations
-3. Use the ThreadManager within a larger agent structure
-
-## Documentation
-
-For more detailed information about the AgentPress components:
-
-- `ThreadManager`: The core class that manages threads, tools, and model execution.
-- `Tool`: Base class for creating custom tools that can be used by the AI.
-- `ToolRegistry`: Manages the registration and retrieval of tools.
-
-Refer to the comments in the source code files for comprehensive documentation on each component.
 
 ## Contributing
 
@@ -176,3 +112,10 @@ We welcome contributions to AgentPress! Please feel free to submit issues, fork 
 [MIT License](LICENSE)
 
 Built with ❤️ by [Kortix AI Corp](https://www.kortix.ai)
+
+
+
+
+
+
+
