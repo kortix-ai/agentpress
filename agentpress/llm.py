@@ -26,7 +26,7 @@ os.environ['GROQ_API_KEY'] = GROQ_API_KEY
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def make_llm_api_call(messages, model_name, json_mode=False, temperature=0, max_tokens=None, tools=None, tool_choice="auto", use_tool_parser=False, api_key=None, api_base=None, agentops_session=None, stream=False, top_p=None, response_format=None) -> Union[Dict[str, Any], str]:
+async def make_llm_api_call(messages, model_name, json_mode=False, temperature=0, max_tokens=None, tools=None, tool_choice="auto", api_key=None, api_base=None, agentops_session=None, stream=False, top_p=None, response_format=None) -> Union[Dict[str, Any], str]:
     litellm.set_verbose = True
 
     async def attempt_api_call(api_call_func, max_attempts=3):
@@ -69,14 +69,9 @@ async def make_llm_api_call(messages, model_name, json_mode=False, temperature=0
                 api_call_params["max_tokens"] = max_tokens
 
         if tools:
-            if use_tool_parser:
-                # Add tools as user messages
-                tools_message = {"role": "user", "content": json.dumps(tools)}
-                api_call_params["messages"].append(tools_message)
-            else:
-                # Use the existing method of adding tools
-                api_call_params["tools"] = tools
-                api_call_params["tool_choice"] = tool_choice
+            # Use the existing method of adding tools
+            api_call_params["tools"] = tools
+            api_call_params["tool_choice"] = tool_choice
 
         if "claude" in model_name.lower() or "anthropic" in model_name.lower():
             api_call_params["extra_headers"] = {
