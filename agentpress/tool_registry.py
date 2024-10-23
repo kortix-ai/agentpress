@@ -1,9 +1,6 @@
 from typing import Dict, Type, Any, List, Optional
 from agentpress.tool import Tool
-from agentpress.config import settings
-import importlib.util
-import os
-import inspect
+
 
 class ToolRegistry:
     def __init__(self):

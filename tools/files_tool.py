@@ -2,12 +2,11 @@ import os
 import asyncio
 from typing import Dict, Any
 from agentpress.tool import Tool, ToolResult, tool_schema
-from agentpress.config import settings
 
 class FilesTool(Tool):
     def __init__(self):
         super().__init__()
-        self.workspace = settings.workspace_dir
+        self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
         os.makedirs(self.workspace, exist_ok=True)
 
     @tool_schema({

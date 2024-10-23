@@ -6,17 +6,12 @@ import openai
 from openai import OpenAIError
 import asyncio
 import logging
-from agentpress.config import settings  # Import the settings
-
-# Import agentops
 import agentops
 
-# Load environment variables
-OPENAI_API_KEY = settings.openai_api_key
-ANTHROPIC_API_KEY = settings.anthropic_api_key
-GROQ_API_KEY = settings.groq_api_key
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 
-# Export environment variables
 os.environ['OPENAI_API_KEY'] = OPENAI_API_KEY
 os.environ['ANTHROPIC_API_KEY'] = ANTHROPIC_API_KEY
 os.environ['GROQ_API_KEY'] = GROQ_API_KEY
