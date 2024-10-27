@@ -1,10 +1,13 @@
 import asyncio
+import json
 from agentpress.thread_manager import ThreadManager
 from tools.files_tool import FilesTool
+from state_manager import StateManager
 
 async def run_agent(
     thread_manager: ThreadManager,
     thread_id: int,
+    state_manager: StateManager,
     max_iterations: int = 10
 ):
 
@@ -28,8 +31,21 @@ async def run_agent(
         iteration += 1
         await pre_iteration()
 
-        system_message = {"role": "system", "content": "You are a helpful assistant that can create, read, update, and delete files."}
+        # Get entire state store
+        state = await state_manager.export_store()
+        state_info = f"Current state store:\n{json.dumps(state, indent=2)}"
+
+        system_message = {
+            "role": "system", 
+            "content": f"You are a helpful assistant that can create, read, update, and delete files.\n\n{state_info}"
+        }
         model_name = "gpt-4o"
+
+        # Include entire state in additional message
+        # additional_message = {
+        #     "role": "user",
+        #     "content": state_info
+        # }
 
         response = await thread_manager.run_thread(
                     thread_id=thread_id,
@@ -38,7 +54,7 @@ async def run_agent(
                     temperature=0.7,
                     max_tokens=150,
                     tool_choice="auto",
-                    additional_message=None,            
+                    # additional_message=additional_message,            
                     execute_tools_async=False,
                     use_tools=True,
                     execute_model_tool_calls=True                    
@@ -52,7 +68,12 @@ async def run_agent(
 if __name__ == "__main__":
     async def main():
         thread_manager = ThreadManager()
+        state_manager = StateManager("state.json")
         thread_id = await thread_manager.create_thread()
+        
+        # Read current file contents
+        files = await state_manager.get("files")
+        
         await thread_manager.add_message(thread_id, {"role": "user", "content": "Please create a file with a random name with the content 'Hello, world!'"})
 
         thread_manager.add_tool(FilesTool)
@@ -60,6 +81,7 @@ if __name__ == "__main__":
         await run_agent(
             thread_manager=thread_manager,
             thread_id=thread_id,
+            state_manager=state_manager,
             max_iterations=5
         )
 

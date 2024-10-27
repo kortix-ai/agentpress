@@ -1,12 +1,39 @@
 import os
 import asyncio
+from datetime import datetime
 from agentpress.tool import Tool, ToolResult, tool_schema
+from state_manager import StateManager
 
 class FilesTool(Tool):
     def __init__(self):
         super().__init__()
         self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
         os.makedirs(self.workspace, exist_ok=True)
+        self.state_manager = StateManager("state.json")
+        asyncio.create_task(self._init_workspace_state())
+
+    async def _init_workspace_state(self):
+        """Initialize or update the workspace state in JSON"""
+        files_state = {}
+        
+        # Walk through workspace and record all files
+        for root, _, files in os.walk(self.workspace):
+            for file in files:
+                full_path = os.path.join(root, file)
+                # Get path relative to workspace: e.g. "src/components/file.jsx"
+                rel_path = os.path.relpath(full_path, self.workspace)
+                try:
+                    with open(full_path, 'r') as f:
+                        content = f.read()
+                    files_state[rel_path] = content
+                except Exception as e:
+                    print(f"Error reading file {rel_path}: {e}")
+
+        await self.state_manager.set("files", files_state)
+
+    async def _update_workspace_state(self):
+        """Update the workspace state after any file operation"""
+        await self._init_workspace_state()
 
     @tool_schema({
         "name": "create_file",
@@ -25,9 +52,12 @@ class FilesTool(Tool):
             full_path = os.path.join(self.workspace, file_path)
             if os.path.exists(full_path):
                 return self.fail_response(f"File '{file_path}' already exists. Use update_file to modify existing files.")
+            
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
             with open(full_path, 'w') as f:
                 f.write(content)
+            
+            await self._update_workspace_state()
             return self.success_response(f"File '{file_path}' created successfully.")
         except Exception as e:
             return self.fail_response(f"Error creating file: {str(e)}")
@@ -45,10 +75,13 @@ class FilesTool(Tool):
     })
     async def read_file(self, file_path: str) -> ToolResult:
         try:
-            full_path = os.path.join(self.workspace, file_path)
-            with open(full_path, 'r') as f:
-                content = f.read()
-            return self.success_response({"file_path": file_path, "content": content})
+            workspace_state = await self.state_manager.get("workspace")
+            if file_path in workspace_state["files"]:
+                return self.success_response({
+                    "file_path": file_path,
+                    "content": workspace_state["files"][file_path]["content"]
+                })
+            return self.fail_response(f"File '{file_path}' not found in workspace state.")
         except Exception as e:
             return self.fail_response(f"Error reading file: {str(e)}")
 
@@ -69,10 +102,11 @@ class FilesTool(Tool):
             full_path = os.path.join(self.workspace, file_path)
             with open(full_path, 'w') as f:
                 f.write(content)
+            
+            await self._update_workspace_state()
             return self.success_response(f"File '{file_path}' updated successfully.")
         except Exception as e:
             return self.fail_response(f"Error updating file: {str(e)}")
-
 
     @tool_schema({
         "name": "delete_file",
@@ -89,6 +123,8 @@ class FilesTool(Tool):
         try:
             full_path = os.path.join(self.workspace, file_path)
             os.remove(full_path)
+            
+            await self._update_workspace_state()
             return self.success_response(f"File '{file_path}' deleted successfully.")
         except Exception as e:
             return self.fail_response(f"Error deleting file: {str(e)}")
