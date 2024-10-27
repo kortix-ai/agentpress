@@ -1,4 +1,4 @@
-# AgentPress: LLM Messages[] API on Steroids called "Threads" with easy Tool Definition & Tool Execution
+# AgentPress: LLM Messages[] API on Steroids called "Threads" with automatic Tool Execution and simple state management.
 
 AgentPress is a lightweight, powerful utility for kickstarting your LLM App or AI Agent. It provides a simple way to manage message threads, execute LLM calls, and automatically handle tool interactions.
 
@@ -7,6 +7,8 @@ AgentPress is a lightweight, powerful utility for kickstarting your LLM App or A
 - **Thread Management**: Easily create, update, and manage message threads.
 - **Automatic Tool Execution**: Define tools as Python classes and have them automatically called by the LLM.
 - **Flexible LLM Integration**: Uses LiteLLM under the hood, allowing easy switching between different LLM providers.
+- **State Management**: JSON-based state persistence for storing information, tool data, and runtime state.
+
 
 ## Quick Start
 
