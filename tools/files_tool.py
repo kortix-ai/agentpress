@@ -2,15 +2,80 @@ import os
 import asyncio
 from datetime import datetime
 from agentpress.tool import Tool, ToolResult, tool_schema
-from state_manager import StateManager
+from agentpress.state_manager import StateManager
 
 class FilesTool(Tool):
+    # Excluded files, directories, and extensions
+    EXCLUDED_FILES = {
+        ".DS_Store",
+        ".gitignore",
+        "package-lock.json",
+        "postcss.config.js",
+        "postcss.config.mjs",
+        "playwright.config.js",
+        "jsconfig.json",
+        "components.json",
+        "tsconfig.tsbuildinfo",
+        "next-env.d.ts",
+        "tsconfig.json",
+        "firebase-service-account.json",
+        "Dockerfile"
+    }
+
+    EXCLUDED_DIRS = {
+        "src/components/ui",
+        "cypress",
+        "node_modules",
+        "migrations",
+        ".next",
+        "playwright-report",
+        "test-results",
+        "dist",
+        "build",
+        "coverage",
+        "terminal_logs",
+        ".git"
+    }
+
+    EXCLUDED_EXT = {
+        ".ico",
+        ".svg",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".tiff",
+        ".webp",
+        ".db",
+        ".sql"
+    }
+
     def __init__(self):
         super().__init__()
         self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
         os.makedirs(self.workspace, exist_ok=True)
         self.state_manager = StateManager("state.json")
         asyncio.create_task(self._init_workspace_state())
+
+    def _should_exclude_file(self, rel_path: str) -> bool:
+        """Check if a file should be excluded based on path, name, or extension"""
+        # Check filename
+        filename = os.path.basename(rel_path)
+        if filename in self.EXCLUDED_FILES:
+            return True
+
+        # Check directory
+        dir_path = os.path.dirname(rel_path)
+        if any(excluded in dir_path for excluded in self.EXCLUDED_DIRS):
+            return True
+
+        # Check extension
+        _, ext = os.path.splitext(filename)
+        if ext.lower() in self.EXCLUDED_EXT:
+            return True
+
+        return False
 
     async def _init_workspace_state(self):
         """Initialize or update the workspace state in JSON"""
@@ -20,14 +85,20 @@ class FilesTool(Tool):
         for root, _, files in os.walk(self.workspace):
             for file in files:
                 full_path = os.path.join(root, file)
-                # Get path relative to workspace: e.g. "src/components/file.jsx"
                 rel_path = os.path.relpath(full_path, self.workspace)
+
+                # Skip excluded files
+                if self._should_exclude_file(rel_path):
+                    continue
+
                 try:
                     with open(full_path, 'r') as f:
                         content = f.read()
                     files_state[rel_path] = content
                 except Exception as e:
                     print(f"Error reading file {rel_path}: {e}")
+                except UnicodeDecodeError:
+                    print(f"Skipping binary file: {rel_path}")
 
         await self.state_manager.set("files", files_state)
 
