@@ -13,6 +13,11 @@ on:
           - minor
           - patch
 
+# Add these permissions
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   bump-version:
     runs-on: ubuntu-latest
