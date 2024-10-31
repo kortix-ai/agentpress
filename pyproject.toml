@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "agentpress"
-version = "0.1.0"
+version = "0.1.1"
 description = "LLM Messages[] API on Steroids called \"Threads\" with easy Tool Execution and State Management"
 authors = ["marko-kraemer <markokraemer.mail@gmail.com>"]
 readme = "README.md"
