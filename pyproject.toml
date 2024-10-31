@@ -1,11 +1,23 @@
 [tool.poetry]
 name = "agentpress"
 version = "0.1.0"
-description = "LLM Messages[] API on Steroids called \"Threads\" with easy Tool Definition & Tool Execution"
+description = "LLM Messages[] API on Steroids called \"Threads\" with easy Tool Execution and State Management"
 authors = ["marko-kraemer <markokraemer.mail@gmail.com>"]
 readme = "README.md"
 packages = [
     { include = "agentpress" },
+]
+license = "MIT"
+homepage = "https://github.com/kortix-ai/agentpress"
+repository = "https://github.com/kortix-ai/agentpress"
+keywords = ["llm", "ai", "agents", "ai agents", "ai agent framework"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
 [tool.poetry.dependencies]
@@ -14,7 +26,6 @@ streamlit-quill = "^0.0.3"
 python-dotenv = "^1.0.1"
 litellm = "^1.44.4"
 agentops = "^0.3.10"
-
 
 [build-system]
 requires = ["poetry-core"]

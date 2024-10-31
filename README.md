@@ -9,33 +9,17 @@ AgentPress is a lightweight, powerful utility for kickstarting your LLM App or A
 - **Flexible LLM Integration**: Uses LiteLLM under the hood, allowing easy switching between different LLM providers.
 - **State Management**: JSON-based state persistence for storing information, tool data, and runtime state.
 
+## Installation
+
+```bash
+pip install agentpress
+```
 
 ## Quick Start
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/kortix-ai/agentpress
-   cd agentpress
-   ```
+1. Set up your environment variables (API keys, etc.) in a `.env` file.
 
-2. Install Poetry (if not already installed):
-   ```
-   pip install poetry
-   ```
-
-3. Install dependencies using Poetry:
-   ```
-   poetry install
-   ```
-
-4. Run with poetry:
-   ```
-   poetry run python agent.py 
-   ```
-
-5. Set up your environment variables (API keys, etc.) in a `.env` file.
-
-6. Create a simple tool:
+2. Create a simple tool:
    ```python
    from agentpress.tool import Tool, ToolResult, tool_schema
 
@@ -56,7 +40,7 @@ AgentPress is a lightweight, powerful utility for kickstarting your LLM App or A
            return self.success_response(f"The sum is {a + b}")
    ```
 
-7. Use the ThreadManager to run a conversation:
+3. Use the ThreadManager to run a conversation:
    ```python
    import asyncio
    from agentpress.thread_manager import ThreadManager
@@ -78,8 +62,7 @@ AgentPress is a lightweight, powerful utility for kickstarting your LLM App or A
    asyncio.run(main())
    ```
 
-
-8. Create an autonomous agent with multiple iterations:
+4. Create an autonomous agent with multiple iterations:
    ```python
    import asyncio
    from agentpress.thread_manager import ThreadManager
@@ -95,7 +78,7 @@ AgentPress is a lightweight, powerful utility for kickstarting your LLM App or A
        for iteration in range(max_iterations):
            print(f"Iteration {iteration + 1}/{max_iterations}")
            
-            await thread_manager.add_message(thread_id, {"role": "user", "content": "Continue!"})
+           await thread_manager.add_message(thread_id, {"role": "user", "content": "Continue!"})
 
            response = await thread_manager.run_thread(
                thread_id=thread_id,
@@ -111,8 +94,30 @@ AgentPress is a lightweight, powerful utility for kickstarting your LLM App or A
    if __name__ == "__main__":
        asyncio.run(run_autonomous_agent())
    ```
+   This example demonstrates how to create an autonomous agent that runs for a specified number of iterations. It uses the `FilesTool` to 
+   interact with the file system and showcases how to control the behavior of `run_thread` by adjusting parameters like `temperature`, 
+   `max_tokens`, and `tool_choice`. The agent creates files autonomously.
 
-   This example demonstrates how to create an autonomous agent that runs for a specified number of iterations. It uses the `FilesTool` to interact with the file system and showcases how to control the behavior of `run_thread` by adjusting parameters like `temperature`, `max_tokens`, and `tool_choice`. The agent creates files autonomously.
+## Development Setup
+
+If you want to contribute or modify the package:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/kortix-ai/agentpress
+   cd agentpress
+   ```
+
+2. Install Poetry (if not already installed):
+   ```bash
+   pip install poetry
+   ```
+
+3. Install dependencies:
+   ```bash
+   poetry install
+   ```
+
 
 
 ## Contributing
