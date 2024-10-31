@@ -26,11 +26,8 @@ jobs:
         run: |
           poetry config pypi-token.pypi ${{ secrets.PYPI_TOKEN }}
       
-      - name: Install dependencies
-        run: poetry install
-      
       - name: Build package
         run: poetry build
       
       - name: Publish to PyPI
-        run: poetry publish 
+        run: poetry publish

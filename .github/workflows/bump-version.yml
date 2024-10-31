@@ -48,4 +48,4 @@ jobs:
           title: "Bump version to ${{ env.NEW_VERSION }}"
           body: "Automated version bump to ${{ env.NEW_VERSION }}"
           branch: "bump-version-${{ env.NEW_VERSION }}"
-          base: "main" 
+          base: "main"
