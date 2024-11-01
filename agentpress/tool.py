@@ -17,24 +17,31 @@ Usage:
 4. Use the tool in your ThreadManager by adding it with add_tool method.
 
 Example:
-    class MyTool(Tool):
+    class CalculatorTool(Tool):
         @tool_schema({
-            "name": "add",
-            "description": "Add two numbers",
+            "name": "divide",
+            "description": "Divide two numbers",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "a": {"type": "number", "description": "First number"},
-                    "b": {"type": "number", "description": "Second number"}
+                    "a": {"type": "number", "description": "Numerator"},
+                    "b": {"type": "number", "description": "Denominator"}
                 },
                 "required": ["a", "b"]
             }
         })
-        async def add(self, a: float, b: float) -> ToolResult:
-            return self.success_response(f"The sum is {a + b}")
+        async def divide(self, a: float, b: float) -> ToolResult:
+            if b == 0:
+                return self.fail_response("Cannot divide by zero")
+            result = a / b
+            return self.success_response(f"The result of {a} ÷ {b} = {result}")
 
     # In your thread manager:
-    manager.add_tool(MyTool)
+    manager.add_tool(CalculatorTool)
+    
+    # Example usage:
+    # Success case: divide(10, 2) -> ToolResult(success=True, output="The result of 10 ÷ 2 = 5")
+    # Failure case: divide(10, 0) -> ToolResult(success=False, output="Cannot divide by zero")
 """
 
 from typing import Dict, Any
@@ -125,19 +132,22 @@ def tool_schema(schema: Dict[str, Any]):
 
     Example:
         @tool_schema({
-            "name": "add",
-            "description": "Add two numbers",
+            "name": "divide",
+            "description": "Divide two numbers",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "a": {"type": "number", "description": "First number"},
-                    "b": {"type": "number", "description": "Second number"}
+                    "a": {"type": "number", "description": "Numerator"},
+                    "b": {"type": "number", "description": "Denominator"}
                 },
                 "required": ["a", "b"]
             }
         })
-        async def add(self, a: float, b: float) -> ToolResult:
-            return self.success_response(f"The sum is {a + b}")
+        async def divide(self, a: float, b: float) -> ToolResult:
+            if b == 0:
+                return self.fail_response("Cannot divide by zero")
+            result = a / b
+            return self.success_response(f"The result of {a} ÷ {b} = {result}")
     """
     def decorator(func):
         func.schema = {

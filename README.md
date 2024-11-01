@@ -140,15 +140,6 @@ poetry install
 - **Plug & Play**: Start with our defaults, then customize to your needs.
 - **No Lock-in**: Take full ownership of the code. Copy what you need directly into your codebase.
 
-## What Makes AgentPress Different?
-
-Unlike monolithic frameworks that dictate how you should build your AI agents, AgentPress provides the essential building blocks while letting you maintain complete control over your implementation. It's designed for developers who want to:
-
-- Quickly prototype AI agents without committing to a heavy framework
-- Maintain full ownership and understanding of their agent's code
-- Customize and extend functionality based on specific needs
-- Learn best practices for building AI agents through clear, practical examples
-
 ## Contributing
 
 We welcome contributions! Feel free to:
