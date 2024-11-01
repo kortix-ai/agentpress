@@ -4,9 +4,6 @@ version = "0.1.2"
 description = "Building blocks for AI Agents"
 authors = ["marko-kraemer <mail@markokraemer.com>"]
 readme = "README.md"
-packages = [
-    { include = "agentpress" },
-]
 license = "MIT"
 homepage = "https://github.com/kortix-ai/agentpress"
 repository = "https://github.com/kortix-ai/agentpress"
