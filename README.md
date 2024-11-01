@@ -3,6 +3,10 @@
 AgentPress is not a agent framework - it's a collection of lightweight, modular utilities that serve as building blocks for creating AI agents. Think of it as "shadcn/ui for AI agents" - a set of utils to copy, paste, and customize in order to quickly bootstrap your AI App / Agent.
 
 AgentPress provides Messages[] API on Steroids called "Threads", a ThreadManager with automatic Tool Execution and a simple StateManager.
+- **Threads**: Simple message thread handling utilities
+- **Automatic Tool**: Flexible tool definition and automatic execution
+- **State Management**: Basic JSON-based state persistence
+- **LLM Integration**: Provider-agnostic LLM calls via LiteLLM
 
 ## Installation & Setup
 
@@ -17,12 +21,14 @@ agentpress init
 ```
 This will create a `agentpress` directory with the core utilities you can customize.
 
-## Key Components
 
-- **Threads**: Simple message thread handling utilities
-- **Automatic Tool**: Flexible tool definition and automatic execution
-- **State Management**: Basic JSON-based state persistence
-- **LLM Integration**: Provider-agnostic LLM calls via LiteLLM
+3. If you selected the example agent during initialization:
+   - Creates an `agent.py` file with a web development agent example
+   - Creates a `tools` directory with example tools:
+     - `files_tool.py`: File operations (create/update files, read directory and load into state)
+     - `terminal_tool.py`: Terminal command execution
+   - Creates a `workspace` directory for the agent to work in
+
 
 ## Quick Start
 
