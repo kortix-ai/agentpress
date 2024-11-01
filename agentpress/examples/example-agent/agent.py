@@ -5,11 +5,10 @@ from tools.files_tool import FilesTool
 from agentpress.state_manager import StateManager
 from tools.terminal_tool import TerminalTool
 
-async def run_agent():
+async def run_agent(thread_id: str, max_iterations: int = 5):
     # Initialize managers and tools
     thread_manager = ThreadManager()
-    state_manager = StateManager("state.json")
-    thread_id = await thread_manager.create_thread()
+    state_manager = StateManager()
     
     thread_manager.add_tool(FilesTool)
     thread_manager.add_tool(TerminalTool)
@@ -18,7 +17,7 @@ async def run_agent():
         thread_id, 
         {
             "role": "user", 
-            "content": "Let's create a marketing website."
+            "content": "Let's create a marketing website for my AI Agent 'Jarvis' using HTML, CSS, Javascript. Use images from pixabay, pexels, and co. Style it cyberpunk style. Make it like Ironmen Jarvis."
         }
     )
 
@@ -29,14 +28,14 @@ async def run_agent():
         # Update files state
         files_tool = FilesTool()
         await files_tool._init_workspace_state()
-        
-        terminal_tool = TerminalTool()
-        await terminal_tool.get_command_history()
 
     async def after_iteration():
+        # Ask the user for a custom message or use the default
+        custom_message = input("Enter a message to send (or press Enter to use 'Continue!!!' as message): ")
+        message_content = custom_message if custom_message else "Continue!!!"
         await thread_manager.add_message(thread_id, {
             "role": "user", 
-            "content": "Continue developing. "
+            "content": message_content
         })
 
     async def finalizer():
@@ -45,7 +44,6 @@ async def run_agent():
     await init()
 
     iteration = 0
-    max_iterations = 1
 
     while iteration < max_iterations:
         iteration += 1
@@ -81,6 +79,7 @@ async def run_agent():
         
         print(response)
 
+        # Call after_iteration without arguments
         await after_iteration()
 
     await finalizer()
@@ -88,5 +87,8 @@ async def run_agent():
 
 if __name__ == "__main__":
     async def main():
-        await run_agent()
+        thread_manager = ThreadManager()
+        thread_id = await thread_manager.create_thread()
+        await run_agent(thread_id)
+    
     asyncio.run(main())

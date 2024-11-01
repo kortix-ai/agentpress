@@ -6,7 +6,7 @@ import openai
 from openai import OpenAIError
 import asyncio
 import logging
-import agentops
+# import agentops
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')

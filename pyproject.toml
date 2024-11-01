@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "agentpress"
-version = "0.1.1"
-description = "LLM Messages[] API on Steroids called \"Threads\" with easy Tool Execution and State Management"
-authors = ["marko-kraemer <markokraemer.mail@gmail.com>"]
+version = "0.1.2"
+description = "Building blocks for AI Agents"
+authors = ["marko-kraemer <mail@markokraemer.com>"]
 readme = "README.md"
 packages = [
     { include = "agentpress" },
@@ -26,6 +26,11 @@ streamlit-quill = "^0.0.3"
 python-dotenv = "^1.0.1"
 litellm = "^1.44.4"
 agentops = "^0.3.10"
+click = "^8.1.7"
+questionary = "^2.0.1"
+
+[tool.poetry.scripts]
+agentpress = "agentpress.cli:main"
 
 [build-system]
 requires = ["poetry-core"]

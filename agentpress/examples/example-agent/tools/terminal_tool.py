@@ -80,22 +80,3 @@ class TerminalTool(Tool):
         finally:
             # Always restore original directory
             os.chdir(original_dir)
-
-    @tool_schema({
-        "name": "get_command_history",
-        "description": "Get the history of executed commands",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "limit": {"type": "integer", "description": "Number of recent commands to return (optional)"}
-            }
-        }
-    })
-    async def get_command_history(self, limit: int = None) -> ToolResult:
-        try:
-            history = await self.state_manager.get("terminal_history") or []
-            if limit:
-                history = history[-limit:]
-            return self.success_response({"history": history})
-        except Exception as e:
-            return self.fail_response(f"Error getting command history: {str(e)}")
