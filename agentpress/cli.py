@@ -140,8 +140,8 @@ def init():
         components_dir_path = os.path.abspath(components_dir)
         copy_module_files(package_dir, components_dir_path, all_files)
         
-        # Copy example if selected
-        if selected_example:
+        # Copy example only if a valid example (not None) was selected
+        if selected_example and selected_example in STARTER_EXAMPLES:
             click.echo(f"\n📝 Creating {selected_example}...")
             copy_example_files(
                 package_dir, 
@@ -153,7 +153,7 @@ def init():
         
         click.echo("\n✨ Success! Your AgentPress project is ready.")
         click.echo(f"\n📁 Components created in: {click.style(components_dir_path, fg='green')}")
-        if selected_example:
+        if selected_example and selected_example in STARTER_EXAMPLES:
             click.echo(f"📁 Example agent files created in the current directory.")
         
         click.echo("\n🔥 Quick start:")        
