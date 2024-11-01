@@ -156,19 +156,17 @@ def init():
         if selected_example:
             click.echo(f"📁 Example agent files created in the current directory.")
         
-        click.echo("\n🔥 Quick start:")
-        click.echo("1. Create and activate a virtual environment:")
-        click.echo("  python -m venv venv")
-        click.echo("  source venv/bin/activate  # On Windows: .\\venv\\Scripts\\activate")
+        click.echo("\n🔥 Quick start:")        
         
-        if selected_example:
-            click.echo(f"\n2. Run the example agent:")
-            click.echo("  python agent.py")
-        
-        click.echo("\n📚 Import components in your code:")
+        click.echo("\n📚Import agentpress components in your code:")
         click.echo(f"  from {components_dir}.llm import make_llm_api_call")
         click.echo(f"  from {components_dir}.thread_manager import ThreadManager")
-        
+
+        if selected_example:
+            click.echo(f"\nRun the example agent:")
+            click.echo("  python agent.py")
+
+
     except Exception as e:
         click.echo(f"\n❌ Error during setup: {str(e)}", err=True)
         return
