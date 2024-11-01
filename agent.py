@@ -5,12 +5,23 @@ from tools.files_tool import FilesTool
 from agentpress.state_manager import StateManager
 from tools.terminal_tool import TerminalTool
 
-async def run_agent(
-    thread_manager: ThreadManager,
-    thread_id: int,
-    state_manager: StateManager,
-    max_iterations: int = 10
-):
+async def run_agent():
+    # Initialize managers and tools
+    thread_manager = ThreadManager()
+    state_manager = StateManager("state.json")
+    thread_id = await thread_manager.create_thread()
+    
+    thread_manager.add_tool(FilesTool)
+    thread_manager.add_tool(TerminalTool)
+    
+    await thread_manager.add_message(
+        thread_id, 
+        {
+            "role": "user", 
+            "content": "Let's create a marketing website."
+        }
+    )
+
     async def init():
         pass
 
@@ -34,6 +45,8 @@ async def run_agent(
     await init()
 
     iteration = 0
+    max_iterations = 1
+
     while iteration < max_iterations:
         iteration += 1
         await pre_iteration()
@@ -65,6 +78,8 @@ async def run_agent(
                     use_tools=True,
                     execute_model_tool_calls=True                    
                 )
+        
+        print(response)
 
         await after_iteration()
 
@@ -73,26 +88,5 @@ async def run_agent(
 
 if __name__ == "__main__":
     async def main():
-        thread_manager = ThreadManager()
-        state_manager = StateManager("state.json")
-        thread_id = await thread_manager.create_thread()
-        
-        thread_manager.add_tool(FilesTool)
-        thread_manager.add_tool(TerminalTool)
-        
-        await thread_manager.add_message(
-            thread_id, 
-            {
-                "role": "user", 
-                "content": "Let's create a marketing website."
-            }
-        )
-
-        await run_agent(
-            thread_manager=thread_manager,
-            thread_id=thread_id,
-            state_manager=state_manager,
-            max_iterations=5
-        )
-
+        await run_agent()
     asyncio.run(main())

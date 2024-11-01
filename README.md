@@ -55,6 +55,7 @@ pip install agentpress
            thread_id=thread_id,
            system_message=system_message,
            model_name="gpt-4o",
+           use_tools=True,
            execute_model_tool_calls=True
        )
        print("Response:", response)
