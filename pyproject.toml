@@ -25,12 +25,14 @@ litellm = "^1.44.4"
 agentops = "^0.3.10"
 click = "^8.1.7"
 questionary = "^2.0.1"
+requests = "^2.31.0"
+packaging = "^23.2"
 
 [tool.poetry.scripts]
-agentpress = "core.cli:main"
+agentpress = "agentpress.cli:main"
 
 [[tool.poetry.packages]]
-include = "core"
+include = "agentpress"
 
 [build-system]
 requires = ["poetry-core"]

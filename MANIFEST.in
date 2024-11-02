@@ -1,8 +1,8 @@
 # Include all Python files in agentpress directory
-recursive-include core *.py
+recursive-include agentpress *.py
 
 # Include example files
-recursive-include core/examples *
+recursive-include agentpress/examples *
 
 # Include any other necessary files
 include LICENSE

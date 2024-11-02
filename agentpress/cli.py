@@ -2,8 +2,11 @@ import os
 import shutil
 import click
 import questionary
-from typing import List, Dict
+from typing import List, Dict, Optional, Tuple
 import time
+import pkg_resources
+import requests
+from packaging import version
 
 MODULES = {
     "llm": {
@@ -42,15 +45,57 @@ STARTER_EXAMPLES = {
     }
 }
 
+PACKAGE_NAME = "agentpress"
+PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
+
+def check_for_updates() -> Tuple[Optional[str], Optional[str], bool]:
+    """
+    Check if there's a newer version available on PyPI
+    Returns: (current_version, latest_version, update_available)
+    """
+    try:
+        current_version = pkg_resources.get_distribution(PACKAGE_NAME).version
+        response = requests.get(PYPI_URL, timeout=2)
+        response.raise_for_status()  # Raise exception for bad status codes
+        
+        latest_version = response.json()["info"]["version"]
+        
+        # Compare versions properly using packaging.version
+        current_ver = version.parse(current_version)
+        latest_ver = version.parse(latest_version)
+        
+        return current_version, latest_version, latest_ver > current_ver
+        
+    except requests.RequestException:
+        # Handle network-related errors silently
+        return None, None, False
+    except Exception as e:
+        # Log other unexpected errors but don't break the CLI
+        click.echo(f"Warning: Failed to check for updates: {str(e)}", err=True)
+        return None, None, False
+
 def show_welcome():
     """Display welcome message with ASCII art"""
     click.clear()
+    
+    # Check for updates
+    current_version, latest_version, update_available = check_for_updates()
+    
     click.echo("""
     ╔═══════════════════════════════════════════╗
     ║          Welcome to AgentPress            ║
     ║       Your AI Agent Building Blocks       ║
     ╚═══════════════════════════════════════════╝
     """)
+    
+    if update_available and current_version and latest_version:
+        click.echo(
+            f"\n📢 Update available! "
+            f"{click.style(f'v{current_version}', fg='yellow')} → "
+            f"{click.style(f'v{latest_version}', fg='green')}"
+        )
+        click.echo("Run: pip install --upgrade agentpress\n")
+    
     time.sleep(1)
 
 def copy_module_files(src_dir: str, dest_dir: str, files: List[str]):
@@ -82,7 +127,7 @@ def cli():
 def init():
     """Initialize AgentPress modules in your project"""
     show_welcome()
-
+    
     # Set components directory name to 'agentpress'
     components_dir = "agentpress"
 
