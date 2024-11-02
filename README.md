@@ -111,7 +111,7 @@ You can find the complete implementation in our [example-agent](agentpress/examp
 
 Run the thread viewer to view messages of threads in a stylisedweb UI:
 ```bash
-streamlit run agentpress/ui.py
+streamlit run agentpress/thread_viewer_ui.py
 ```
 
 ## Development

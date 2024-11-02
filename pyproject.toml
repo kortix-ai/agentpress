@@ -18,7 +18,7 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.9"
 streamlit-quill = "^0.0.3"
 python-dotenv = "^1.0.1"
 litellm = "^1.44.4"

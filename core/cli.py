@@ -75,7 +75,7 @@ def copy_example_files(src_dir: str, dest_dir: str, files: Dict[str, str]):
 
 @click.group()
 def cli():
-    """AgentPress CLI - Initialize your project with AgentPress modules"""
+    """AgentPress CLI - Initialize your AgentPress modules"""
     pass
 
 @cli.command()
@@ -126,7 +126,7 @@ def init():
     # Create selections dict with required modules pre-selected
     selections = {name: True for name in required_modules.keys()}
     
-    click.echo("\n🚀 Setting up your project...")
+    click.echo("\n🚀 Setting up your AgentPress...")
     time.sleep(0.5)
     
     try:
@@ -151,16 +151,14 @@ def init():
             # Create workspace directory
             os.makedirs(os.path.join(os.getcwd(), "workspace"), exist_ok=True)
         
-        click.echo("\n✨ Success! Your AgentPress project is ready.")
+        click.echo("\n✨ Success! Your AgentPress is ready.")
         click.echo(f"\n📁 Components created in: {click.style(components_dir_path, fg='green')}")
         if selected_example and selected_example in STARTER_EXAMPLES:
             click.echo(f"📁 Example agent files created in the current directory.")
         
-        click.echo("\n🔥 Quick start:")        
-        
-        click.echo("\n📚Import agentpress components in your code:")
-        click.echo(f"  from {components_dir}.llm import make_llm_api_call")
-        click.echo(f"  from {components_dir}.thread_manager import ThreadManager")
+        click.echo("\n🔥 Quick start:")
+        click.echo("Check out the Quick Start guide at:")
+        click.echo("https://github.com/kortix-ai/agentpress#quick-start")
 
         if selected_example:
             click.echo(f"\nRun the example agent:")
