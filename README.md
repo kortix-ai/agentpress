@@ -33,8 +33,12 @@ This will create a `agentpress` directory with the core utilities you can custom
 ## Quick Start
 
 1. Set up your environment variables (API keys, etc.) in a `.env` file.
+- OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+GROQ_API_KEY=
+Whatever LLM you want to use, we use LiteLLM (Call 100+ LLMs using the OpenAI Input/Output Format) https://docs.litellm.ai/ – set it up in your `.env` file.. Also check out the agentpress/llm.py and modify as needed to support your wanted LLM.
 
-2. Create a tool - copy this code directly into your project:
+2. Create a calculator_tool.py 
 ```python
 from agentpress.tool import Tool, ToolResult, tool_schema
 
@@ -52,17 +56,27 @@ class CalculatorTool(Tool):
         }
     })
     async def add(self, a: float, b: float) -> ToolResult:
-        return self.success_response(f"The sum is {a + b}")
+        try:
+            result = a + b
+            return self.success_response(f"The sum is {result}")
+        except Exception as e:
+            return self.fail_response(f"Failed to add numbers: {str(e)}")
 ```
 
-3. Use the Thread Manager - customize as needed:
+3. Use the Thread Manager, create a new thread – or access an existing one. Then Add the Calculator Tool, and run the thread. It will automatically use & execute the python function associated with the tool:
 ```python
 import asyncio
 from agentpress.thread_manager import ThreadManager
+from calculator_tool import CalculatorTool
 
 async def main():
+    # Initialize thread manager and add tools
     manager = ThreadManager()
     manager.add_tool(CalculatorTool)
+
+    # Create a new thread
+    # Alternatively, you could use an existing thread_id like:
+    # thread_id = "existing-thread-uuid" 
     thread_id = await manager.create_thread()
     
     # Add your custom logic here
@@ -86,43 +100,17 @@ async def main():
 asyncio.run(main())
 ```
 
-## Building Your Own Agent
+4. Autonomous Web Developer Agent (the standard example)
 
-Example of a customized autonomous agent:
-```python
-import asyncio
-from agentpress.thread_manager import ThreadManager
-from your_custom_tools import CustomTool
+When you run `agentpress init` and select the example agent – you will get code for a simple implementation of an AI Web Developer Agent that leverages architecture similar to platforms like [Softgen](https://softgen.ai/), [Bolt](https://bolt.new/), [GPT Engineer](https://gptengineer.app/), [V0](https://v0.dev/), etc... 
 
-async def run_agent(max_iterations=5):
-    # Create your own manager instance
-    manager = ThreadManager()
-    thread_id = await manager.create_thread()
-    
-    # Add your custom tools
-    manager.add_tool(CustomTool)
-    
-    # Define your agent's behavior
-    system_message = {
-        "role": "system",
-        "content": "Your custom system message here"
-    }
-    
-    # Implement your control loop
-    for iteration in range(max_iterations):
-        response = await manager.run_thread(
-            thread_id=thread_id,
-            system_message=system_message,
-            model_name="your-preferred-model",
-            # Customize parameters as needed
-        )
-        
-        # Add your custom logic here
-        process_response(response)
+- **Files Tool**: Allows the agent to create, read, update, and delete files within the workspace.
+- **Terminal Tool**: Enables the agent to execute terminal commands.
+- **State Workspace Management**: The agent has access to a workspace whose state is stored and sent on every request. This state includes all file contents, ensuring the agent knows what it is editing.
+- **User Interaction via CLI**: After each action, the agent pauses and allows the user to provide further instructions through the CLI.
 
-if __name__ == "__main__":
-    asyncio.run(run_agent())
-```
+You can find the complete implementation in our [example-agent](agentpress/examples/example-agent/agent.py) directory.
+
 
 ## Development
 
