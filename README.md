@@ -18,8 +18,8 @@ pip install agentpress
 ```bash
 agentpress init
 ```
-This will create a `agentpress` directory with the core utilities you can customize.
-
+Creates a `agentpress` directory with all the core utilities.
+Check out [File Overview](#file-overview) for explanations of the generated util files.
 
 3. If you selected the example agent during initialization:
    - Creates an `agent.py` file with a web development agent example
@@ -114,19 +114,6 @@ Run the thread viewer to view messages of threads in a stylised web UI:
 streamlit run agentpress/thread_viewer_ui.py
 ```
 
-## Development
-
-1. Clone for reference:
-```bash
-git clone https://github.com/kortix-ai/agentpress
-cd agentpress
-```
-
-2. Install dependencies:
-```bash
-pip install poetry
-poetry install
-```
 
 ## File Overview
 
@@ -145,6 +132,7 @@ Central registry for tool management. Keeps track of available tools and their s
 ### agentpress/state_manager.py
 Simple key-value based state persistence using JSON files. For maintaining environment state, settings, or other persistent data.
 
+
 ## Philosophy
 - **Plug & Play**: Start with our defaults, then customize to your needs.
 - **Agnostic**: Built on LiteLLM, supporting any LLM provider. Minimal opinions, maximum flexibility.
@@ -157,6 +145,20 @@ We welcome contributions! Feel free to:
 - Submit issues for bugs or suggestions
 - Fork the repository and send pull requests
 - Share how you've used AgentPress in your projects
+
+## Development
+
+1. Clone for reference:
+```bash
+git clone https://github.com/kortix-ai/agentpress
+cd agentpress
+```
+
+2. Install dependencies:
+```bash
+pip install poetry
+poetry install
+```
 
 ## License
 
