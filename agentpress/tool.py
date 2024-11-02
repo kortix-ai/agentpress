@@ -44,7 +44,7 @@ Example:
     # Failure case: divide(10, 0) -> ToolResult(success=False, output="Cannot divide by zero")
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from dataclasses import dataclass
 from abc import ABC
 import json
@@ -92,7 +92,7 @@ class Tool(ABC):
         """
         return self._schemas
 
-    def success_response(self, data: Dict[str, Any] | str) -> ToolResult:
+    def success_response(self, data: Union[Dict[str, Any], str]) -> ToolResult:
         """
         Creates a successful ToolResult with the given data.
 
