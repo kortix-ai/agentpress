@@ -148,7 +148,7 @@ We welcome contributions! Feel free to:
 
 ## Development
 
-1. Clone for reference:
+1. Clone:
 ```bash
 git clone https://github.com/kortix-ai/agentpress
 cd agentpress
@@ -159,6 +159,19 @@ cd agentpress
 pip install poetry
 poetry install
 ```
+
+3. Build the package:
+```bash
+poetry build
+```
+It will return the built package name with the version number.
+
+4. Install the package with the correct version number, here for example its 0.1.3 `agentpress-0.1.3-py3-none-any.whl`:
+```bash
+pip install /Users/markokraemer/Projects/agentpress/dist/agentpress-0.1.3-py3-none-any.whl --force-reinstall
+```
+Then you can test that version.
+
 
 ## License
 
