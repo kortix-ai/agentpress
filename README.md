@@ -1,10 +1,10 @@
 # AgentPress: Building Blocks for AI Agents
 
-AgentPress is not a agent framework - it's a collection of lightweight, modular utilities that serve as building blocks for creating AI agents. Think of it as "shadcn/ui for AI agents" - a set of utils to copy, paste, and customize in order to quickly bootstrap your AI App / Agent.
+AgentPress is not a agent framework - it's a collection of _simple, but powerful_ utilities that serve as building blocks for creating AI agents. *Plug, play, and customize.*
 
 - **Threads**: Simple message thread handling utilities
-- **Automatic Tool**: Flexible tool definition and automatic execution
-- **State Management**: Basic JSON-based state persistence
+- **Tools**: Flexible tool definition and automatic execution
+- **State Management**: Simple JSON key-value state management
 - **LLM Integration**: Provider-agnostic LLM calls via LiteLLM
 
 ## Installation & Setup
@@ -109,7 +109,7 @@ You can find the complete implementation in our [example-agent](agentpress/examp
 
 5. Thread Viewer 
 
-Run the thread viewer to view messages of threads in a stylisedweb UI:
+Run the thread viewer to view messages of threads in a stylised web UI:
 ```bash
 streamlit run agentpress/thread_viewer_ui.py
 ```
@@ -128,12 +128,27 @@ pip install poetry
 poetry install
 ```
 
-## Philosophy
+## File Overview
 
-- **Modular**: Pick and choose what you need. Each component is designed to work independently.
+### agentpress/llm.py
+Core LLM API interface using LiteLLM. Supports 100+ LLMs using the OpenAI Input/Output Format. Easy to extend for custom model configurations and API endpoints. `make_llm_api_call()` can be imported to make LLM calls.
+
+### agentpress/thread_manager.py
+Orchestrates conversations between users, LLMs, and tools. Manages message history and automatically handles tool execution when LLMs request them. Tools registered here become available for LLM function calls.
+
+### agentpress/tool.py
+Base infrastructure for LLM-compatible tools. Inherit from `Tool` class and use `@tool_schema` decorator to create tools that are automatically registered for LLM function calling. Returns standardized `ToolResult` responses.
+
+### agentpress/tool_registry.py
+Central registry for tool management. Keeps track of available tools and their schemas, allowing selective function registration. Works with `thread_manager.py` to expose tools to LLMs.
+
+### agentpress/state_manager.py
+Simple key-value based state persistence using JSON files. For maintaining environment state, settings, or other persistent data.
+
+## Philosophy
+- **Plug & Play**: Start with our defaults, then customize to your needs.
 - **Agnostic**: Built on LiteLLM, supporting any LLM provider. Minimal opinions, maximum flexibility.
 - **Simplicity**: Clean, readable code that's easy to understand and modify.
-- **Plug & Play**: Start with our defaults, then customize to your needs.
 - **No Lock-in**: Take full ownership of the code. Copy what you need directly into your codebase.
 
 ## Contributing
