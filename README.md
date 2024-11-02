@@ -1,6 +1,6 @@
 # AgentPress: Building Blocks for AI Agents
 
-AgentPress is not a agent framework - it's a collection of _simple, but powerful_ utilities that serve as building blocks for creating AI agents. *Plug, play, and customize.*
+AgentPress is a collection of _simple, but powerful_ utilities that serve as building blocks for creating AI agents. *Plug, play, and customize.*
 
 - **Threads**: Simple message thread handling utilities
 - **Tools**: Flexible tool definition and automatic execution
