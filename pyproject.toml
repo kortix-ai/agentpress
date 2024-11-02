@@ -27,7 +27,10 @@ click = "^8.1.7"
 questionary = "^2.0.1"
 
 [tool.poetry.scripts]
-agentpress = "agentpress.cli:main"
+agentpress = "core.cli:main"
+
+[[tool.poetry.packages]]
+include = "core"
 
 [build-system]
 requires = ["poetry-core"]

@@ -13,7 +13,7 @@ MODULES = {
     },
     "thread_manager": {
         "required": True,
-        "files": ["thread_manager.py"],
+        "files": ["thread_manager.py", "ui.py"],
         "description": "Message thread management module - Manages conversation history and message flows"
     },
     "tool_system": {

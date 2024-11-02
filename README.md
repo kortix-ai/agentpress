@@ -107,6 +107,12 @@ When you run `agentpress init` and select the example agent – you will get cod
 
 You can find the complete implementation in our [example-agent](agentpress/examples/example-agent/agent.py) directory.
 
+5. Thread Viewer 
+
+Run the thread viewer to view messages of threads in a stylisedweb UI:
+```bash
+streamlit run agentpress/ui.py
+```
 
 ## Development
 
