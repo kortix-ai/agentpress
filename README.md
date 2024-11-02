@@ -2,7 +2,6 @@
 
 AgentPress is not a agent framework - it's a collection of lightweight, modular utilities that serve as building blocks for creating AI agents. Think of it as "shadcn/ui for AI agents" - a set of utils to copy, paste, and customize in order to quickly bootstrap your AI App / Agent.
 
-AgentPress provides Messages[] API on Steroids called "Threads", a ThreadManager with automatic Tool Execution and a simple StateManager.
 - **Threads**: Simple message thread handling utilities
 - **Automatic Tool**: Flexible tool definition and automatic execution
 - **State Management**: Basic JSON-based state persistence
