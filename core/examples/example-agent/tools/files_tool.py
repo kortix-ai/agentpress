@@ -1,6 +1,9 @@
 import os
 import asyncio
+from datetime import datetime
 from pathlib import Path
+from collections import defaultdict
+from typing import Optional, List
 from agentpress.tool import Tool, ToolResult, tool_schema
 from agentpress.state_manager import StateManager
 
@@ -84,20 +87,8 @@ class FilesTool(Tool):
                 try:
                     with open(full_path, 'r') as f:
                         content = f.read()
-                    lines = content.split('\n')
-                    
-                    # Create file state object with content and line information
                     files_state[rel_path] = {
-                        "content": content,
-                        "line_count": len(lines),
-                        "lines": [
-                            {
-                                "number": i + 1,
-                                "content": line,
-                                "length": len(line)
-                            }
-                            for i, line in enumerate(lines)
-                        ]
+                        "content": content
                     }
                 except Exception as e:
                     print(f"Error reading file {rel_path}: {e}")
@@ -202,48 +193,6 @@ class FilesTool(Tool):
             
         except Exception as e:
             return self.fail_response(f"Error replacing string: {str(e)}")
-
-    @tool_schema({
-        "name": "insert_lines",
-        "description": "Insert lines at a specific line number in a file",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string", "description": "Path to the file"},
-                "insert_line": {"type": "integer", "description": "Line number to insert at"},
-                "new_content": {"type": "string", "description": "Content to insert"}
-            },
-            "required": ["file_path", "insert_line", "new_content"]
-        }
-    })
-    async def insert_lines(self, file_path: str, insert_line: int, new_content: str) -> ToolResult:
-        try:
-            full_path = Path(os.path.join(self.workspace, file_path))
-            if not full_path.exists():
-                return self.fail_response(f"File '{file_path}' does not exist")
-                
-            content = full_path.read_text().expandtabs()
-            lines = content.split('\n')
-            
-            if insert_line < 0 or insert_line > len(lines):
-                return self.fail_response(f"Invalid line number {insert_line}")
-            
-            # Insert new content
-            new_lines = new_content.expandtabs().split('\n')
-            updated_lines = lines[:insert_line] + new_lines + lines[insert_line:]
-            new_content = '\n'.join(updated_lines)
-            
-            full_path.write_text(new_content)
-            
-            # Show snippet around the edit
-            start_line = max(0, insert_line - self.SNIPPET_LINES)
-            end_line = insert_line + len(new_lines) + self.SNIPPET_LINES
-            snippet = '\n'.join(updated_lines[start_line:end_line])
-            
-            return self.success_response(f"Lines inserted successfully. Snippet of changes:\n{snippet}")
-            
-        except Exception as e:
-            return self.fail_response(f"Error inserting lines: {str(e)}")
 
 
 if __name__ == "__main__":
