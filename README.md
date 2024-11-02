@@ -33,10 +33,7 @@ This will create a `agentpress` directory with the core utilities you can custom
 ## Quick Start
 
 1. Set up your environment variables (API keys, etc.) in a `.env` file.
-- OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-GROQ_API_KEY=
-Whatever LLM you want to use, we use LiteLLM (Call 100+ LLMs using the OpenAI Input/Output Format) https://docs.litellm.ai/ – set it up in your `.env` file.. Also check out the agentpress/llm.py and modify as needed to support your wanted LLM.
+- OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, etc... Whatever LLM you want to use, we use LiteLLM (Call 100+ LLMs using the OpenAI Input/Output Format) https://docs.litellm.ai/ – set it up in your `.env` file.. Also check out the agentpress/llm.py and modify as needed to support your wanted LLM.
 
 2. Create a calculator_tool.py 
 ```python
@@ -102,7 +99,7 @@ asyncio.run(main())
 
 4. Autonomous Web Developer Agent (the standard example)
 
-When you run `agentpress init` and select the example agent – you will get code for a simple implementation of an AI Web Developer Agent that leverages architecture similar to platforms like [Softgen](https://softgen.ai/), [Bolt](https://bolt.new/), [GPT Engineer](https://gptengineer.app/), [V0](https://v0.dev/), etc... 
+When you run `agentpress init` and select the example agent – you will get code for a simple implementation of an AI Web Developer Agent that leverages architecture similar to platforms like our own [Softgen](https://softgen.ai/) Platform. 
 
 - **Files Tool**: Allows the agent to create, read, update, and delete files within the workspace.
 - **Terminal Tool**: Enables the agent to execute terminal commands.
