@@ -32,7 +32,7 @@ This will create a `agentpress` directory with the core utilities you can custom
 ## Quick Start
 
 1. Set up your environment variables (API keys, etc.) in a `.env` file.
-- OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, etc... Whatever LLM you want to use, we use LiteLLM (Call 100+ LLMs using the OpenAI Input/Output Format) https://docs.litellm.ai/ – set it up in your `.env` file.. Also check out the agentpress/llm.py and modify as needed to support your wanted LLM.
+- OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, etc... Whatever LLM you want to use, we use LiteLLM (https://litellm.ai) (Call 100+ LLMs using the OpenAI Input/Output Format) – set it up in your `.env` file.. Also check out the agentpress/llm.py and modify as needed to support your wanted LLM.
 
 2. Create a calculator_tool.py 
 ```python
