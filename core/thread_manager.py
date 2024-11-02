@@ -14,18 +14,13 @@ class ThreadManager:
         self.tool_registry = ToolRegistry()
         os.makedirs(self.threads_dir, exist_ok=True)
 
-    def add_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
+    def add_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None):
         """
         Add a tool to the ThreadManager.
         If function_names is provided, only register those specific functions.
         If function_names is None, register all functions from the tool.
-        
-        Args:
-            tool_class: The tool class to register
-            function_names: Optional list of function names to register
-            **kwargs: Additional keyword arguments passed to tool initialization
         """
-        self.tool_registry.register_tool(tool_class, function_names, **kwargs)
+        self.tool_registry.register_tool(tool_class, function_names)
 
     async def create_thread(self) -> str:
         thread_id = str(uuid.uuid4())
