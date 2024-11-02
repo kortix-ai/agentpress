@@ -12,28 +12,17 @@ class FilesTool(Tool):
         "package-lock.json",
         "postcss.config.js",
         "postcss.config.mjs",
-        "playwright.config.js",
         "jsconfig.json",
         "components.json",
         "tsconfig.tsbuildinfo",
-        "next-env.d.ts",
         "tsconfig.json",
-        "firebase-service-account.json",
-        "Dockerfile"
     }
 
     EXCLUDED_DIRS = {
-        "src/components/ui",
-        "cypress",
         "node_modules",
-        "migrations",
         ".next",
-        "playwright-report",
-        "test-results",
         "dist",
         "build",
-        "coverage",
-        "terminal_logs",
         ".git"
     }
 
@@ -108,11 +97,11 @@ class FilesTool(Tool):
 
     @tool_schema({
         "name": "create_file",
-        "description": "Create a new file in the workspace",
+        "description": "Create a new file with the provided contents at a given path in the workspace",
         "parameters": {
             "type": "object",
             "properties": {
-                "file_path": {"type": "string", "description": "The relative path of the file to create"},
+                "file_path": {"type": "string", "description": "Path to the file to be created."},
                 "content": {"type": "string", "description": "The content to write to the file"}
             },
             "required": ["file_path", "content"]
@@ -134,36 +123,13 @@ class FilesTool(Tool):
             return self.fail_response(f"Error creating file: {str(e)}")
 
     @tool_schema({
-        "name": "read_file",
-        "description": "Read the contents of a file in the workspace",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string", "description": "The relative path of the file to read"}
-            },
-            "required": ["file_path"]
-        }
-    })
-    async def read_file(self, file_path: str) -> ToolResult:
-        try:
-            workspace_state = await self.state_manager.get("workspace")
-            if file_path in workspace_state["files"]:
-                return self.success_response({
-                    "file_path": file_path,
-                    "content": workspace_state["files"][file_path]["content"]
-                })
-            return self.fail_response(f"File '{file_path}' not found in workspace state.")
-        except Exception as e:
-            return self.fail_response(f"Error reading file: {str(e)}")
-
-    @tool_schema({
         "name": "update_file",
-        "description": "Update the contents of a file in the workspace",
+        "description": "Update an existing file at the given path in the workspace with the provided contents.",
         "parameters": {
             "type": "object",
             "properties": {
-                "file_path": {"type": "string", "description": "The relative path of the file to update"},
-                "content": {"type": "string", "description": "The new content to write to the file"}
+                "file_path": {"type": "string", "description": "Path to the file to be updated"},
+                "content": {"type": "string", "description": "New content to be written to the file. ONLY CODE. The whole file contents, the complete code – The contents of the new file with all instructions implemented perfectly. NEVER write comments. Keep the complete File Contents within this key."}
             },
             "required": ["file_path", "content"]
         }
@@ -181,11 +147,11 @@ class FilesTool(Tool):
 
     @tool_schema({
         "name": "delete_file",
-        "description": "Delete a file from the workspace",
+        "description": "Delete a file at the given path in the workspace.",
         "parameters": {
             "type": "object",
             "properties": {
-                "file_path": {"type": "string", "description": "The relative path of the file to delete"}
+                "file_path": {"type": "string", "description": "Path to the file to be deleted."}
             },
             "required": ["file_path"]
         }
@@ -214,17 +180,9 @@ if __name__ == "__main__":
         create_result = await files_tool.create_file(test_file_path, test_content)
         print("Create file result:", create_result)
 
-        # Test read_file
-        read_result = await files_tool.read_file(test_file_path)
-        print("Read file result:", read_result)
-
         # Test update_file
         update_result = await files_tool.update_file(test_file_path, updated_content)
         print("Update file result:", update_result)
-
-        # Test read_file after update
-        read_updated_result = await files_tool.read_file(test_file_path)
-        print("Read updated file result:", read_updated_result)
 
         # Test delete_file
         delete_result = await files_tool.delete_file(test_file_path)
