@@ -109,7 +109,7 @@ Current development environment workspace state:
                     system_message=system_message,
                     model_name=model_name,
                     temperature=0.1,
-                    max_tokens=4096,
+                    max_tokens=8096,
                     tool_choice="auto",
                     additional_message=state_message,
                     execute_tools_async=True,
