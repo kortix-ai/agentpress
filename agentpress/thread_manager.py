@@ -9,7 +9,7 @@ from agentpress.tool_registry import ToolRegistry
 import uuid
 
 class ThreadManager:
-    def __init__(self, threads_dir: str = 'threads'):
+    def __init__(self, threads_dir: str = "threads"):
         self.threads_dir = threads_dir
         self.tool_registry = ToolRegistry()
         os.makedirs(self.threads_dir, exist_ok=True)

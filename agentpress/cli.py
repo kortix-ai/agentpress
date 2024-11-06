@@ -7,6 +7,7 @@ import time
 import pkg_resources
 import requests
 from packaging import version
+import re
 
 MODULES = {
     "llm": {
@@ -118,6 +119,19 @@ def copy_example_files(src_dir: str, dest_dir: str, files: Dict[str, str]):
         shutil.copy2(src, dst)
         click.echo(f"  ✓ Created {dest_path}")
 
+def update_file_paths(file_path: str, replacements: Dict[str, str]):
+    """Update file paths in the given file"""
+    with open(file_path, 'r') as f:
+        content = f.read()
+    
+    for old, new in replacements.items():
+        # Escape special characters in the old string
+        escaped_old = re.escape(old)
+        content = re.sub(escaped_old, new, content)
+    
+    with open(file_path, 'w') as f:
+        f.write(content)
+
 @click.group()
 def cli():
     """AgentPress CLI - Initialize your AgentPress modules"""
@@ -185,6 +199,21 @@ def init():
         components_dir_path = os.path.abspath(components_dir)
         copy_module_files(package_dir, components_dir_path, all_files)
         
+        # Update paths in thread_manager.py and state_manager.py
+        project_dir = os.getcwd()
+        thread_manager_path = os.path.join(components_dir_path, "thread_manager.py")
+        state_manager_path = os.path.join(components_dir_path, "state_manager.py")
+
+        if os.path.exists(thread_manager_path):
+            update_file_paths(thread_manager_path, {
+                'threads_dir: str = "threads"': f'threads_dir: str = "{os.path.join(project_dir, "threads")}"'
+            })
+
+        if os.path.exists(state_manager_path):
+            update_file_paths(state_manager_path, {
+                'store_file: str = "state.json"': f'store_file: str = "{os.path.join(project_dir, "state.json")}"'
+            })
+
         # Copy example only if a valid example (not None) was selected
         if selected_example and selected_example in STARTER_EXAMPLES:
             click.echo(f"\n📝 Creating {selected_example}...")
@@ -193,8 +222,8 @@ def init():
                 os.getcwd(),  # Use current working directory
                 STARTER_EXAMPLES[selected_example]["files"]
             )
-            # Create workspace directory
-            os.makedirs(os.path.join(os.getcwd(), "workspace"), exist_ok=True)
+            # Create threads directory
+            os.makedirs(os.path.join(project_dir, "threads"), exist_ok=True)
         
         click.echo("\n✨ Success! Your AgentPress is ready.")
         click.echo(f"\n📁 Components created in: {click.style(components_dir_path, fg='green')}")
