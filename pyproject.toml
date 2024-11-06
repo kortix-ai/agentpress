@@ -27,6 +27,7 @@ click = "^8.1.7"
 questionary = "^2.0.1"
 requests = "^2.31.0"
 packaging = "^23.2"
+setuptools = "^75.3.0"
 
 [tool.poetry.scripts]
 agentpress = "agentpress.cli:main"
