@@ -6,12 +6,45 @@ from typing import List, Dict, Any, Optional, Callable, Type, Union, AsyncGenera
 from agentpress.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
+from agentpress.tool_parser import ToolParser, StandardToolParser
+from agentpress.tool_executor import ToolExecutor, StandardToolExecutor, SequentialToolExecutor
 import uuid
 
 class ThreadManager:
-    def __init__(self, threads_dir: str = "threads"):
+    """
+    Manages conversation threads with LLM models and tool execution.
+    
+    The ThreadManager handles:
+    - Creating and managing conversation threads
+    - Adding/retrieving messages in threads
+    - Executing LLM calls with optional tool usage
+    - Managing tool registration and execution
+    - Supporting both streaming and non-streaming responses
+    
+    Attributes:
+        threads_dir (str): Directory where thread files are stored
+        tool_registry (ToolRegistry): Registry for managing available tools
+        tool_parser (ToolParser): Parser for handling tool calls/responses
+        tool_executor (ToolExecutor): Executor for running tool functions
+    """
+
+    def __init__(
+        self, 
+        threads_dir: str = "threads", 
+        tool_parser: Optional[ToolParser] = None,
+        tool_executor: Optional[ToolExecutor] = None
+    ):
+        """Initialize ThreadManager with optional custom tool parser and executor.
+        
+        Args:
+            threads_dir (str): Directory to store thread files
+            tool_parser (Optional[ToolParser]): Custom tool parser implementation
+            tool_executor (Optional[ToolExecutor]): Custom tool executor implementation
+        """
         self.threads_dir = threads_dir
         self.tool_registry = ToolRegistry()
+        self.tool_parser = tool_parser or StandardToolParser()
+        self.tool_executor = tool_executor or StandardToolExecutor()
         os.makedirs(self.threads_dir, exist_ok=True)
 
     def add_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
@@ -28,6 +61,12 @@ class ThreadManager:
         self.tool_registry.register_tool(tool_class, function_names, **kwargs)
 
     async def create_thread(self) -> str:
+        """
+        Create a new conversation thread.
+        
+        Returns:
+            str: Unique thread ID for the created thread
+        """
         thread_id = str(uuid.uuid4())
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
         with open(thread_path, 'w') as f:
@@ -35,6 +74,18 @@ class ThreadManager:
         return thread_id
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
+        """
+        Add a message to an existing thread.
+        
+        Args:
+            thread_id (str): ID of the thread to add message to
+            message_data (Dict[str, Any]): Message data including role and content
+            images (Optional[List[Dict[str, Any]]]): List of image data to include
+                Each image dict should contain 'content_type' and 'base64' keys
+        
+        Raises:
+            Exception: If message addition fails
+        """
         logging.info(f"Adding message to thread {thread_id} with images: {images}")
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
         
@@ -86,6 +137,18 @@ class ThreadManager:
             raise e
 
     async def list_messages(self, thread_id: str, hide_tool_msgs: bool = False, only_latest_assistant: bool = False, regular_list: bool = True) -> List[Dict[str, Any]]:
+        """
+        Retrieve messages from a thread with optional filtering.
+        
+        Args:
+            thread_id (str): ID of the thread to retrieve messages from
+            hide_tool_msgs (bool): If True, excludes tool messages and tool calls
+            only_latest_assistant (bool): If True, returns only the most recent assistant message
+            regular_list (bool): If True, only includes standard message types
+        
+        Returns:
+            List[Dict[str, Any]]: List of messages matching the filter criteria
+        """
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
         
         try:
@@ -147,16 +210,51 @@ class ThreadManager:
                 return True
         return False
 
-    async def run_thread(self, thread_id: str, system_message: Dict[str, Any], model_name: str, temperature: float = 0, max_tokens: Optional[int] = None, tool_choice: str = "auto", additional_message: Optional[Dict[str, Any]] = None, execute_tools_async: bool = True, execute_model_tool_calls: bool = True, use_tools: bool = False, stream: bool = False) -> Union[Dict[str, Any], AsyncGenerator]:
+    async def run_thread(
+        self, 
+        thread_id: str, 
+        system_message: Dict[str, Any], 
+        model_name: str, 
+        temperature: float = 0, 
+        max_tokens: Optional[int] = None, 
+        tool_choice: str = "auto", 
+        temporary_message: Optional[Dict[str, Any]] = None, 
+        use_tools: bool = False, 
+        execute_tools_async: bool = True, 
+        execute_tool_calls: bool = True, 
+        stream: bool = False,
+        execute_tools_on_stream: bool = False
+    ) -> Union[Dict[str, Any], AsyncGenerator]:
         """
-        Run a thread with the given parameters. If stream=True, returns an AsyncGenerator that yields response chunks.
-        Otherwise returns a Dict with the complete response.
+        Run a conversation thread with the specified parameters.
+        
+        Args:
+            thread_id (str): ID of the thread to run
+            system_message (Dict[str, Any]): System message to guide model behavior
+            model_name (str): Name of the LLM model to use
+            temperature (float): Sampling temperature for model responses
+            max_tokens (Optional[int]): Maximum tokens in model response
+            tool_choice (str): How tools should be selected ('auto' or 'none')
+            temporary_message (Optional[Dict[str, Any]]): Extra temporary message to include at the end of the LLM api request. Without adding it permanently to the Thread.
+            use_tools (bool): Whether to enable tool usage
+            execute_tools_async (bool): Whether to execute tools concurrently or synchronously if off.
+            execute_tool_calls (bool): Whether to execute parsed tool calls
+            stream (bool): Whether to stream the response
+            execute_tools_on_stream (bool): Whether to execute tools during streaming, or waiting for full response before executing.
+        
+        Returns:
+            Union[Dict[str, Any], AsyncGenerator]: 
+                - Dict with response data for non-streaming
+                - AsyncGenerator yielding chunks for streaming
+        
+        Raises:
+            Exception: If API call or tool execution fails
         """
         messages = await self.list_messages(thread_id)
         prepared_messages = [system_message] + messages
         
-        if additional_message:
-            prepared_messages.append(additional_message)
+        if temporary_message:
+            prepared_messages.append(temporary_message)
         
         tools = self.tool_registry.get_all_tool_schemas() if use_tools else None
 
@@ -172,10 +270,17 @@ class ThreadManager:
             )
 
             if stream:
-                return self._handle_streaming_response(thread_id, llm_response, use_tools, execute_model_tool_calls, execute_tools_async)
+                return self._handle_streaming_response(
+                    thread_id=thread_id,
+                    response_stream=llm_response,
+                    use_tools=use_tools,
+                    execute_tool_calls=execute_tool_calls,
+                    execute_tools_async=execute_tools_async,
+                    execute_tools_on_stream=execute_tools_on_stream
+                )
             
-            # For non-streaming, handle the response as before
-            if use_tools and execute_model_tool_calls:
+            # For non-streaming, handle the response
+            if use_tools and execute_tool_calls:
                 await self.handle_response_with_tools(thread_id, llm_response, execute_tools_async)
             else:
                 await self.handle_response_without_tools(thread_id, llm_response)
@@ -189,11 +294,12 @@ class ThreadManager:
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                     "tool_choice": tool_choice,
-                    "additional_message": additional_message,
+                    "temporary_message": temporary_message,
                     "execute_tools_async": execute_tools_async,
-                    "execute_model_tool_calls": execute_model_tool_calls,
+                    "execute_tool_calls": execute_tool_calls,
                     "use_tools": use_tools,
-                    "stream": stream
+                    "stream": stream,
+                    "execute_tools_on_stream": execute_tools_on_stream
                 }
             }
 
@@ -209,99 +315,116 @@ class ThreadManager:
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                     "tool_choice": tool_choice,
-                    "additional_message": additional_message,
+                    "temporary_message": temporary_message,
                     "execute_tools_async": execute_tools_async,
-                    "execute_model_tool_calls": execute_model_tool_calls,
+                    "execute_tool_calls": execute_tool_calls,
                     "use_tools": use_tools,
-                    "stream": stream
+                    "stream": stream,
+                    "execute_tools_on_stream": execute_tools_on_stream
                 }
             }
 
-    async def _handle_streaming_response(self, thread_id: str, response_stream: AsyncGenerator, use_tools: bool, execute_model_tool_calls: bool, execute_tools_async: bool) -> AsyncGenerator:
-        """Handle streaming response and tool execution"""
-        tool_calls_map = {}  # Map to store tool calls by index
-        content_buffer = ""
-        
+    async def _handle_streaming_response(
+        self, 
+        thread_id: str, 
+        response_stream: AsyncGenerator, 
+        use_tools: bool, 
+        execute_tool_calls: bool, 
+        execute_tools_async: bool,
+        execute_tools_on_stream: bool
+    ) -> AsyncGenerator:
+        """Handle streaming response and tool execution."""
+        tool_calls_buffer = {}  # Buffer to store tool calls by index
+        executed_tool_calls = set()  # Track which tool calls have been executed
+        available_functions = self.get_available_functions() if use_tools else {}
+        content_buffer = ""  # Buffer for content
+        current_assistant_message = None  # Track current assistant message
+        pending_tool_calls = []  # Store tool calls for non-streaming execution
+
+        async def execute_tool_calls(tool_calls):
+            if execute_tools_async:
+                return await self.tool_executor.execute_tool_calls(
+                    tool_calls=tool_calls,
+                    available_functions=available_functions,
+                    thread_id=thread_id,
+                    executed_tool_calls=executed_tool_calls
+                )
+            else:
+                sequential_executor = SequentialToolExecutor()
+                return await sequential_executor.execute_tool_calls(
+                    tool_calls=tool_calls,
+                    available_functions=available_functions,
+                    thread_id=thread_id,
+                    executed_tool_calls=executed_tool_calls
+                )
+
         async def process_chunk(chunk):
-            nonlocal content_buffer
+            nonlocal content_buffer, current_assistant_message, pending_tool_calls
             
-            # Process tool calls in the chunk
-            if hasattr(chunk.choices[0], 'delta'):
-                delta = chunk.choices[0].delta
-                
-                # Handle content if present
-                if hasattr(delta, 'content') and delta.content:
-                    content_buffer += delta.content
+            # Parse the chunk using tool parser
+            parsed_message, is_complete = await self.tool_parser.parse_stream(chunk, tool_calls_buffer)
+            
+            # If we have a message with tool calls
+            if parsed_message and 'tool_calls' in parsed_message and parsed_message['tool_calls']:
+                # Update or create assistant message
+                if not current_assistant_message:
+                    current_assistant_message = parsed_message
+                    await self.add_message(thread_id, current_assistant_message)
+                else:
+                    current_assistant_message['tool_calls'] = parsed_message['tool_calls']
+                    await self._update_message(thread_id, current_assistant_message)
 
-                # Handle tool calls
-                if hasattr(delta, 'tool_calls') and delta.tool_calls:
-                    for tool_call in delta.tool_calls:
-                        idx = tool_call.index
-                        if idx not in tool_calls_map:
-                            tool_calls_map[idx] = {
-                                'id': tool_call.id if tool_call.id else None,
-                                'type': 'function',
-                                'function': {
-                                    'name': tool_call.function.name if tool_call.function.name else None,
-                                    'arguments': ''
-                                }
-                            }
-                        
-                        current_tool = tool_calls_map[idx]
-                        if tool_call.id:
-                            current_tool['id'] = tool_call.id
-                        if tool_call.function.name:
-                            current_tool['function']['name'] = tool_call.function.name
-                        if tool_call.function.arguments:
-                            current_tool['function']['arguments'] += tool_call.function.arguments
+                # Get new tool calls that haven't been executed
+                new_tool_calls = [
+                    tool_call for tool_call in parsed_message['tool_calls']
+                    if tool_call['id'] not in executed_tool_calls
+                ]
 
-            # If this is the final chunk with tool_calls finish_reason
-            if chunk.choices[0].finish_reason == 'tool_calls' and use_tools and execute_model_tool_calls:
-                try:
-                    # Convert tool_calls_map to list and sort by index
-                    tool_calls = [tool_calls_map[idx] for idx in sorted(tool_calls_map.keys())]
-                    
-                    # Create assistant message with tool calls and any content
-                    assistant_message = {
-                        "role": "assistant",
-                        "content": content_buffer,
-                        "tool_calls": tool_calls
-                    }
-                    await self.add_message(thread_id, assistant_message)
-                    
-                    # Process the complete tool calls
-                    processed_tool_calls = []
-                    for tool_call in tool_calls:
-                        try:
-                            args_str = tool_call['function']['arguments']
-                            # Try to parse the string as JSON
-                            tool_call['function']['arguments'] = json.loads(args_str)
-                            processed_tool_calls.append(tool_call)
-                            logging.info(f"Processed tool call: {tool_call}")
-                        except json.JSONDecodeError as e:
-                            logging.error(f"Error parsing tool call arguments: {e}, args: {args_str}")
-                            continue
-                    
-                    # Execute tools with the processed tool calls
-                    available_functions = self.get_available_functions()
-                    if execute_tools_async:
-                        tool_results = await self.execute_tools_async(processed_tool_calls, available_functions, thread_id)
+                if new_tool_calls:
+                    if execute_tools_on_stream:
+                        # Execute tools immediately during streaming
+                        tool_results = await execute_tool_calls(new_tool_calls)
+                        for result in tool_results:
+                            await self.add_message(thread_id, result)
+                            executed_tool_calls.add(result['tool_call_id'])
                     else:
-                        tool_results = await self.execute_tools_sync(processed_tool_calls, available_functions, thread_id)
-                    
-                    # Add tool results
+                        # Store tool calls for later execution
+                        pending_tool_calls.extend(new_tool_calls)
+
+            # Handle end of response
+            if chunk.choices[0].finish_reason:
+                if not execute_tools_on_stream and pending_tool_calls:
+                    # Execute all pending tool calls at the end
+                    tool_results = await execute_tool_calls(pending_tool_calls)
                     for result in tool_results:
                         await self.add_message(thread_id, result)
-                        logging.info(f"Tool execution result: {result}")
-                except Exception as e:
-                    logging.error(f"Error executing tools: {str(e)}")
-                    logging.error(f"Tool calls: {tool_calls}")
-            
+                        executed_tool_calls.add(result['tool_call_id'])
+                    pending_tool_calls.clear()
+
             return chunk
 
         async for chunk in response_stream:
             processed_chunk = await process_chunk(chunk)
             yield processed_chunk
+
+    async def _update_message(self, thread_id: str, message: Dict[str, Any]):
+        """Update an existing message in the thread."""
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        try:
+            with open(thread_path, 'r') as f:
+                thread_data = json.load(f)
+            
+            # Find and update the last assistant message
+            for i in reversed(range(len(thread_data["messages"]))):
+                if thread_data["messages"][i]["role"] == "assistant":
+                    thread_data["messages"][i] = message
+                    break
+            
+            with open(thread_path, 'w') as f:
+                json.dump(thread_data, f)
+        except Exception as e:
+            logging.error(f"Error updating message in thread {thread_id}: {e}")
+            raise e
 
     async def handle_response_without_tools(self, thread_id: str, response: Any):
         response_content = response.choices[0].message['content']
@@ -309,47 +432,28 @@ class ThreadManager:
 
     async def handle_response_with_tools(self, thread_id: str, response: Any, execute_tools_async: bool):
         try:
-            response_message = response.choices[0].message
-            tool_calls = response_message.get('tool_calls', [])
-            
-            assistant_message = self.create_assistant_message_with_tools(response_message)
+            # Parse the response using the tool parser
+            assistant_message = await self.tool_parser.parse_response(response)
             await self.add_message(thread_id, assistant_message)
 
-            available_functions = self.get_available_functions()
-            
-            if tool_calls:
+            # Execute tools if present
+            if 'tool_calls' in assistant_message and assistant_message['tool_calls']:
+                available_functions = self.get_available_functions()
                 if execute_tools_async:
-                    tool_results = await self.execute_tools_async(tool_calls, available_functions, thread_id)
+                    tool_results = await self.execute_tools_async(assistant_message['tool_calls'], available_functions, thread_id)
                 else:
-                    tool_results = await self.execute_tools_sync(tool_calls, available_functions, thread_id)
+                    tool_results = await self.execute_tools_sync(assistant_message['tool_calls'], available_functions, thread_id)
                 
                 for result in tool_results:
                     await self.add_message(thread_id, result)
+                    logging.info(f"Tool execution result: {result}")
         
-        except AttributeError as e:
-            logging.error(f"AttributeError: {e}")
-            response_content = response.choices[0].message['content']
+        except Exception as e:
+            logging.error(f"Error in handle_response_with_tools: {e}")
+            logging.error(f"Response: {response}")
+            response_content = response.choices[0].message.get('content', '')
             await self.add_message(thread_id, {"role": "assistant", "content": response_content or ""})
 
-    def create_assistant_message_with_tools(self, response_message: Any) -> Dict[str, Any]:
-        message = {
-            "role": "assistant",
-            "content": response_message.get('content') or "",
-        }
-        tool_calls = response_message.get('tool_calls')
-        if tool_calls:
-            message["tool_calls"] = [
-                {
-                    "id": tool_call.id,
-                    "type": "function",
-                    "function": {
-                        "name": tool_call.function.name,
-                        "arguments": tool_call.function.arguments
-                    }
-                } for tool_call in tool_calls
-            ]
-        return message
-    
     def get_available_functions(self) -> Dict[str, Callable]:
         available_functions = {}
         for tool_name, tool_info in self.tool_registry.get_all_tools().items():
@@ -359,55 +463,105 @@ class ThreadManager:
                     available_functions[func_name] = getattr(tool_instance, func_name)
         return available_functions
 
-    async def execute_tools_async(self, tool_calls, available_functions, thread_id):
-        async def execute_single_tool(tool_call):
+    async def execute_tools_async(self, tool_calls: List[Dict[str, Any]], available_functions: Dict[str, Callable], thread_id: str) -> List[Dict[str, Any]]:
+        """
+        Execute multiple tool calls concurrently.
+        
+        Args:
+            tool_calls (List[Dict[str, Any]]): List of tool calls to execute
+            available_functions (Dict[str, Callable]): Map of function names to implementations
+            thread_id (str): ID of the thread requesting tool execution
+        
+        Returns:
+            List[Dict[str, Any]]: Results from tool executions
+        """
+        async def execute_single_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
             try:
-                if isinstance(tool_call, dict):
-                    function_name = tool_call['function']['name']
-                    function_args = tool_call['function']['arguments']  # Already a dict
-                    tool_call_id = tool_call['id']
-                else:
-                    function_name = tool_call.function.name
-                    function_args = json.loads(tool_call.function.arguments) if isinstance(tool_call.function.arguments, str) else tool_call.function.arguments
-                    tool_call_id = tool_call.id
-
+                function_name = tool_call['function']['name']
+                function_args = tool_call['function']['arguments']
+                if isinstance(function_args, str):
+                    function_args = json.loads(function_args)
+                
                 function_to_call = available_functions.get(function_name)
-                if function_to_call:
-                    return await self.execute_tool(function_to_call, function_args, function_name, tool_call_id)
-                else:
-                    logging.warning(f"Function {function_name} not found in available functions")
-                    return None
+                if not function_to_call:
+                    error_msg = f"Function {function_name} not found"
+                    logging.error(error_msg)
+                    return {
+                        "role": "tool",
+                        "tool_call_id": tool_call['id'],
+                        "name": function_name,
+                        "content": str(ToolResult(success=False, output=error_msg))
+                    }
+
+                result = await function_to_call(**function_args)
+                logging.info(f"Tool execution result for {function_name}: {result}")
+                
+                return {
+                    "role": "tool",
+                    "tool_call_id": tool_call['id'],
+                    "name": function_name,
+                    "content": str(result)
+                }
             except Exception as e:
-                logging.error(f"Error executing tool: {str(e)}")
-                return None
+                error_msg = f"Error executing {function_name}: {str(e)}"
+                logging.error(error_msg)
+                return {
+                    "role": "tool",
+                    "tool_call_id": tool_call['id'],
+                    "name": function_name,
+                    "content": str(ToolResult(success=False, output=error_msg))
+                }
 
-        tool_results = await asyncio.gather(*[execute_single_tool(tool_call) for tool_call in tool_calls])
-        return [result for result in tool_results if result]
+        tasks = [execute_single_tool(tool_call) for tool_call in tool_calls]
+        results = await asyncio.gather(*tasks)
+        return results
 
-    async def execute_tools_sync(self, tool_calls, available_functions, thread_id):
-        tool_results = []
+    async def execute_tools_sync(self, tool_calls: List[Dict[str, Any]], available_functions: Dict[str, Callable], thread_id: str) -> List[Dict[str, Any]]:
+        """
+        Execute multiple tool calls sequentially.
+        
+        Args:
+            tool_calls (List[Dict[str, Any]]): List of tool calls to execute
+            available_functions (Dict[str, Callable]): Map of function names to implementations
+            thread_id (str): ID of the thread requesting tool execution
+        
+        Returns:
+            List[Dict[str, Any]]: Results from tool executions
+        """
+        results = []
         for tool_call in tool_calls:
             try:
-                if isinstance(tool_call, dict):
-                    function_name = tool_call['function']['name']
-                    function_args = tool_call['function']['arguments']  # Already a dict
-                    tool_call_id = tool_call['id']
-                else:
-                    function_name = tool_call.function.name
-                    function_args = json.loads(tool_call.function.arguments) if isinstance(tool_call.function.arguments, str) else tool_call.function.arguments
-                    tool_call_id = tool_call.id
-
+                function_name = tool_call['function']['name']
+                function_args = tool_call['function']['arguments']
+                if isinstance(function_args, str):
+                    function_args = json.loads(function_args)
+                
                 function_to_call = available_functions.get(function_name)
-                if function_to_call:
-                    result = await self.execute_tool(function_to_call, function_args, function_name, tool_call_id)
-                    if result:
-                        tool_results.append(result)
+                if not function_to_call:
+                    error_msg = f"Function {function_name} not found"
+                    logging.error(error_msg)
+                    result = ToolResult(success=False, output=error_msg)
                 else:
-                    logging.warning(f"Function {function_name} not found in available functions")
+                    result = await function_to_call(**function_args)
+                    logging.info(f"Tool execution result for {function_name}: {result}")
+                
+                results.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call['id'],
+                    "name": function_name,
+                    "content": str(result)
+                })
             except Exception as e:
-                logging.error(f"Error executing tool: {str(e)}")
+                error_msg = f"Error executing {function_name}: {str(e)}"
+                logging.error(error_msg)
+                results.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call['id'],
+                    "name": function_name,
+                    "content": str(ToolResult(success=False, output=error_msg))
+                })
         
-        return tool_results
+        return results
 
     async def execute_tool(self, function_to_call, function_args, function_name, tool_call_id):
         try:
@@ -443,14 +597,15 @@ if __name__ == "__main__":
         # Add a test message
         await manager.add_message(thread_id, {
             "role": "user", 
-            "content": "Please create a file with a random name with the content 'Hello, world!' Explain what robotics is in a short message to me.."
+            "content": "Please create 10x files – Each should be a chapter of a book about an Introduction to Robotics.."
         })
 
         system_message = {
             "role": "system", 
             "content": "You are a helpful assistant that can create, read, update, and delete files."
         }
-        model_name = "gpt-4o-mini"
+        model_name = "anthropic/claude-3-5-haiku-latest"
+        # model_name = "gpt-4o-mini"
         
         # Test with tools (non-streaming)
         print("\n🤖 Testing non-streaming response with tools:")
@@ -461,7 +616,7 @@ if __name__ == "__main__":
             temperature=0.7,
             stream=False,
             use_tools=True,
-            execute_model_tool_calls=True
+            execute_tool_calls=True
         )
         
         # Print the non-streaming response
@@ -480,7 +635,8 @@ if __name__ == "__main__":
             temperature=0.7,
             stream=True,  
             use_tools=True,
-            execute_model_tool_calls=True 
+            execute_tool_calls=True,
+            execute_tools_on_stream=True
         )
 
         buffer = ""
@@ -503,5 +659,4 @@ if __name__ == "__main__":
             print(buffer, flush=True)
         print("\n✨ Stream completed.\n")
 
-    # Run the async main function
     asyncio.run(main())

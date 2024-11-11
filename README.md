@@ -89,7 +89,7 @@ async def main():
         },
         model_name="gpt-4",
         use_tools=True,
-        execute_model_tool_calls=True
+        execute_tool_calls=True
     )
     print("Response:", response)
 
@@ -160,18 +160,10 @@ pip install poetry
 poetry install
 ```
 
-3. Build the package:
+3. For quick testing, you can install directly from the current directory:
 ```bash
-poetry build
+pip install -e .
 ```
-It will return the built package name with the version number.
-
-4. Install the package with the correct version number, here for example its 0.1.3 `agentpress-0.1.3-py3-none-any.whl`:
-```bash
-pip install /Users/markokraemer/Projects/agentpress/dist/agentpress-0.1.3-py3-none-any.whl --force-reinstall
-```
-Then you can test that version.
-
 
 ## License
 

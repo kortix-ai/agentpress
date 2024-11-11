@@ -6,7 +6,6 @@ import openai
 from openai import OpenAIError
 import asyncio
 import logging
-# import agentops
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
@@ -17,13 +16,62 @@ os.environ['OPENAI_API_KEY'] = OPENAI_API_KEY
 os.environ['ANTHROPIC_API_KEY'] = ANTHROPIC_API_KEY
 os.environ['GROQ_API_KEY'] = GROQ_API_KEY
 
-# agentops.init(AGENTOPS_API_KEY)
-# os.environ['LITELLM_LOG'] = 'DEBUG'
-
-async def make_llm_api_call(messages, model_name, response_format=None, temperature=0, max_tokens=None, tools=None, tool_choice="auto", api_key=None, api_base=None, agentops_session=None, stream=False, top_p=None):
-    litellm.set_verbose = True
+async def make_llm_api_call(
+    messages: list, 
+    model_name: str, 
+    response_format: Any = None, 
+    temperature: float = 0, 
+    max_tokens: int = None, 
+    tools: list = None, 
+    tool_choice: str = "auto", 
+    api_key: str = None, 
+    api_base: str = None, 
+    agentops_session: Any = None, 
+    stream: bool = False, 
+    top_p: float = None
+) -> Union[Dict[str, Any], Any]:
+    """
+    Make an API call to a language model using litellm.
+    
+    This function provides a unified interface for making calls to various LLM providers
+    (OpenAI, Anthropic, Groq, etc.) with support for streaming, tool calls, and retry logic.
+    
+    Args:
+        messages (list): List of message dictionaries for the conversation
+        model_name (str): Name of the model to use (e.g., "gpt-4", "claude-3")
+        response_format (Any, optional): Desired format for the response
+        temperature (float, optional): Sampling temperature. Defaults to 0
+        max_tokens (int, optional): Maximum tokens in the response
+        tools (list, optional): List of tool definitions for function calling
+        tool_choice (str, optional): How to select tools ("auto" or "none")
+        api_key (str, optional): Override default API key
+        api_base (str, optional): Override default API base URL
+        agentops_session (Any, optional): Session for agentops integration
+        stream (bool, optional): Whether to stream the response. Defaults to False
+        top_p (float, optional): Top-p sampling parameter
+        
+    Returns:
+        Union[Dict[str, Any], Any]: API response, either complete or streaming
+        
+    Raises:
+        Exception: If API call fails after retries
+    """
+    # litellm.set_verbose = True
 
     async def attempt_api_call(api_call_func, max_attempts=3):
+        """
+        Attempt an API call with retries.
+        
+        Args:
+            api_call_func: Async function that makes the API call
+            max_attempts (int): Maximum number of retry attempts
+            
+        Returns:
+            API response if successful
+            
+        Raises:
+            Exception: If all retry attempts fail
+        """
         for attempt in range(max_attempts):
             try:
                 return await api_call_func()
@@ -39,6 +87,12 @@ async def make_llm_api_call(messages, model_name, response_format=None, temperat
         raise Exception("Failed to make API call after multiple attempts.")
 
     async def api_call():
+        """
+        Prepare and execute the API call with the specified parameters.
+        
+        Returns:
+            API response from the language model
+        """
         api_call_params = {
             "model": model_name,
             "messages": messages,
@@ -48,13 +102,13 @@ async def make_llm_api_call(messages, model_name, response_format=None, temperat
             "stream": stream,
         }
 
-        # Add api_key and api_base if provided
+        # Add optional parameters if provided
         if api_key:
             api_call_params["api_key"] = api_key
         if api_base:
             api_call_params["api_base"] = api_base
 
-        # Use 'max_completion_tokens' for 'o1' models, otherwise use 'max_tokens'
+        # Handle token limits differently for different models
         if 'o1' in model_name:
             if max_tokens is not None:
                 api_call_params["max_completion_tokens"] = max_tokens
@@ -63,10 +117,10 @@ async def make_llm_api_call(messages, model_name, response_format=None, temperat
                 api_call_params["max_tokens"] = max_tokens
 
         if tools:
-            # Use the existing method of adding tools
             api_call_params["tools"] = tools
             api_call_params["tool_choice"] = tool_choice
 
+        # Add special headers for Claude models
         if "claude" in model_name.lower() or "anthropic" in model_name.lower():
             api_call_params["extra_headers"] = {
                 "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
@@ -75,6 +129,7 @@ async def make_llm_api_call(messages, model_name, response_format=None, temperat
         # Log the API request
         # logging.info(f"Sending API request: {json.dumps(api_call_params, indent=2)}")
 
+        # Make the API call using either agentops session or direct litellm
         if agentops_session:
             response = await agentops_session.patch(litellm.acompletion)(**api_call_params)
         else:
@@ -87,10 +142,15 @@ async def make_llm_api_call(messages, model_name, response_format=None, temperat
 
     return await attempt_api_call(api_call)
 
-# Sample Usage
 if __name__ == "__main__":
     import asyncio
     async def test_llm_api_call(stream=True):
+        """
+        Test function for the LLM API call functionality.
+        
+        Args:
+            stream (bool): Whether to test streaming mode
+        """
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": "Complex essay on economics"}
@@ -106,17 +166,14 @@ if __name__ == "__main__":
                 if isinstance(chunk, dict) and 'choices' in chunk:
                     content = chunk['choices'][0]['delta'].get('content', '')
                 else:
-                    # For non-dict responses (like ModelResponse objects)
                     content = chunk.choices[0].delta.content
                 
                 if content:
                     buffer += content
-                    # Print complete words/sentences when we hit whitespace
                     if content[-1].isspace():
                         print(buffer, end='', flush=True)
                         buffer = ""
             
-            # Print any remaining content
             if buffer:
                 print(buffer, flush=True)
             print("\n✨ Stream completed.\n")
@@ -125,12 +182,7 @@ if __name__ == "__main__":
             if isinstance(response, dict) and 'choices' in response:
                 print(response['choices'][0]['message']['content'])
             else:
-                # For non-dict responses (like ModelResponse objects)
                 print(response.choices[0].message.content)
             print()
-
-    # Example usage:
-    # asyncio.run(test_llm_api_call(stream=True))  # For streaming
-    # asyncio.run(test_llm_api_call(stream=False))  # For non-streaming
 
     asyncio.run(test_llm_api_call())
