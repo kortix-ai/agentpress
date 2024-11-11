@@ -1,9 +1,6 @@
 import os
 import asyncio
-from datetime import datetime
 from pathlib import Path
-from collections import defaultdict
-from typing import Optional, List
 from agentpress.tool import Tool, ToolResult, tool_schema
 from agentpress.state_manager import StateManager
 

@@ -20,10 +20,6 @@ os.environ['GROQ_API_KEY'] = GROQ_API_KEY
 # agentops.init(AGENTOPS_API_KEY)
 # os.environ['LITELLM_LOG'] = 'DEBUG'
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 async def make_llm_api_call(messages, model_name, response_format=None, temperature=0, max_tokens=None, tools=None, tool_choice="auto", api_key=None, api_base=None, agentops_session=None, stream=False, top_p=None):
     litellm.set_verbose = True
 
@@ -32,13 +28,13 @@ async def make_llm_api_call(messages, model_name, response_format=None, temperat
             try:
                 return await api_call_func()
             except litellm.exceptions.RateLimitError as e:
-                logger.warning(f"Rate limit exceeded. Waiting for 30 seconds before retrying...")
+                logging.warning(f"Rate limit exceeded. Waiting for 30 seconds before retrying...")
                 await asyncio.sleep(30)
             except OpenAIError as e:
-                logger.info(f"API call failed, retrying attempt {attempt + 1}. Error: {e}")
+                logging.info(f"API call failed, retrying attempt {attempt + 1}. Error: {e}")
                 await asyncio.sleep(5)
             except json.JSONDecodeError:
-                logger.error(f"JSON decoding failed, retrying attempt {attempt + 1}")
+                logging.error(f"JSON decoding failed, retrying attempt {attempt + 1}")
                 await asyncio.sleep(5)
         raise Exception("Failed to make API call after multiple attempts.")
 
@@ -77,7 +73,7 @@ async def make_llm_api_call(messages, model_name, response_format=None, temperat
             }
         
         # Log the API request
-        logger.info(f"Sending API request: {json.dumps(api_call_params, indent=2)}")
+        # logging.info(f"Sending API request: {json.dumps(api_call_params, indent=2)}")
 
         if agentops_session:
             response = await agentops_session.patch(litellm.acompletion)(**api_call_params)
@@ -85,7 +81,7 @@ async def make_llm_api_call(messages, model_name, response_format=None, temperat
             response = await litellm.acompletion(**api_call_params)
 
         # Log the API response
-        logger.info(f"Received API response: {response}")
+        # logging.info(f"Received API response: {response}")
 
         return response
 
@@ -104,24 +100,34 @@ if __name__ == "__main__":
         response = await make_llm_api_call(messages, model_name, stream=stream)
 
         if stream:
-            print("Streaming response:")
+            print("\n🤖 Streaming response:\n")
+            buffer = ""
             async for chunk in response:
                 if isinstance(chunk, dict) and 'choices' in chunk:
                     content = chunk['choices'][0]['delta'].get('content', '')
-                    print(content, end='', flush=True)
                 else:
                     # For non-dict responses (like ModelResponse objects)
                     content = chunk.choices[0].delta.content
-                    if content:
-                        print(content, end='', flush=True)
-            print("\nStream completed.")
+                
+                if content:
+                    buffer += content
+                    # Print complete words/sentences when we hit whitespace
+                    if content[-1].isspace():
+                        print(buffer, end='', flush=True)
+                        buffer = ""
+            
+            # Print any remaining content
+            if buffer:
+                print(buffer, flush=True)
+            print("\n✨ Stream completed.\n")
         else:
-            print("Non-streaming response:")
+            print("\n🤖 Response:\n")
             if isinstance(response, dict) and 'choices' in response:
                 print(response['choices'][0]['message']['content'])
             else:
                 # For non-dict responses (like ModelResponse objects)
                 print(response.choices[0].message.content)
+            print()
 
     # Example usage:
     # asyncio.run(test_llm_api_call(stream=True))  # For streaming
