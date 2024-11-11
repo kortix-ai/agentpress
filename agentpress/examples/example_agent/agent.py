@@ -118,8 +118,8 @@ Current development environment workspace state:
                     execute_tools_async=True,
                     use_tools=True,
                     execute_model_tool_calls=True,
-                    stream=True,
-                    execute_tools_on_stream=False                 
+                    stream=False,
+                    execute_tools_on_stream=True                 
                 )
         
         # Handle streaming response
@@ -169,7 +169,7 @@ if __name__ == "__main__":
             thread_id, 
             {
                 "role": "user", 
-                "content": "Change a file slightly. You decide what u want to change slightly."
+                "content": "Create a simple landing page with a header, hero section, and footer. Use modern CSS styling."
             }
         )      
 

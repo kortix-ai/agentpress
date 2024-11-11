@@ -62,7 +62,7 @@ class StandardToolParser(ToolParser):
             Dict[str, Any]: Formatted assistant message containing:
                 - role: "assistant"
                 - content: Text content of the response
-                - tool_use: List of parsed tool calls (if present)
+                - tool_calls: List of parsed tool calls (if present)
         """
         response_message = response.choices[0].message
         message = {
@@ -72,17 +72,16 @@ class StandardToolParser(ToolParser):
         
         tool_calls = response_message.get('tool_calls')
         if tool_calls:
-            message["tool_use"] = [
+            message["tool_calls"] = [
                 {
                     "id": tool_call.id,
-                    "type": "tool",
+                    "type": "function",
                     "function": {
                         "name": tool_call.function.name,
                         "arguments": tool_call.function.arguments
                     }
                 } for tool_call in tool_calls
             ]
-            logging.debug(f"Parsed tool_use: {message['tool_use']}")
         
         return message
 
@@ -111,67 +110,52 @@ class StandardToolParser(ToolParser):
             
             # Handle content if present
             if hasattr(delta, 'content') and delta.content:
-                content_chunk += delta.content
+                content_chunk = delta.content
 
             # Handle tool calls
             if hasattr(delta, 'tool_calls') and delta.tool_calls:
                 for tool_call in delta.tool_calls:
                     idx = tool_call.index
-                    
-                    # Initialize tool call in buffer if not exists
                     if idx not in tool_calls_buffer:
                         tool_calls_buffer[idx] = {
-                            'id': None,
-                            'type': 'tool',
+                            'id': tool_call.id if tool_call.id else None,
+                            'type': 'function',
                             'function': {
-                                'name': None,
+                                'name': tool_call.function.name if tool_call.function.name else None,
                                 'arguments': ''
                             }
                         }
                     
                     current_tool = tool_calls_buffer[idx]
-                    
-                    # Update tool call ID if present
-                    if hasattr(tool_call, 'id') and tool_call.id:
+                    if tool_call.id:
                         current_tool['id'] = tool_call.id
-                    
-                    # Update function name if present
-                    if hasattr(tool_call.function, 'name') and tool_call.function.name:
+                    if tool_call.function.name:
                         current_tool['function']['name'] = tool_call.function.name
-                    
-                    # Append function arguments if present
-                    if hasattr(tool_call.function, 'arguments') and tool_call.function.arguments:
+                    if tool_call.function.arguments:
                         current_tool['function']['arguments'] += tool_call.function.arguments
-
-                    current_tool['type'] = 'tool'
 
         # Check if this is the final chunk with tool_calls finish_reason
         if chunk.choices[0].finish_reason == 'tool_calls':
             is_complete = True
+            # Convert tool_calls_buffer to list and sort by index
+            tool_calls = [tool_calls_buffer[idx] for idx in sorted(tool_calls_buffer.keys())]
             
-            # Process all complete tool calls
+            # Process the complete tool calls
             processed_tool_calls = []
-            for idx in sorted(tool_calls_buffer.keys()):
-                tool_call = tool_calls_buffer[idx]
-                
-                # Only include complete tool calls
-                if tool_call['id'] and tool_call['function']['name']:
-                    try:
-                        args_str = tool_call['function']['arguments']
-                        if args_str:
-                            # Try to parse arguments as JSON
-                            tool_call['function']['arguments'] = json.loads(args_str)
-                        processed_tool_calls.append(tool_call)
-                    except json.JSONDecodeError as e:
-                        logging.error(f"Error parsing tool call arguments: {e}, args: {args_str}")
-                        continue
+            for tool_call in tool_calls:
+                try:
+                    args_str = tool_call['function']['arguments']
+                    # Try to parse the string as JSON
+                    tool_call['function']['arguments'] = json.loads(args_str)
+                    processed_tool_calls.append(tool_call)
+                except json.JSONDecodeError as e:
+                    logging.error(f"Error parsing tool call arguments: {e}, args: {args_str}")
+                    continue
             
-            if processed_tool_calls:
-                logging.debug(f"Parsed streaming tool_use: {processed_tool_calls}")
-                return {
-                    "role": "assistant",
-                    "content": content_chunk,
-                    "tool_use": processed_tool_calls
-                }, is_complete
+            return {
+                "role": "assistant",
+                "content": content_chunk,
+                "tool_calls": processed_tool_calls
+            }, is_complete
 
         return None, is_complete
