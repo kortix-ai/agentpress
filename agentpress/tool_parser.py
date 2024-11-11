@@ -88,19 +88,6 @@ class StandardToolParser(ToolParser):
     async def parse_stream(self, chunk: Any, tool_calls_buffer: Dict[int, Dict]) -> tuple[Optional[Dict[str, Any]], bool]:
         """
         Parse a streaming response chunk and update the tool calls buffer.
-        
-        Args:
-            chunk (Any): Single chunk from the streaming response
-            tool_calls_buffer (Dict[int, Dict]): Buffer storing incomplete tool calls
-            
-        Returns:
-            tuple(message, is_complete):
-                - message: Parsed message with tool calls if complete
-                - is_complete: Whether tool calls parsing is finished
-                
-        Note:
-            The tool_calls_buffer is modified in-place to accumulate tool call data
-            across multiple chunks.
         """
         content_chunk = ""
         is_complete = False
@@ -118,24 +105,24 @@ class StandardToolParser(ToolParser):
                     idx = tool_call.index
                     if idx not in tool_calls_buffer:
                         tool_calls_buffer[idx] = {
-                            'id': tool_call.id if tool_call.id else None,
+                            'id': tool_call.id if hasattr(tool_call, 'id') and tool_call.id else None,
                             'type': 'function',
                             'function': {
-                                'name': tool_call.function.name if tool_call.function.name else None,
+                                'name': tool_call.function.name if hasattr(tool_call.function, 'name') and tool_call.function.name else None,
                                 'arguments': ''
                             }
                         }
                     
                     current_tool = tool_calls_buffer[idx]
-                    if tool_call.id:
+                    if hasattr(tool_call, 'id') and tool_call.id:
                         current_tool['id'] = tool_call.id
-                    if tool_call.function.name:
+                    if hasattr(tool_call.function, 'name') and tool_call.function.name:
                         current_tool['function']['name'] = tool_call.function.name
-                    if tool_call.function.arguments:
+                    if hasattr(tool_call.function, 'arguments') and tool_call.function.arguments:
                         current_tool['function']['arguments'] += tool_call.function.arguments
 
-        # Check if this is the final chunk with tool_calls finish_reason
-        if chunk.choices[0].finish_reason == 'tool_calls':
+        # Check if this is the final chunk
+        if hasattr(chunk.choices[0], 'finish_reason') and chunk.choices[0].finish_reason:
             is_complete = True
             # Convert tool_calls_buffer to list and sort by index
             tool_calls = [tool_calls_buffer[idx] for idx in sorted(tool_calls_buffer.keys())]
@@ -144,18 +131,21 @@ class StandardToolParser(ToolParser):
             processed_tool_calls = []
             for tool_call in tool_calls:
                 try:
-                    args_str = tool_call['function']['arguments']
-                    # Try to parse the string as JSON
-                    tool_call['function']['arguments'] = json.loads(args_str)
-                    processed_tool_calls.append(tool_call)
+                    # Only process tool calls that have all required fields
+                    if tool_call['id'] and tool_call['function']['name'] and tool_call['function']['arguments']:
+                        args_str = tool_call['function']['arguments']
+                        # Try to parse the string as JSON
+                        json.loads(args_str)  # Validate JSON
+                        processed_tool_calls.append(tool_call)
                 except json.JSONDecodeError as e:
                     logging.error(f"Error parsing tool call arguments: {e}, args: {args_str}")
                     continue
             
-            return {
-                "role": "assistant",
-                "content": content_chunk,
-                "tool_calls": processed_tool_calls
-            }, is_complete
+            if processed_tool_calls:
+                return {
+                    "role": "assistant",
+                    "content": content_chunk,
+                    "tool_calls": processed_tool_calls
+                }, is_complete
 
         return None, is_complete

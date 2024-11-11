@@ -343,68 +343,32 @@ class ThreadManager:
         async def process_chunk(chunk):
             nonlocal content_buffer, current_assistant_message
             
-            # Handle content and tool calls from the chunk
-            if hasattr(chunk.choices[0], 'delta'):
-                delta = chunk.choices[0].delta
-                
-                # Accumulate content
-                if hasattr(delta, 'content') and delta.content is not None:
-                    content_buffer += delta.content
-                
-                # Handle tool calls
-                if hasattr(delta, 'tool_calls') and delta.tool_calls:
-                    for tool_call in delta.tool_calls:
-                        idx = tool_call.index
-                        if idx not in tool_calls_buffer:
-                            tool_calls_buffer[idx] = {
-                                'id': tool_call.id if tool_call.id else None,
-                                'type': 'function',
-                                'function': {
-                                    'name': tool_call.function.name if tool_call.function.name else None,
-                                    'arguments': ''
-                                }
-                            }
-                        
-                        current_tool = tool_calls_buffer[idx]
-                        if tool_call.id:
-                            current_tool['id'] = tool_call.id
-                        if tool_call.function.name:
-                            current_tool['function']['name'] = tool_call.function.name
-                        if tool_call.function.arguments:
-                            current_tool['function']['arguments'] += tool_call.function.arguments
+            # Parse the chunk using tool parser
+            parsed_message, is_complete = await self.tool_parser.parse_stream(chunk, tool_calls_buffer)
+            
+            # If we have a complete message with tool calls
+            if parsed_message and 'tool_calls' in parsed_message and parsed_message['tool_calls']:
+                # Update or create assistant message
+                if not current_assistant_message:
+                    current_assistant_message = parsed_message
+                    await self.add_message(thread_id, current_assistant_message)
+                else:
+                    # Update existing message with new tool calls
+                    current_assistant_message['tool_calls'] = parsed_message['tool_calls']
+                    # You might need to implement a method to update existing messages
+                    await self._update_message(thread_id, current_assistant_message)
 
-            # Execute tools during streaming if enabled
-            if execute_tools_on_stream and use_tools and execute_model_tool_calls:
-                try:
-                    # Get complete tool calls that haven't been executed
-                    complete_tool_calls = []
-                    for idx, tool_call in tool_calls_buffer.items():
-                        if (tool_call.get('id') and 
-                            tool_call['function'].get('name') and 
-                            tool_call['function'].get('arguments') and
-                            tool_call['id'] not in executed_tool_calls):
-                            try:
-                                # Verify arguments are complete JSON
-                                if isinstance(tool_call['function']['arguments'], str):
-                                    json.loads(tool_call['function']['arguments'])
-                                complete_tool_calls.append(tool_call)
-                            except json.JSONDecodeError:
-                                continue
-
-                    if complete_tool_calls:
-                        # First, add the current assistant message if we haven't yet
-                        if not current_assistant_message:
-                            current_assistant_message = {
-                                "role": "assistant",
-                                "content": content_buffer,
-                                "tool_calls": list(tool_calls_buffer.values())
-                            }
-                            await self.add_message(thread_id, current_assistant_message)
-
-                        # Execute complete tool calls
+                # Execute tools if enabled
+                if execute_tools_on_stream and use_tools and execute_model_tool_calls:
+                    new_tool_calls = [
+                        tool_call for tool_call in parsed_message['tool_calls']
+                        if tool_call['id'] not in executed_tool_calls
+                    ]
+                    
+                    if new_tool_calls:
                         if execute_tools_async:
                             tool_results = await self.tool_executor.execute_tool_calls(
-                                tool_calls=complete_tool_calls,
+                                tool_calls=new_tool_calls,
                                 available_functions=available_functions,
                                 thread_id=thread_id,
                                 executed_tool_calls=executed_tool_calls
@@ -412,7 +376,7 @@ class ThreadManager:
                         else:
                             sequential_executor = SequentialToolExecutor()
                             tool_results = await sequential_executor.execute_tool_calls(
-                                tool_calls=complete_tool_calls,
+                                tool_calls=new_tool_calls,
                                 available_functions=available_functions,
                                 thread_id=thread_id,
                                 executed_tool_calls=executed_tool_calls
@@ -421,32 +385,21 @@ class ThreadManager:
                         # Add tool results to thread
                         for result in tool_results:
                             await self.add_message(thread_id, result)
-                            
-                except Exception as e:
-                    logging.error(f"Error processing tool calls during stream: {str(e)}")
+                            executed_tool_calls.add(result['tool_call_id'])
 
             # Handle end of response
             if chunk.choices[0].finish_reason:
-                # Add final assistant message if not added yet
-                if not current_assistant_message:
-                    current_assistant_message = {
-                        "role": "assistant",
-                        "content": content_buffer,
-                        "tool_calls": list(tool_calls_buffer.values()) if tool_calls_buffer else None
-                    }
-                    await self.add_message(thread_id, current_assistant_message)
-
                 # Execute any remaining tool calls if not streaming execution
                 if not execute_tools_on_stream and use_tools and execute_model_tool_calls:
-                    remaining_tool_calls = [
+                    all_tool_calls = [
                         tool_call for tool_call in tool_calls_buffer.values()
                         if tool_call.get('id') and tool_call['id'] not in executed_tool_calls
                     ]
                     
-                    if remaining_tool_calls:
+                    if all_tool_calls:
                         if execute_tools_async:
                             tool_results = await self.tool_executor.execute_tool_calls(
-                                tool_calls=remaining_tool_calls,
+                                tool_calls=all_tool_calls,
                                 available_functions=available_functions,
                                 thread_id=thread_id,
                                 executed_tool_calls=executed_tool_calls
@@ -454,7 +407,7 @@ class ThreadManager:
                         else:
                             sequential_executor = SequentialToolExecutor()
                             tool_results = await sequential_executor.execute_tool_calls(
-                                tool_calls=remaining_tool_calls,
+                                tool_calls=all_tool_calls,
                                 available_functions=available_functions,
                                 thread_id=thread_id,
                                 executed_tool_calls=executed_tool_calls
@@ -468,6 +421,25 @@ class ThreadManager:
         async for chunk in response_stream:
             processed_chunk = await process_chunk(chunk)
             yield processed_chunk
+
+    async def _update_message(self, thread_id: str, message: Dict[str, Any]):
+        """Update an existing message in the thread."""
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        try:
+            with open(thread_path, 'r') as f:
+                thread_data = json.load(f)
+            
+            # Find and update the last assistant message
+            for i in reversed(range(len(thread_data["messages"]))):
+                if thread_data["messages"][i]["role"] == "assistant":
+                    thread_data["messages"][i] = message
+                    break
+            
+            with open(thread_path, 'w') as f:
+                json.dump(thread_data, f)
+        except Exception as e:
+            logging.error(f"Error updating message in thread {thread_id}: {e}")
+            raise e
 
     async def handle_response_without_tools(self, thread_id: str, response: Any):
         response_content = response.choices[0].message['content']

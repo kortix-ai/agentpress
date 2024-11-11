@@ -118,7 +118,7 @@ Current development environment workspace state:
                     execute_tools_async=True,
                     use_tools=True,
                     execute_model_tool_calls=True,
-                    stream=False,
+                    stream=True,
                     execute_tools_on_stream=True                 
                 )
         
