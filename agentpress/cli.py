@@ -36,12 +36,12 @@ MODULES = {
 }
 
 STARTER_EXAMPLES = {
-    "example-agent": {
+    "example_agent": {
         "description": "Web development agent with file and terminal tools",
         "files": {
-            "agent.py": "examples/example-agent/agent.py",
-            "tools/files_tool.py": "examples/example-agent/tools/files_tool.py",
-            "tools/terminal_tool.py": "examples/example-agent/tools/terminal_tool.py",
+            "agent.py": "examples/example_agent/agent.py",
+            "tools/files_tool.py": "examples/example_agent/tools/files_tool.py",
+            "tools/terminal_tool.py": "examples/example_agent/tools/terminal_tool.py",
         }
     }
 }
