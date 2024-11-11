@@ -4,6 +4,9 @@ from agentpress.thread_manager import ThreadManager
 from tools.files_tool import FilesTool
 from agentpress.state_manager import StateManager
 from tools.terminal_tool import TerminalTool
+import logging
+from typing import AsyncGenerator
+import sys
 
 async def run_agent(thread_id: str, max_iterations: int = 5):
     # Initialize managers and tools
@@ -111,13 +114,45 @@ Current development environment workspace state:
                     temperature=0.1,
                     max_tokens=8096,
                     tool_choice="auto",
-                    additional_message=state_message,
+                    temporary_message=state_message,
                     execute_tools_async=True,
                     use_tools=True,
-                    execute_model_tool_calls=True                    
+                    execute_tool_calls=True,
+                    stream=True,
+                    execute_tools_on_stream=True                 
                 )
         
-        print(response)
+        # Handle streaming response
+        if isinstance(response, AsyncGenerator):
+            print("\n🤖 Assistant is responding:")
+            content_buffer = ""
+            try:
+                async for chunk in response:
+                    if hasattr(chunk.choices[0], 'delta'):
+                        delta = chunk.choices[0].delta
+                        
+                        # Handle content streaming
+                        if hasattr(delta, 'content') and delta.content is not None:
+                            print(delta.content, end='', flush=True)
+                        
+                        # Handle tool calls
+                        if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                            for tool_call in delta.tool_calls:
+                                # Print tool name when it first appears
+                                if tool_call.function and tool_call.function.name:
+                                    print(f"\n🛠️  Tool Call: {tool_call.function.name}", flush=True)
+                                
+                                # Print arguments as they stream in
+                                if tool_call.function and tool_call.function.arguments:
+                                    print(f"   {tool_call.function.arguments}", end='', flush=True)
+                
+                print("\n✨ Response completed\n")
+                
+            except Exception as e:
+                print(f"\n❌ Error processing stream: {e}", file=sys.stderr)
+                logging.error(f"Error processing stream: {e}")
+        else:
+            print("\n❌ Non-streaming response received:", response)
 
         # Call after_iteration without arguments
         await after_iteration()
@@ -134,7 +169,7 @@ if __name__ == "__main__":
             thread_id, 
             {
                 "role": "user", 
-                "content": "Let's create a identical 1to1 Airbnb Clone using HTML, CSS, Javascript. Use images from pixabay, pexels, and co."
+                "content": "Create a simple landing page with a header, hero section, and footer. Use modern CSS styling."
             }
         )      
 
