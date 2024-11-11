@@ -56,7 +56,7 @@ async def make_llm_api_call(
     Raises:
         Exception: If API call fails after retries
     """
-    litellm.set_verbose = True
+    # litellm.set_verbose = True
 
     async def attempt_api_call(api_call_func, max_attempts=3):
         """

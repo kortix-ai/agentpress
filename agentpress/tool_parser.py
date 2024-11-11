@@ -88,9 +88,11 @@ class StandardToolParser(ToolParser):
     async def parse_stream(self, chunk: Any, tool_calls_buffer: Dict[int, Dict]) -> tuple[Optional[Dict[str, Any]], bool]:
         """
         Parse a streaming response chunk and update the tool calls buffer.
+        Returns a message when a complete tool call is detected.
         """
         content_chunk = ""
         is_complete = False
+        has_complete_tool_call = False
         
         if hasattr(chunk.choices[0], 'delta'):
             delta = chunk.choices[0].delta
@@ -120,32 +122,42 @@ class StandardToolParser(ToolParser):
                         current_tool['function']['name'] = tool_call.function.name
                     if hasattr(tool_call.function, 'arguments') and tool_call.function.arguments:
                         current_tool['function']['arguments'] += tool_call.function.arguments
+                    
+                    # Check if this tool call is complete
+                    if (current_tool['id'] and 
+                        current_tool['function']['name'] and 
+                        current_tool['function']['arguments']):
+                        try:
+                            # Validate JSON arguments
+                            json.loads(current_tool['function']['arguments'])
+                            has_complete_tool_call = True
+                        except json.JSONDecodeError:
+                            pass
 
         # Check if this is the final chunk
         if hasattr(chunk.choices[0], 'finish_reason') and chunk.choices[0].finish_reason:
             is_complete = True
-            # Convert tool_calls_buffer to list and sort by index
-            tool_calls = [tool_calls_buffer[idx] for idx in sorted(tool_calls_buffer.keys())]
-            
-            # Process the complete tool calls
-            processed_tool_calls = []
-            for tool_call in tool_calls:
+
+        # Return message if we have complete tool calls or it's the final chunk
+        if has_complete_tool_call or is_complete:
+            # Get all complete tool calls
+            complete_tool_calls = []
+            for idx, tool_call in tool_calls_buffer.items():
                 try:
-                    # Only process tool calls that have all required fields
-                    if tool_call['id'] and tool_call['function']['name'] and tool_call['function']['arguments']:
-                        args_str = tool_call['function']['arguments']
-                        # Try to parse the string as JSON
-                        json.loads(args_str)  # Validate JSON
-                        processed_tool_calls.append(tool_call)
-                except json.JSONDecodeError as e:
-                    logging.error(f"Error parsing tool call arguments: {e}, args: {args_str}")
+                    if (tool_call['id'] and 
+                        tool_call['function']['name'] and 
+                        tool_call['function']['arguments']):
+                        # Validate JSON
+                        json.loads(tool_call['function']['arguments'])
+                        complete_tool_calls.append(tool_call)
+                except json.JSONDecodeError:
                     continue
             
-            if processed_tool_calls:
+            if complete_tool_calls:
                 return {
                     "role": "assistant",
                     "content": content_chunk,
-                    "tool_calls": processed_tool_calls
+                    "tool_calls": complete_tool_calls
                 }, is_complete
 
         return None, is_complete

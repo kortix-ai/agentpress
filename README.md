@@ -89,7 +89,7 @@ async def main():
         },
         model_name="gpt-4",
         use_tools=True,
-        execute_model_tool_calls=True
+        execute_tool_calls=True
     )
     print("Response:", response)
 
@@ -171,6 +171,12 @@ It will return the built package name with the version number.
 pip install /Users/markokraemer/Projects/agentpress/dist/agentpress-0.1.3-py3-none-any.whl --force-reinstall
 ```
 Then you can test that version.
+
+
+For quick testing, you can install directly from the current directory:
+```bash
+pip install e .
+```
 
 
 ## License

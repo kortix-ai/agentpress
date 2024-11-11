@@ -221,7 +221,7 @@ class ThreadManager:
         temporary_message: Optional[Dict[str, Any]] = None, 
         use_tools: bool = False, 
         execute_tools_async: bool = True, 
-        execute_model_tool_calls: bool = True, 
+        execute_tool_calls: bool = True, 
         stream: bool = False,
         execute_tools_on_stream: bool = False
     ) -> Union[Dict[str, Any], AsyncGenerator]:
@@ -238,7 +238,7 @@ class ThreadManager:
             temporary_message (Optional[Dict[str, Any]]): Extra temporary message to include at the end of the LLM api request. Without adding it permanently to the Thread.
             use_tools (bool): Whether to enable tool usage
             execute_tools_async (bool): Whether to execute tools concurrently or synchronously if off.
-            execute_model_tool_calls (bool): Whether to execute parsed tool calls
+            execute_tool_calls (bool): Whether to execute parsed tool calls
             stream (bool): Whether to stream the response
             execute_tools_on_stream (bool): Whether to execute tools during streaming, or waiting for full response before executing.
         
@@ -274,13 +274,13 @@ class ThreadManager:
                     thread_id=thread_id,
                     response_stream=llm_response,
                     use_tools=use_tools,
-                    execute_model_tool_calls=execute_model_tool_calls,
+                    execute_tool_calls=execute_tool_calls,
                     execute_tools_async=execute_tools_async,
                     execute_tools_on_stream=execute_tools_on_stream
                 )
             
             # For non-streaming, handle the response
-            if use_tools and execute_model_tool_calls:
+            if use_tools and execute_tool_calls:
                 await self.handle_response_with_tools(thread_id, llm_response, execute_tools_async)
             else:
                 await self.handle_response_without_tools(thread_id, llm_response)
@@ -296,7 +296,7 @@ class ThreadManager:
                     "tool_choice": tool_choice,
                     "temporary_message": temporary_message,
                     "execute_tools_async": execute_tools_async,
-                    "execute_model_tool_calls": execute_model_tool_calls,
+                    "execute_tool_calls": execute_tool_calls,
                     "use_tools": use_tools,
                     "stream": stream,
                     "execute_tools_on_stream": execute_tools_on_stream
@@ -317,7 +317,7 @@ class ThreadManager:
                     "tool_choice": tool_choice,
                     "temporary_message": temporary_message,
                     "execute_tools_async": execute_tools_async,
-                    "execute_model_tool_calls": execute_model_tool_calls,
+                    "execute_tool_calls": execute_tool_calls,
                     "use_tools": use_tools,
                     "stream": stream,
                     "execute_tools_on_stream": execute_tools_on_stream
@@ -329,7 +329,7 @@ class ThreadManager:
         thread_id: str, 
         response_stream: AsyncGenerator, 
         use_tools: bool, 
-        execute_model_tool_calls: bool, 
+        execute_tool_calls: bool, 
         execute_tools_async: bool,
         execute_tools_on_stream: bool
     ) -> AsyncGenerator:
@@ -339,82 +339,67 @@ class ThreadManager:
         available_functions = self.get_available_functions() if use_tools else {}
         content_buffer = ""  # Buffer for content
         current_assistant_message = None  # Track current assistant message
+        pending_tool_calls = []  # Store tool calls for non-streaming execution
+
+        async def execute_tool_calls(tool_calls):
+            if execute_tools_async:
+                return await self.tool_executor.execute_tool_calls(
+                    tool_calls=tool_calls,
+                    available_functions=available_functions,
+                    thread_id=thread_id,
+                    executed_tool_calls=executed_tool_calls
+                )
+            else:
+                sequential_executor = SequentialToolExecutor()
+                return await sequential_executor.execute_tool_calls(
+                    tool_calls=tool_calls,
+                    available_functions=available_functions,
+                    thread_id=thread_id,
+                    executed_tool_calls=executed_tool_calls
+                )
 
         async def process_chunk(chunk):
-            nonlocal content_buffer, current_assistant_message
+            nonlocal content_buffer, current_assistant_message, pending_tool_calls
             
             # Parse the chunk using tool parser
             parsed_message, is_complete = await self.tool_parser.parse_stream(chunk, tool_calls_buffer)
             
-            # If we have a complete message with tool calls
+            # If we have a message with tool calls
             if parsed_message and 'tool_calls' in parsed_message and parsed_message['tool_calls']:
                 # Update or create assistant message
                 if not current_assistant_message:
                     current_assistant_message = parsed_message
                     await self.add_message(thread_id, current_assistant_message)
                 else:
-                    # Update existing message with new tool calls
                     current_assistant_message['tool_calls'] = parsed_message['tool_calls']
-                    # You might need to implement a method to update existing messages
                     await self._update_message(thread_id, current_assistant_message)
 
-                # Execute tools if enabled
-                if execute_tools_on_stream and use_tools and execute_model_tool_calls:
-                    new_tool_calls = [
-                        tool_call for tool_call in parsed_message['tool_calls']
-                        if tool_call['id'] not in executed_tool_calls
-                    ]
-                    
-                    if new_tool_calls:
-                        if execute_tools_async:
-                            tool_results = await self.tool_executor.execute_tool_calls(
-                                tool_calls=new_tool_calls,
-                                available_functions=available_functions,
-                                thread_id=thread_id,
-                                executed_tool_calls=executed_tool_calls
-                            )
-                        else:
-                            sequential_executor = SequentialToolExecutor()
-                            tool_results = await sequential_executor.execute_tool_calls(
-                                tool_calls=new_tool_calls,
-                                available_functions=available_functions,
-                                thread_id=thread_id,
-                                executed_tool_calls=executed_tool_calls
-                            )
+                # Get new tool calls that haven't been executed
+                new_tool_calls = [
+                    tool_call for tool_call in parsed_message['tool_calls']
+                    if tool_call['id'] not in executed_tool_calls
+                ]
 
-                        # Add tool results to thread
+                if new_tool_calls:
+                    if execute_tools_on_stream:
+                        # Execute tools immediately during streaming
+                        tool_results = await execute_tool_calls(new_tool_calls)
                         for result in tool_results:
                             await self.add_message(thread_id, result)
                             executed_tool_calls.add(result['tool_call_id'])
+                    else:
+                        # Store tool calls for later execution
+                        pending_tool_calls.extend(new_tool_calls)
 
             # Handle end of response
             if chunk.choices[0].finish_reason:
-                # Execute any remaining tool calls if not streaming execution
-                if not execute_tools_on_stream and use_tools and execute_model_tool_calls:
-                    all_tool_calls = [
-                        tool_call for tool_call in tool_calls_buffer.values()
-                        if tool_call.get('id') and tool_call['id'] not in executed_tool_calls
-                    ]
-                    
-                    if all_tool_calls:
-                        if execute_tools_async:
-                            tool_results = await self.tool_executor.execute_tool_calls(
-                                tool_calls=all_tool_calls,
-                                available_functions=available_functions,
-                                thread_id=thread_id,
-                                executed_tool_calls=executed_tool_calls
-                            )
-                        else:
-                            sequential_executor = SequentialToolExecutor()
-                            tool_results = await sequential_executor.execute_tool_calls(
-                                tool_calls=all_tool_calls,
-                                available_functions=available_functions,
-                                thread_id=thread_id,
-                                executed_tool_calls=executed_tool_calls
-                            )
-
-                        for result in tool_results:
-                            await self.add_message(thread_id, result)
+                if not execute_tools_on_stream and pending_tool_calls:
+                    # Execute all pending tool calls at the end
+                    tool_results = await execute_tool_calls(pending_tool_calls)
+                    for result in tool_results:
+                        await self.add_message(thread_id, result)
+                        executed_tool_calls.add(result['tool_call_id'])
+                    pending_tool_calls.clear()
 
             return chunk
 
@@ -631,7 +616,7 @@ if __name__ == "__main__":
             temperature=0.7,
             stream=False,
             use_tools=True,
-            execute_model_tool_calls=True
+            execute_tool_calls=True
         )
         
         # Print the non-streaming response
@@ -650,7 +635,7 @@ if __name__ == "__main__":
             temperature=0.7,
             stream=True,  
             use_tools=True,
-            execute_model_tool_calls=True,
+            execute_tool_calls=True,
             execute_tools_on_stream=True
         )
 
