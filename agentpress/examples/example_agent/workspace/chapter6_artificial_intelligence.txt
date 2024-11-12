@@ -1,0 +1,15 @@
+Chapter 6: Artificial Intelligence in Robotics
+
+AI Foundations for Robotics:
+- Machine Learning Algorithms
+- Neural Networks
+- Deep Learning
+- Reinforcement Learning
+- Adaptive Robotic Systems
+
+Key Concepts:
+- Autonomous Decision Making
+- Learning from Environment
+- Predictive Modeling
+- Robotic Reasoning
+- Cognitive Robotics

@@ -1,0 +1,15 @@
+Chapter 4: Sensors and Robotic Perception
+
+Types of Robotic Sensors:
+- Vision Sensors
+- Proximity Sensors
+- Force and Tactile Sensors
+- Inertial Measurement Units (IMUs)
+- GPS and Positioning Systems
+
+Perception Techniques:
+- Computer Vision
+- Machine Learning in Perception
+- Sensor Fusion
+- Environmental Mapping
+- Object Recognition
