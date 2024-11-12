@@ -350,73 +350,95 @@ if __name__ == "__main__":
     from agentpress.examples.example_agent.tools.files_tool import FilesTool
 
     async def main():
-        manager = ThreadManager()
-        manager.add_tool(FilesTool, ['create_file'])
-        thread_id = await manager.create_thread()
+        # Initialize managers
+        thread_manager = ThreadManager()
+        
+        # Register available tools
+        thread_manager.add_tool(FilesTool)
+        
+        # Create a new thread
+        thread_id = await thread_manager.create_thread()
         
         # Add a test message
-        await manager.add_message(thread_id, {
+        await thread_manager.add_message(thread_id, {
             "role": "user", 
             "content": "Please create 10x files – Each should be a chapter of a book about an Introduction to Robotics.."
         })
 
+        # Define system message
         system_message = {
             "role": "system", 
             "content": "You are a helpful assistant that can create, read, update, and delete files."
         }
-        model_name = "anthropic/claude-3-5-haiku-latest"
-        # model_name = "gpt-4o-mini"
-        
-        # Test with tools (non-streaming)
-        print("\n🤖 Testing non-streaming response with tools:")
-        response = await manager.run_thread(
+
+        # Test with streaming response and tool execution
+        print("\n🤖 Testing streaming response with tools:")
+        response = await thread_manager.run_thread(
             thread_id=thread_id,
             system_message=system_message,
-            model_name=model_name,
+            model_name="anthropic/claude-3-5-haiku-latest", 
             temperature=0.7,
-            stream=False,
+            max_tokens=4096,
+            stream=True,
             use_tools=True,
-            execute_tool_calls=True
+            execute_tools=True,
+            immediate_tool_execution=True,
+            parallel_tool_execution=False
         )
-        
-        # Print the non-streaming response
-        if "error" in response:
-            print(f"Error: {response['message']}")
+
+        # Handle streaming response
+        if isinstance(response, AsyncGenerator):
+            print("\nAssistant is responding:")
+            content_buffer = ""
+            try:
+                async for chunk in response:
+                    if hasattr(chunk.choices[0], 'delta'):
+                        delta = chunk.choices[0].delta
+                        
+                        # Handle content streaming
+                        if hasattr(delta, 'content') and delta.content is not None:
+                            content_buffer += delta.content
+                            if delta.content.endswith((' ', '\n')):
+                                print(content_buffer, end='', flush=True)
+                                content_buffer = ""
+                        
+                        # Handle tool calls
+                        if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                            for tool_call in delta.tool_calls:
+                                # Print tool name when it first appears
+                                if tool_call.function and tool_call.function.name:
+                                    print(f"\n🛠️  Tool Call: {tool_call.function.name}", flush=True)
+                                
+                                # Print arguments as they stream in
+                                if tool_call.function and tool_call.function.arguments:
+                                    print(f"   {tool_call.function.arguments}", end='', flush=True)
+                
+                # Print any remaining content
+                if content_buffer:
+                    print(content_buffer, flush=True)
+                print("\n✨ Response completed\n")
+                
+            except Exception as e:
+                print(f"\n❌ Error processing stream: {e}")
         else:
-            print(response["llm_response"].choices[0].message.content)
-            print("\n✨ Response completed.\n")
+            # Handle non-streaming response
+            print("\nAssistant response:")
+            if hasattr(response.choices[0], 'message'):
+                message = response.choices[0].message
+                if message.content:
+                    print(message.content)
+                if hasattr(message, 'tool_calls') and message.tool_calls:
+                    for tool_call in message.tool_calls:
+                        print(f"\n🛠️  Tool Call: {tool_call.function.name}")
+                        print(f"   Arguments: {tool_call.function.arguments}")
+            print("\n✨ Response completed\n")
 
-        # Test streaming
-        print("\n🤖 Testing streaming response:")
-        stream_response = await manager.run_thread(
-            thread_id=thread_id,
-            system_message=system_message,
-            model_name=model_name,
-            temperature=0.7,
-            stream=True,  
-            use_tools=True,
-            execute_tool_calls=True,
-            execute_tools_on_stream=True
-        )
-
-        buffer = ""
-        async for chunk in stream_response:
-            if isinstance(chunk, dict) and 'choices' in chunk:
-                content = chunk['choices'][0]['delta'].get('content', '')
-            else:
-                # For non-dict responses (like ModelResponse objects)
-                content = chunk.choices[0].delta.content
-            
-            if content:
-                buffer += content
-                # Print complete words/sentences when we hit whitespace
-                if content[-1].isspace():
-                    print(buffer, end='', flush=True)
-                    buffer = ""
-        
-        # Print any remaining content
-        if buffer:
-            print(buffer, flush=True)
-        print("\n✨ Stream completed.\n")
+        # Display final thread state
+        messages = await thread_manager.list_messages(thread_id)
+        print("\n📝 Final Thread State:")
+        for msg in messages:
+            role = msg.get('role', 'unknown')
+            content = msg.get('content', '')
+            print(f"\n{role.upper()}: {content[:100]}...")
 
     asyncio.run(main())

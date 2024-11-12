@@ -1,5 +1,5 @@
+import logging
 from typing import Dict, Any, AsyncGenerator, Callable
-import json
 from agentpress.tool_executor import ToolExecutor
 from agentpress.tool_parser import ToolParser
 
@@ -50,7 +50,7 @@ class LLMResponseProcessor:
         self,
         response_stream: AsyncGenerator,
         execute_tools: bool = True,
-        immediate_execution: bool = True  # Renamed from execute_tools_immediately
+        immediate_execution: bool = True 
     ) -> AsyncGenerator:
         """
         Process streaming LLM response and handle tool execution.
