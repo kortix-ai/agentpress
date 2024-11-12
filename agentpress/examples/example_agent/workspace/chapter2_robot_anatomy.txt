@@ -1,0 +1,15 @@
+Chapter 2: Robot Anatomy and Components
+
+Core Components of Robotic Systems:
+- Mechanical Structure
+- Actuators and Motors
+- Sensors
+- Control Systems
+- Power Sources
+
+Key Topics:
+- Types of robotic joints
+- Degrees of freedom
+- Structural materials
+- Mechanical design principles
+- Importance of each component in robotic functionality

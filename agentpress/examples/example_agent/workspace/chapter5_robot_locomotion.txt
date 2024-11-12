@@ -1,0 +1,15 @@
+Chapter 5: Robot Locomotion and Movement
+
+Locomotion Strategies:
+- Wheeled Robots
+- Legged Robots
+- Flying Robots
+- Swimming and Underwater Robots
+- Hybrid Locomotion Systems
+
+Movement Principles:
+- Kinematics
+- Dynamics
+- Balance and Stability
+- Energy Efficiency
+- Terrain Adaptation
