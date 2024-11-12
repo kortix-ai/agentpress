@@ -105,7 +105,7 @@ Current development environment workspace state:
             """
         }
 
-        model_name = "anthropic/claude-3-5-sonnet-latest"
+        model_name = "anthropic/claude-3-5-haiku-latest"
 
         response = await thread_manager.run_thread(
                     thread_id=thread_id,
@@ -115,11 +115,11 @@ Current development environment workspace state:
                     max_tokens=8096,
                     tool_choice="auto",
                     temporary_message=state_message,
-                    execute_tools_async=True,
                     use_tools=True,
-                    execute_tool_calls=True,
+                    execute_tools=True,
                     stream=True,
-                    execute_tools_on_stream=True                 
+                    immediate_tool_execution=False,
+                    parallel_tool_execution=False
                 )
         
         # Handle streaming response
