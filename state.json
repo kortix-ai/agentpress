@@ -1,3 +1,34 @@
 {
-  "files": {}
+  "files": {
+    "chapter8_robot_ethics.txt": {
+      "content": "Chapter 8: Robot Ethics and Social Implications\n\nEthical Considerations in Robotics\n- Philosophical and moral challenges\n- Human-robot interaction\n- Privacy and security concerns\n- Societal impact of robotics\n\nEthical Dimensions:\n1. Autonomous Decision Making\n2. Job Displacement\n3. Privacy Concerns\n4. Safety Protocols\n5. Human-Robot Collaboration"
+    },
+    "chapter2_robot_anatomy.txt": {
+      "content": "Chapter 2: Robot Anatomy and Components\n\nStructural Elements of Robots\n- Mechanical frameworks\n- Joints and motion systems\n- Actuators and motors\n- End effectors and manipulators\n\nKey Components:\n1. Mechanical Structure\n2. Actualization Mechanisms\n3. Power Systems\n4. Control Interfaces"
+    },
+    "chapter4_robot_control_systems.txt": {
+      "content": "Chapter 4: Robot Control Systems\n\nControl Architectures and Strategies\n- Feedback and feedforward control\n- Closed-loop and open-loop systems\n- PID controllers\n- Advanced control algorithms\n\nControl Principles:\n1. Basic Control Mechanisms\n2. Adaptive Control Techniques\n3. Intelligent Control Systems\n4. Machine Learning in Robotics"
+    },
+    "chapter6_robotic_applications.txt": {
+      "content": "Chapter 6: Robotic Applications Across Industries\n\nDiverse Robotic Applications\n- Manufacturing robotics\n- Medical and surgical robots\n- Space and exploration robots\n- Agricultural robotics\n- Service and social robots\n\nApplication Domains:\n1. Industrial Automation\n2. Healthcare\n3. Exploration\n4. Agriculture\n5. Personal Assistance"
+    },
+    "chapter1_foundations_of_robotics.txt": {
+      "content": "Chapter 1: Foundations of Robotics\n\nIntroduction to Robotics\n- Definition of a robot\n- Historical development of robotics\n- Key milestones in robotic technology\n- Importance of robotics in modern society\n\nKey Topics:\n1. What is a Robot?\n2. Origins of Robotics\n3. Interdisciplinary Nature of Robotics\n4. Major Fields of Robotic Applications"
+    },
+    "chapter3_sensors_and_perception.txt": {
+      "content": "Chapter 3: Sensors and Robotic Perception\n\nUnderstanding Robotic Sensing\n- Types of sensors\n- Vision systems\n- Tactile and proximity sensors\n- Environmental perception techniques\n\nSensor Categories:\n1. Visual Sensors\n2. Mechanical Sensors\n3. Electromagnetic Sensors\n4. Acoustic Sensors\n5. Chemical and Thermal Sensors"
+    },
+    "chapter7_artificial_intelligence.txt": {
+      "content": "Chapter 7: Artificial Intelligence in Robotics\n\nAI and Machine Learning Integration\n- Neural networks\n- Deep learning\n- Cognitive robotics\n- Autonomous decision making\n\nAI Techniques:\n1. Machine Learning Algorithms\n2. Neural Network Architectures\n3. Reinforcement Learning\n4. Computer Vision"
+    },
+    "chapter5_programming_robots.txt": {
+      "content": "Chapter 5: Programming and Software for Robots\n\nRobot Programming Fundamentals\n- Programming languages for robotics\n- Robot Operating System (ROS)\n- Algorithm design\n- Motion planning\n\nProgramming Topics:\n1. C++, Python in Robotics\n2. ROS Framework\n3. Algorithmic Movement Planning\n4. Simulation Environments"
+    },
+    "chapter9_future_of_robotics.txt": {
+      "content": "Chapter 9: The Future of Robotics\n\nEmerging Trends and Technologies\n- Nano-robotics\n- Soft robotics\n- Swarm robotics\n- Humanoid development\n- Quantum computing in robotics\n\nFuture Perspectives:\n1. Technological Advancements\n2. Interdisciplinary Integration\n3. Potential Breakthroughs\n4. Emerging Research Areas"
+    },
+    "chapter10_robotics_research.txt": {
+      "content": "Chapter 10: Robotics Research and Innovation\n\nResearch Frontiers in Robotics\n- Current research institutions\n- Funding and innovation\n- Open-source robotics\n- Global robotics initiatives\n\nResearch Focus Areas:\n1. Academic Research Centers\n2. Industry Innovation\n3. International Collaborations\n4. Emerging Research Domains"
+    }
+  }
 }
