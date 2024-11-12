@@ -1,4 +1,4 @@
-from typing import Dict, Type, Any, List, Optional
+from typing import Dict, Type, Any, List, Optional, Callable
 from agentpress.tool import Tool
 
 
@@ -52,6 +52,21 @@ class ToolRegistry:
                     }
                 else:
                     raise ValueError(f"Function '{func_name}' not found in {tool_class.__name__}")
+
+    def get_available_functions(self) -> Dict[str, Callable]:
+        """
+        Get all available tool functions that can be executed.
+        
+        Returns:
+            Dict[str, Callable]: Dictionary mapping function names to their callable implementations
+        """
+        available_functions = {}
+        for tool_name, tool_info in self.tools.items():
+            tool_instance = tool_info['instance']
+            for func_name, func in tool_instance.__class__.__dict__.items():
+                if callable(func) and not func_name.startswith("__"):
+                    available_functions[func_name] = getattr(tool_instance, func_name)
+        return available_functions
 
     def get_tool(self, tool_name: str) -> Dict[str, Any]:
         """
