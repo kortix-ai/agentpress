@@ -383,7 +383,7 @@ if __name__ == "__main__":
             use_tools=True,
             execute_tools=True,
             immediate_tool_execution=True,
-            parallel_tool_execution=False
+            parallel_tool_execution=True
         )
 
         # Handle streaming response
@@ -421,16 +421,6 @@ if __name__ == "__main__":
             except Exception as e:
                 print(f"\n❌ Error processing stream: {e}")
         else:
-            # Handle non-streaming response
-            print("\nAssistant response:")
-            if hasattr(response.choices[0], 'message'):
-                message = response.choices[0].message
-                if message.content:
-                    print(message.content)
-                if hasattr(message, 'tool_calls') and message.tool_calls:
-                    for tool_call in message.tool_calls:
-                        print(f"\n🛠️  Tool Call: {tool_call.function.name}")
-                        print(f"   Arguments: {tool_call.function.arguments}")
             print("\n✨ Response completed\n")
 
         # Display final thread state
