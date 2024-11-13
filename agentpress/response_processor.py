@@ -3,6 +3,8 @@ from typing import Dict, Any, AsyncGenerator, Callable
 from agentpress.tool_parser import ToolParser
 from agentpress.tool_executor import ToolExecutor
 import asyncio
+import os
+import json
 
 class LLMResponseProcessor:
     """
@@ -60,80 +62,120 @@ class LLMResponseProcessor:
     ) -> AsyncGenerator:
         """
         Process streaming LLM response and handle tool execution.
-        
-        Yields chunks immediately as they arrive, while handling tool execution
-        and message management in the background.
+        Yields chunks immediately while managing message state and tool execution efficiently.
         """
         pending_tool_calls = []
+        background_tasks = set()
+        last_update_time = 0
+        UPDATE_INTERVAL = 0.5  # Minimum seconds between message updates
+        tool_results = []  # Track tool results
 
         async def handle_message_management(chunk):
-            # Accumulate content
-            if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content:
-                self.content_buffer += chunk.choices[0].delta.content
-            
-            # Parse and accumulate tool calls
-            parsed_message, is_complete = await self.tool_parser.parse_stream(
-                chunk, 
-                self.tool_calls_buffer
-            )
-            if parsed_message and 'tool_calls' in parsed_message:
-                self.tool_calls_accumulated = parsed_message['tool_calls']
+            try:
+                nonlocal last_update_time, tool_results
+                current_time = asyncio.get_event_loop().time()
 
-            # Handle message management and tool execution
-            if chunk.choices[0].finish_reason or (self.content_buffer and self.tool_calls_accumulated):
-                message = {
-                    "role": "assistant",
-                    "content": self.content_buffer
-                }
-                if self.tool_calls_accumulated:
-                    message["tool_calls"] = self.tool_calls_accumulated
+                # Accumulate content
+                if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content:
+                    self.content_buffer += chunk.choices[0].delta.content
+                
+                # Parse tool calls only if present in chunk
+                if hasattr(chunk.choices[0].delta, 'tool_calls'):
+                    parsed_message, is_complete = await self.tool_parser.parse_stream(
+                        chunk, 
+                        self.tool_calls_buffer
+                    )
+                    if parsed_message and 'tool_calls' in parsed_message:
+                        self.tool_calls_accumulated = parsed_message['tool_calls']
 
-                if not self.message_added:
-                    await self.add_message(self.thread_id, message)
-                    self.message_added = True
-                else:
-                    await self.update_message(self.thread_id, message)
-
-                # Handle tool execution
+                # Handle tool execution and results
                 if execute_tools and self.tool_calls_accumulated:
                     new_tool_calls = [
                         tool_call for tool_call in self.tool_calls_accumulated
                         if tool_call['id'] not in self.processed_tool_calls
                     ]
 
-                    if new_tool_calls:
-                        if immediate_execution:
-                            results = await self.tool_executor.execute_tool_calls(
-                                tool_calls=new_tool_calls,
-                                available_functions=self.available_functions,
-                                thread_id=self.thread_id,
-                                executed_tool_calls=self.processed_tool_calls
-                            )
-                            for result in results:
-                                await self.add_message(self.thread_id, result)
-                                self.processed_tool_calls.add(result['tool_call_id'])
-                        else:
-                            pending_tool_calls.extend(new_tool_calls)
+                    if new_tool_calls and immediate_execution:
+                        results = await self.tool_executor.execute_tool_calls(
+                            tool_calls=new_tool_calls,
+                            available_functions=self.available_functions,
+                            thread_id=self.thread_id,
+                            executed_tool_calls=self.processed_tool_calls
+                        )
+                        tool_results.extend(results)
+                        for result in results:
+                            self.processed_tool_calls.add(result['tool_call_id'])
+                    elif new_tool_calls:
+                        pending_tool_calls.extend(new_tool_calls)
 
-            # Handle end of stream
-            if chunk.choices[0].finish_reason:
-                if not immediate_execution and pending_tool_calls:
-                    results = await self.tool_executor.execute_tool_calls(
-                        tool_calls=pending_tool_calls,
-                        available_functions=self.available_functions,
-                        thread_id=self.thread_id,
-                        executed_tool_calls=self.processed_tool_calls
-                    )
-                    for result in results:
-                        await self.add_message(self.thread_id, result)
-                        self.processed_tool_calls.add(result['tool_call_id'])
-                    pending_tool_calls.clear()
+                # Update message state with rate limiting
+                should_update = (
+                    chunk.choices[0].finish_reason or 
+                    (current_time - last_update_time) >= UPDATE_INTERVAL
+                )
 
-        async for chunk in response_stream:
-            # Start background task for message management and tool execution
-            asyncio.create_task(handle_message_management(chunk))
-            # Immediately yield the chunk
-            yield chunk
+                if should_update:
+                    # First, add tool results if any
+                    for result in tool_results:
+                        if not any(msg.get('tool_call_id') == result['tool_call_id'] 
+                                 for msg in await self.list_messages(self.thread_id)):
+                            await self.add_message(self.thread_id, result)
+                    tool_results = []  # Clear processed results
+
+                    # Then add/update assistant message
+                    message = {
+                        "role": "assistant",
+                        "content": self.content_buffer
+                    }
+                    if self.tool_calls_accumulated:
+                        message["tool_calls"] = self.tool_calls_accumulated
+
+                    if not self.message_added:
+                        await self.add_message(self.thread_id, message)
+                        self.message_added = True
+                    else:
+                        await self.update_message(self.thread_id, message)
+                    last_update_time = current_time
+
+                # Handle stream completion
+                if chunk.choices[0].finish_reason:
+                    if not immediate_execution and pending_tool_calls:
+                        results = await self.tool_executor.execute_tool_calls(
+                            tool_calls=pending_tool_calls,
+                            available_functions=self.available_functions,
+                            thread_id=self.thread_id,
+                            executed_tool_calls=self.processed_tool_calls
+                        )
+                        for result in results:
+                            await self.add_message(self.thread_id, result)
+                            self.processed_tool_calls.add(result['tool_call_id'])
+                        pending_tool_calls.clear()
+
+            except Exception as e:
+                logging.error(f"Error in background task: {e}")
+                return
+
+        try:
+            async for chunk in response_stream:
+                # Create and track background task
+                task = asyncio.create_task(handle_message_management(chunk))
+                background_tasks.add(task)
+                task.add_done_callback(background_tasks.discard)
+                
+                # Immediately yield the chunk
+                yield chunk
+
+            # Wait for all background tasks to complete
+            if background_tasks:
+                await asyncio.gather(*background_tasks, return_exceptions=True)
+                
+        except Exception as e:
+            logging.error(f"Error in stream processing: {e}")
+            # Clean up any remaining background tasks
+            for task in background_tasks:
+                if not task.done():
+                    task.cancel()
+            raise
 
     async def process_response(
         self,
@@ -173,3 +215,13 @@ class LLMResponseProcessor:
                 "role": "assistant", 
                 "content": response_content or ""
             })
+
+    async def list_messages(self, thread_id: str) -> list:
+        """Helper method to get current messages in thread"""
+        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
+        try:
+            with open(thread_path, 'r') as f:
+                thread_data = json.load(f)
+            return thread_data.get("messages", [])
+        except Exception:
+            return []

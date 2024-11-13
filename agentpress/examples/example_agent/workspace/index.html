@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Modern Landing Page</title>
-    <link rel="stylesheet" href="reset.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <header class="header container">
-        <div class="header-logo">Brand</div>
+    <header>
         <nav>
-            <ul class="nav-links">
+            <div class="logo">Brand</div>
+            <ul>
                 <li><a href="#home">Home</a></li>
                 <li><a href="#features">Features</a></li>
                 <li><a href="#contact">Contact</a></li>
@@ -20,56 +19,54 @@
     </header>
 
     <main>
-        <section class="hero">
-            <div class="container hero-content">
-                <h1 class="hero-title">Transform Your Digital Experience</h1>
-                <p class="hero-subtitle">Discover innovative solutions that drive your business forward</p>
-                <a href="#features" class="cta-button">Get Started</a>
+        <section id="home" class="hero">
+            <div class="hero-content">
+                <h1>Transform Your Ideas into Reality</h1>
+                <p>Discover innovative solutions that drive your business forward.</p>
+                <a href="#contact" class="cta-button">Get Started</a>
             </div>
         </section>
 
         <section id="features" class="features">
-            <div class="container">
+            <div class="features-content">
+                <h2>Our Key Features</h2>
                 <div class="feature-grid">
                     <div class="feature">
-                        <div class="feature-icon">🚀</div>
-                        <h3>Fast Performance</h3>
-                        <p>Optimized solutions for maximum efficiency</p>
+                        <h3>Innovative Design</h3>
+                        <p>Cutting-edge solutions tailored to your needs.</p>
                     </div>
                     <div class="feature">
-                        <div class="feature-icon">🔒</div>
-                        <h3>Secure Platform</h3>
-                        <p>Advanced security measures to protect your data</p>
+                        <h3>Scalable Technology</h3>
+                        <p>Grow your business with flexible platforms.</p>
                     </div>
                     <div class="feature">
-                        <div class="feature-icon">📊</div>
-                        <h3>Smart Analytics</h3>
-                        <p>Comprehensive insights for strategic decisions</p>
+                        <h3>Expert Support</h3>
+                        <p>24/7 professional assistance for your projects.</p>
                     </div>
                 </div>
             </div>
         </section>
+
+        <section id="contact" class="contact">
+            <div class="contact-content">
+                <h2>Ready to Get Started?</h2>
+                <p>Connect with our team and unlock your potential.</p>
+                <a href="#" class="cta-button">Contact Us</a>
+            </div>
+        </section>
     </main>
 
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-logo">Brand</div>
-                <div class="footer-links">
-                    <a href="#home">Home</a>
-                    <a href="#features">Features</a>
-                    <a href="#contact">Contact</a>
-                </div>
-                <div class="footer-social">
-                    <a href="#">Twitter</a>
-                    <a href="#">LinkedIn</a>
-                    <a href="#">GitHub</a>
-                </div>
-            </div>
-            <div class="footer-copyright">
-                &copy; 2023 Brand. All rights reserved.
+    <footer>
+        <div class="footer-content">
+            <p>&copy; 2023 Brand. All rights reserved.</p>
+            <div class="social-links">
+                <a href="#">Twitter</a>
+                <a href="#">LinkedIn</a>
+                <a href="#">GitHub</a>
             </div>
         </div>
     </footer>
+
+    <script src="script.js"></script>
 </body>
 </html>
