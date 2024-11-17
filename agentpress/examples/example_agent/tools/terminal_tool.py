@@ -5,6 +5,15 @@ from agentpress.tool import Tool, ToolResult, tool_schema
 from agentpress.state_manager import StateManager
 
 class TerminalTool(Tool):
+    """Terminal command execution tool for workspace operations.
+    
+    Provides secure command execution within a workspace directory,
+    with command history tracking and output management.
+    
+    Attributes:
+        workspace (str): Path to the workspace directory
+    """
+    
     def __init__(self):
         super().__init__()
         self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
@@ -23,14 +32,20 @@ class TerminalTool(Tool):
         await self.state_manager.set("terminal_history", history)
 
     @tool_schema({
-        "name": "execute_command",
-        "description": "Execute a shell command in the workspace directory",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "command": {"type": "string", "description": "The command to execute"},
-            },
-            "required": ["command"]
+        "type": "function",
+        "function": {
+            "name": "execute_command",
+            "description": "Execute a shell command in the workspace directory. Commands are executed in an isolated environment.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The shell command to execute"
+                    }
+                },
+                "required": ["command"]
+            }
         }
     })
     async def execute_command(self, command: str) -> ToolResult:

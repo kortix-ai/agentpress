@@ -5,6 +5,19 @@ from agentpress.tool import Tool, ToolResult, tool_schema
 from agentpress.state_manager import StateManager
 
 class FilesTool(Tool):
+    """File management tool for creating, updating, and deleting files.
+    
+    This tool provides file operations within a workspace directory, with built-in
+    file filtering and state tracking capabilities.
+    
+    Attributes:
+        workspace (str): Path to the workspace directory
+        EXCLUDED_FILES (set): Files to exclude from operations
+        EXCLUDED_DIRS (set): Directories to exclude
+        EXCLUDED_EXT (set): File extensions to exclude
+        SNIPPET_LINES (int): Context lines for edit previews
+    """
+    
     # Excluded files, directories, and extensions
     EXCLUDED_FILES = {
         ".DS_Store",
@@ -99,15 +112,24 @@ class FilesTool(Tool):
         await self._init_workspace_state()
 
     @tool_schema({
-        "name": "create_file",
-        "description": "Create a new file with the provided contents at a given path in the workspace",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string", "description": "Path to the file to be created."},
-                "content": {"type": "string", "description": "The content to write to the file"}
-            },
-            "required": ["file_path", "content"]
+        "type": "function",
+        "function": {
+            "name": "create_file",
+            "description": "Create a new file with the provided contents at a given path in the workspace",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to be created"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The content to write to the file"
+                    }
+                },
+                "required": ["file_path", "content"]
+            }
         }
     })
     async def create_file(self, file_path: str, content: str) -> ToolResult:
@@ -126,14 +148,20 @@ class FilesTool(Tool):
             return self.fail_response(f"Error creating file: {str(e)}")
 
     @tool_schema({
-        "name": "delete_file",
-        "description": "Delete a file at the given path in the workspace.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string", "description": "Path to the file to be deleted."}
-            },
-            "required": ["file_path"]
+        "type": "function",
+        "function": {
+            "name": "delete_file",
+            "description": "Delete a file at the given path in the workspace",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to be deleted"
+                    }
+                },
+                "required": ["file_path"]
+            }
         }
     })
     async def delete_file(self, file_path: str) -> ToolResult:
@@ -147,16 +175,28 @@ class FilesTool(Tool):
             return self.fail_response(f"Error deleting file: {str(e)}")
 
     @tool_schema({
-        "name": "str_replace",
-        "description": "Replace a string with another string in a file",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string", "description": "Path to the file"},
-                "old_str": {"type": "string", "description": "String to replace"},
-                "new_str": {"type": "string", "description": "Replacement string"}
-            },
-            "required": ["file_path", "old_str", "new_str"]
+        "type": "function",
+        "function": {
+            "name": "str_replace",
+            "description": "Replace a specific string with another string in a file. The old string must appear exactly once in the file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the target file"
+                    },
+                    "old_str": {
+                        "type": "string",
+                        "description": "Text to be replaced (must appear exactly once)"
+                    },
+                    "new_str": {
+                        "type": "string",
+                        "description": "Replacement text"
+                    }
+                },
+                "required": ["file_path", "old_str", "new_str"]
+            }
         }
     })
     async def str_replace(self, file_path: str, old_str: str, new_str: str) -> ToolResult:

@@ -5,23 +5,25 @@ from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator
 from agentpress.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
-from agentpress.response_processor import LLMResponseProcessor
+from agentpress.thread_llm_response_processor import StandardLLMResponseProcessor
 import uuid
 
 class ThreadManager:
-    """
-    Manages conversation threads with LLM models and tool execution.
+    """Manages conversation threads with LLM models and tool execution.
     
-    The ThreadManager handles:
-    - Creating and managing conversation threads
-    - Adding/retrieving messages in threads
-    - Executing LLM calls with optional tool usage
-    - Managing tool registration and execution
-    - Supporting both streaming and non-streaming responses
+    The ThreadManager provides comprehensive conversation management, handling
+    message threading, tool registration, and LLM interactions.
     
     Attributes:
-        threads_dir (str): Directory where thread files are stored
+        threads_dir (str): Directory for storing thread files
         tool_registry (ToolRegistry): Registry for managing available tools
+        
+    Key Features:
+        - Thread creation and management
+        - Message handling with support for text and images
+        - Tool registration and execution
+        - LLM interaction with streaming support
+        - Error handling and cleanup
     """
 
     def __init__(self, threads_dir: str = "threads"):
@@ -48,11 +50,15 @@ class ThreadManager:
         self.tool_registry.register_tool(tool_class, function_names, **kwargs)
 
     async def create_thread(self) -> str:
-        """
-        Create a new conversation thread.
+        """Create a new conversation thread.
+        
+        Creates a new thread with a unique identifier and initializes its storage.
         
         Returns:
             str: Unique thread ID for the created thread
+            
+        Raises:
+            IOError: If thread file creation fails
         """
         thread_id = str(uuid.uuid4())
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
@@ -61,17 +67,19 @@ class ThreadManager:
         return thread_id
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
-        """
-        Add a message to an existing thread.
+        """Add a message to an existing thread.
+        
+        Adds a new message to the specified thread, with support for text content
+        and image attachments. Handles message cleanup and state management.
         
         Args:
-            thread_id (str): ID of the thread to add message to
-            message_data (Dict[str, Any]): Message data including role and content
-            images (Optional[List[Dict[str, Any]]]): List of image data to include
-                Each image dict should contain 'content_type' and 'base64' keys
-        
+            thread_id: ID of the target thread
+            message_data: Message content and metadata
+            images: Optional list of image data dictionaries
+            
         Raises:
-            Exception: If message addition fails
+            FileNotFoundError: If thread doesn't exist
+            Exception: For other operation failures
         """
         logging.info(f"Adding message to thread {thread_id} with images: {images}")
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
@@ -212,7 +220,31 @@ class ThreadManager:
         immediate_tool_execution: bool = True,
         parallel_tool_execution: bool = True
     ) -> Union[Dict[str, Any], AsyncGenerator]:
-        """Run a conversation thread with the specified parameters."""
+        """Run a conversation thread with specified parameters.
+        
+        Executes a conversation turn with the LLM, handling tool execution
+        and response processing based on the provided configuration.
+        
+        Args:
+            thread_id: Target thread identifier
+            system_message: System context message
+            model_name: LLM model identifier
+            temperature: Model temperature setting
+            max_tokens: Maximum response length
+            tool_choice: Tool selection mode
+            temporary_message: Optional temporary context
+            use_tools: Enable tool usage
+            execute_tools: Enable tool execution
+            stream: Enable response streaming
+            immediate_tool_execution: Execute tools immediately
+            parallel_tool_execution: Enable parallel execution
+            
+        Returns:
+            Union[Dict[str, Any], AsyncGenerator]: Response data or stream
+            
+        Raises:
+            Exception: For execution failures
+        """
         try:
             # Get thread messages and prepare for LLM call
             messages = await self.list_messages(thread_id)
@@ -225,7 +257,7 @@ class ThreadManager:
             available_functions = self.tool_registry.get_available_functions() if use_tools else {}
 
             # Initialize response processor with list_messages callback
-            response_processor = LLMResponseProcessor(
+            response_processor = StandardLLMResponseProcessor(
                 thread_id=thread_id,
                 available_functions=available_functions,
                 add_message_callback=self.add_message,
@@ -259,43 +291,13 @@ class ThreadManager:
                 execute_tools=execute_tools
             )
 
-            return {
-                "llm_response": llm_response,
-                "run_thread_params": {
-                    "thread_id": thread_id,
-                    "system_message": system_message,
-                    "model_name": model_name,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "tool_choice": tool_choice,
-                    "temporary_message": temporary_message,
-                    "execute_tools": execute_tools,
-                    "use_tools": use_tools,
-                    "stream": stream,
-                    "immediate_tool_execution": immediate_tool_execution,
-                    "parallel_tool_execution": parallel_tool_execution
-                }
-            }
+            return llm_response
 
         except Exception as e:
             logging.error(f"Error in run_thread: {str(e)}")
             return {
                 "status": "error",
-                "message": str(e),
-                "run_thread_params": {
-                    "thread_id": thread_id,
-                    "system_message": system_message,
-                    "model_name": model_name,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "tool_choice": tool_choice,
-                    "temporary_message": temporary_message,
-                    "execute_tools": execute_tools,
-                    "use_tools": use_tools,
-                    "stream": stream,
-                    "immediate_tool_execution": immediate_tool_execution,
-                    "parallel_tool_execution": parallel_tool_execution
-                }
+                "message": str(e)
             }
 
     async def _run_thread_completion(

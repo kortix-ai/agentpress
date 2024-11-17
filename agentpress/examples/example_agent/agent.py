@@ -119,32 +119,32 @@ Current development environment workspace state:
                     execute_tools=True,
                     stream=True,
                     immediate_tool_execution=True,
-                    parallel_tool_execution=False
+                    parallel_tool_execution=True
                 )
         
         # Handle streaming response
         if isinstance(response, AsyncGenerator):
             print("\n🤖 Assistant is responding:")
-            content_buffer = ""
             try:
                 async for chunk in response:
                     if hasattr(chunk.choices[0], 'delta'):
                         delta = chunk.choices[0].delta
                         
-                        # Handle content streaming
+                        # Handle content streaming - print immediately without buffering
                         if hasattr(delta, 'content') and delta.content is not None:
                             print(delta.content, end='', flush=True)
                         
-                        # Handle tool calls
+                        # Handle tool calls - print immediately
                         if hasattr(delta, 'tool_calls') and delta.tool_calls:
                             for tool_call in delta.tool_calls:
-                                # Print tool name when it first appears
-                                if tool_call.function and tool_call.function.name:
-                                    print(f"\n🛠️  Tool Call: {tool_call.function.name}", flush=True)
-                                
-                                # Print arguments as they stream in
-                                if tool_call.function and tool_call.function.arguments:
-                                    print(f"   {tool_call.function.arguments}", end='', flush=True)
+                                if tool_call.function:
+                                    # Print tool name immediately when received
+                                    if tool_call.function.name:
+                                        print(f"\n🛠️  Tool Call: {tool_call.function.name}", flush=True)
+                                    
+                                    # Print arguments immediately when received
+                                    if tool_call.function.arguments:
+                                        print(f"   {tool_call.function.arguments}", end='', flush=True)
                 
                 print("\n✨ Response completed\n")
                 
