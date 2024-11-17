@@ -2,28 +2,128 @@ import logging
 from typing import Dict, Any, AsyncGenerator, Callable, List, Optional, Set
 from abc import ABC, abstractmethod
 import asyncio
-import os
 import json
 from dataclasses import dataclass
 from agentpress.tool import ToolResult
 
-# --- Tool Parser ---
+# --- Tool Parser Base ---
 
-class ToolParser(ABC):
-    """Abstract base class defining the interface for parsing tool calls from LLM responses."""
+class ToolParserBase(ABC):
+    """Abstract base class defining the interface for parsing tool calls from LLM responses.
+    
+    This class provides the foundational interface for parsing both complete and streaming
+    responses from Language Models, specifically focusing on tool call extraction and processing.
+    
+    Attributes:
+        None
+        
+    Methods:
+        parse_response: Processes complete LLM responses
+        parse_stream: Handles streaming response chunks
+    """
     
     @abstractmethod
     async def parse_response(self, response: Any) -> Dict[str, Any]:
-        """Parse a complete LLM response and return the assistant message with tool calls."""
+        """Parse a complete LLM response and extract tool calls.
+        
+        Args:
+            response (Any): The complete response from the LLM
+            
+        Returns:
+            Dict[str, Any]: A dictionary containing:
+                - role: The message role (usually 'assistant')
+                - content: The text content of the response
+                - tool_calls: List of extracted tool calls (if present)
+        """
         pass
     
     @abstractmethod
     async def parse_stream(self, response_chunk: Any, tool_calls_buffer: Dict[int, Dict]) -> tuple[Optional[Dict[str, Any]], bool]:
-        """Parse a streaming response chunk and update the tool calls buffer."""
+        """Parse a streaming response chunk and manage tool call accumulation.
+        
+        Args:
+            response_chunk (Any): A single chunk from the streaming response
+            tool_calls_buffer (Dict[int, Dict]): Buffer storing incomplete tool calls
+            
+        Returns:
+            tuple[Optional[Dict[str, Any]], bool]: A tuple containing:
+                - The parsed message if complete tool calls are found (or None)
+                - Boolean indicating if the stream is complete
+        """
         pass
 
-class StandardToolParser(ToolParser):
-    """Standard implementation of tool parsing for OpenAI-compatible API responses."""
+# --- Tool Executor Base ---
+
+class ToolExecutorBase(ABC):
+    """Abstract base class defining the interface for tool execution strategies.
+    
+    This class provides the foundation for implementing different tool execution
+    approaches, supporting both parallel and sequential execution patterns.
+    
+    Attributes:
+        None
+        
+    Methods:
+        execute_tool_calls: Main entry point for tool execution
+        _execute_parallel: Handles parallel tool execution
+        _execute_sequential: Handles sequential tool execution
+    """
+    
+    @abstractmethod
+    async def execute_tool_calls(
+        self,
+        tool_calls: List[Dict[str, Any]],
+        available_functions: Dict[str, Callable],
+        thread_id: str,
+        executed_tool_calls: Optional[Set[str]] = None
+    ) -> List[Dict[str, Any]]:
+        """Execute a list of tool calls and return their results.
+        
+        Args:
+            tool_calls: List of tool calls to execute
+            available_functions: Dictionary of available tool functions
+            thread_id: ID of the current conversation thread
+            executed_tool_calls: Set of already executed tool call IDs
+            
+        Returns:
+            List[Dict[str, Any]]: List of tool execution results
+        """
+        pass
+    
+    @abstractmethod
+    async def _execute_parallel(
+        self,
+        tool_calls: List[Dict[str, Any]],
+        available_functions: Dict[str, Callable],
+        thread_id: str,
+        executed_tool_calls: Set[str]
+    ) -> List[Dict[str, Any]]:
+        """Execute tool calls in parallel."""
+        pass
+    
+    @abstractmethod
+    async def _execute_sequential(
+        self,
+        tool_calls: List[Dict[str, Any]],
+        available_functions: Dict[str, Callable],
+        thread_id: str,
+        executed_tool_calls: Set[str]
+    ) -> List[Dict[str, Any]]:
+        """Execute tool calls sequentially."""
+        pass
+
+# --- Standard Tool Parser Implementation ---
+
+class StandardToolParser(ToolParserBase):
+    """Standard implementation of tool parsing for OpenAI-compatible API responses.
+    
+    This implementation handles the parsing of tool calls from responses that follow
+    the OpenAI API format, supporting both complete and streaming responses.
+    
+    Methods:
+        parse_response: Process complete LLM responses
+        parse_stream: Handle streaming response chunks
+    """
     
     async def parse_response(self, response: Any) -> Dict[str, Any]:
         response_message = response.choices[0].message
@@ -112,10 +212,23 @@ class StandardToolParser(ToolParser):
 
         return None, is_complete
 
-# --- Tool Executor ---
+# --- Standard Tool Executor Implementation ---
 
-class ToolExecutor:
-    """Handles tool execution with configurable execution strategies."""
+class StandardToolExecutor(ToolExecutorBase):
+    """Standard implementation of tool execution with configurable strategies.
+    
+    Provides a flexible tool execution implementation that supports both parallel
+    and sequential execution patterns, with built-in error handling and result
+    formatting.
+    
+    Attributes:
+        parallel (bool): Whether to execute tools in parallel
+        
+    Methods:
+        execute_tool_calls: Main execution entry point
+        _execute_parallel: Parallel execution implementation
+        _execute_sequential: Sequential execution implementation
+    """
     
     def __init__(self, parallel: bool = True):
         self.parallel = parallel
@@ -252,8 +365,27 @@ class ProcessedResponse:
     tool_calls: Optional[List[Dict[str, Any]]] = None
     tool_results: Optional[List[Dict[str, Any]]] = None
 
-class LLMResponseProcessor:
-    """Handles LLM response processing and tool execution management."""
+class StandardLLMResponseProcessor:
+    """Handles LLM response processing and tool execution management.
+    
+    This class coordinates the parsing of LLM responses and execution of tool calls,
+    managing state and message flow throughout the conversation.
+    
+    Attributes:
+        thread_id (str): Current thread identifier
+        tool_executor (StandardToolExecutor): Tool execution handler
+        tool_parser (StandardToolParser): Response parsing handler
+        available_functions (Dict): Available tool functions
+        add_message (Callable): Callback for adding messages
+        update_message (Callable): Callback for updating messages
+        list_messages (Callable): Callback for listing messages
+        threads_dir (str): Directory for thread storage
+        tool_calls_buffer (Dict): Buffer for incomplete tool calls
+        processed_tool_calls (Set): Set of executed tool call IDs
+        content_buffer (str): Buffer for accumulated content
+        tool_calls_accumulated (List): List of accumulated tool calls
+        message_added (bool): Flag for message addition status
+    """
     
     def __init__(
         self,
@@ -266,7 +398,7 @@ class LLMResponseProcessor:
         threads_dir: str = "threads"
     ):
         self.thread_id = thread_id
-        self.tool_executor = ToolExecutor(parallel=parallel_tool_execution)
+        self.tool_executor = StandardToolExecutor(parallel=parallel_tool_execution)
         self.tool_parser = StandardToolParser()
         self.available_functions = available_functions or {}
         self.add_message = add_message_callback
@@ -426,3 +558,21 @@ class LLMResponseProcessor:
                 "role": "assistant", 
                 "content": response_content or ""
             })
+
+class ThreadManager:
+    """Manages conversation threads with LLM models and tool execution.
+    
+    The ThreadManager provides comprehensive conversation management, handling
+    message threading, tool registration, and LLM interactions.
+    
+    Attributes:
+        threads_dir (str): Directory for storing thread files
+        tool_registry (ToolRegistry): Registry for managing available tools
+        
+    Key Features:
+        - Thread creation and management
+        - Message handling with support for text and images
+        - Tool registration and execution
+        - LLM interaction with streaming support
+        - Error handling and cleanup
+    """
