@@ -123,16 +123,16 @@ class FilesTool(Tool):
                         "type": "string",
                         "description": "Path to the file to be created"
                     },
-                    "content": {
+                    "file_contents": {
                         "type": "string",
                         "description": "The content to write to the file"
                     }
                 },
-                "required": ["file_path", "content"]
+                "required": ["file_path", "file_contents"]
             }
         }
     })
-    async def create_file(self, file_path: str, content: str) -> ToolResult:
+    async def create_file(self, file_path: str, file_contents: str) -> ToolResult:
         try:
             full_path = os.path.join(self.workspace, file_path)
             if os.path.exists(full_path):
@@ -140,7 +140,7 @@ class FilesTool(Tool):
             
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
             with open(full_path, 'w') as f:
-                f.write(content)
+                f.write(file_contents)
             
             await self._update_workspace_state()
             return self.success_response(f"File '{file_path}' created successfully.")

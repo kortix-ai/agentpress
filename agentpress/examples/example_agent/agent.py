@@ -7,6 +7,9 @@ from tools.terminal_tool import TerminalTool
 import logging
 from typing import AsyncGenerator
 import sys
+from agentpress.xml_tool_parser import XMLToolParser
+from agentpress.xml_tool_executor import XMLToolExecutor
+from agentpress.xml_results_adder import XMLResultsAdder
 
 async def run_agent(thread_id: str, max_iterations: int = 5):
     # Initialize managers and tools
@@ -46,6 +49,22 @@ async def run_agent(thread_id: str, max_iterations: int = 5):
     while iteration < max_iterations:
         iteration += 1
         await pre_iteration()
+
+# You are a world-class web developer who can create, edit, and delete files, and execute terminal commands. You write clean, well-structured code.
+
+# RESPONSE FORMAT:
+# Use XML tags to specify file operations:
+
+# <create-file file_path="path/to/file">
+# file contents here
+# </create-file>
+
+# <update-file file_path="path/to/file">
+# updated file contents here
+# </update-file>
+
+# <delete-file file_path="path/to/file">
+# </delete-file>
 
         system_message = {
             "role": "system", 
@@ -119,10 +138,12 @@ Current development environment workspace state:
                     execute_tools=True,
                     stream=True,
                     immediate_tool_execution=True,
-                    parallel_tool_execution=True
+                    parallel_tool_execution=True,
+                    # tool_parser=XMLToolParser(),
+                    # tool_executor=XMLToolExecutor(parallel=True),
+                    # results_adder=XMLResultsAdder(thread_manager)
                 )
         
-        # Handle streaming response
         if isinstance(response, AsyncGenerator):
             print("\n🤖 Assistant is responding:")
             try:
@@ -154,11 +175,9 @@ Current development environment workspace state:
         else:
             print("\n❌ Non-streaming response received:", response)
 
-        # Call after_iteration without arguments
         await after_iteration()
 
     await finalizer()
-
 
 if __name__ == "__main__":
     async def main():
@@ -169,7 +188,7 @@ if __name__ == "__main__":
             thread_id, 
             {
                 "role": "user", 
-                "content": "Create a Crypto Trading Bot Platform. Use modern CSS styling. Make it look like FTX, the trusted and 100% safe crypto trading platform."
+                "content": "Create a modern, responsive landing page with HTML, CSS and JS."
             }
         )      
 

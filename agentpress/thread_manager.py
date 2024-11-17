@@ -6,6 +6,9 @@ from agentpress.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
 from agentpress.thread_llm_response_processor import StandardLLMResponseProcessor
+from agentpress.thread_llm_response_processor import ToolParserBase
+from agentpress.thread_llm_response_processor import ToolExecutorBase
+from agentpress.thread_llm_response_processor import ResultsAdderBase
 import uuid
 
 class ThreadManager:
@@ -218,45 +221,21 @@ class ThreadManager:
         execute_tools: bool = True,
         stream: bool = False,
         immediate_tool_execution: bool = True,
-        parallel_tool_execution: bool = True
+        parallel_tool_execution: bool = True,
+        tool_parser: Optional[ToolParserBase] = None,
+        tool_executor: Optional[ToolExecutorBase] = None,
+        results_adder: Optional[ResultsAdderBase] = None
     ) -> Union[Dict[str, Any], AsyncGenerator]:
-        """Run a conversation thread with specified parameters.
-        
-        Executes a conversation turn with the LLM, handling tool execution
-        and response processing based on the provided configuration.
-        
-        Args:
-            thread_id: Target thread identifier
-            system_message: System context message
-            model_name: LLM model identifier
-            temperature: Model temperature setting
-            max_tokens: Maximum response length
-            tool_choice: Tool selection mode
-            temporary_message: Optional temporary context
-            use_tools: Enable tool usage
-            execute_tools: Enable tool execution
-            stream: Enable response streaming
-            immediate_tool_execution: Execute tools immediately
-            parallel_tool_execution: Enable parallel execution
-            
-        Returns:
-            Union[Dict[str, Any], AsyncGenerator]: Response data or stream
-            
-        Raises:
-            Exception: For execution failures
-        """
+        """Run a conversation thread with specified parameters."""
         try:
-            # Get thread messages and prepare for LLM call
             messages = await self.list_messages(thread_id)
             prepared_messages = [system_message] + messages
             if temporary_message:
                 prepared_messages.append(temporary_message)
 
-            # Configure tools if enabled
             tools = self.tool_registry.get_all_tool_schemas() if use_tools else None
             available_functions = self.tool_registry.get_available_functions() if use_tools else {}
 
-            # Initialize response processor with list_messages callback
             response_processor = StandardLLMResponseProcessor(
                 thread_id=thread_id,
                 available_functions=available_functions,
@@ -264,10 +243,12 @@ class ThreadManager:
                 update_message_callback=self._update_message,
                 list_messages_callback=self.list_messages,
                 parallel_tool_execution=parallel_tool_execution,
-                threads_dir=self.threads_dir
+                threads_dir=self.threads_dir,
+                tool_parser=tool_parser,  # Use provided parser or default to Standard
+                tool_executor=tool_executor,  # Use provided executor or default to Standard
+                results_adder=results_adder  # Use provided adder or default to Standard
             )
 
-            # Get LLM response
             llm_response = await self._run_thread_completion(
                 messages=prepared_messages,
                 model_name=model_name,
@@ -285,7 +266,6 @@ class ThreadManager:
                     immediate_execution=immediate_tool_execution
                 )
 
-            # Process non-streaming response
             await response_processor.process_response(
                 response=llm_response,
                 execute_tools=execute_tools
