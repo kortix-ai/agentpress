@@ -356,36 +356,77 @@ class StandardToolExecutor(ToolExecutorBase):
         
         return results
 
+# --- Results Adder Base ---
+
+class ResultsAdderBase(ABC):
+    """Abstract base class for handling tool results and message processing."""
+    
+    def __init__(self, thread_manager):
+        """Initialize with a ThreadManager instance.
+        
+        Args:
+            thread_manager: The ThreadManager instance to use for message operations
+        """
+        self.add_message = thread_manager.add_message
+        self.update_message = thread_manager._update_message
+        self.list_messages = thread_manager.list_messages
+        self.message_added = False
+
+    @abstractmethod
+    async def add_initial_response(self, thread_id: str, content: str, tool_calls: Optional[List[Dict[str, Any]]] = None):
+        pass
+    
+    @abstractmethod
+    async def update_response(self, thread_id: str, content: str, tool_calls: Optional[List[Dict[str, Any]]] = None):
+        pass
+    
+    @abstractmethod
+    async def add_tool_result(self, thread_id: str, result: Dict[str, Any]):
+        pass
+
+# --- Standard Results Adder Implementation ---
+
+class StandardResultsAdder(ResultsAdderBase):
+    """Standard implementation for handling tool results and message processing."""
+    
+    def __init__(self, thread_manager):
+        """Initialize with ThreadManager instance."""
+        super().__init__(thread_manager)  # Use base class initialization
+    
+    async def add_initial_response(self, thread_id: str, content: str, tool_calls: Optional[List[Dict[str, Any]]] = None):
+        message = {
+            "role": "assistant",
+            "content": content
+        }
+        if tool_calls:
+            message["tool_calls"] = tool_calls
+            
+        await self.add_message(thread_id, message)
+        self.message_added = True
+    
+    async def update_response(self, thread_id: str, content: str, tool_calls: Optional[List[Dict[str, Any]]] = None):
+        if not self.message_added:
+            await self.add_initial_response(thread_id, content, tool_calls)
+            return
+            
+        message = {
+            "role": "assistant",
+            "content": content
+        }
+        if tool_calls:
+            message["tool_calls"] = tool_calls
+            
+        await self.update_message(thread_id, message)
+    
+    async def add_tool_result(self, thread_id: str, result: Dict[str, Any]):
+        messages = await self.list_messages(thread_id)
+        if not any(msg.get('tool_call_id') == result['tool_call_id'] for msg in messages):
+            await self.add_message(thread_id, result)
+
 # --- Response Processor ---
 
-@dataclass
-class ProcessedResponse:
-    """Container for processed LLM response data."""
-    content: str
-    tool_calls: Optional[List[Dict[str, Any]]] = None
-    tool_results: Optional[List[Dict[str, Any]]] = None
-
 class StandardLLMResponseProcessor:
-    """Handles LLM response processing and tool execution management.
-    
-    This class coordinates the parsing of LLM responses and execution of tool calls,
-    managing state and message flow throughout the conversation.
-    
-    Attributes:
-        thread_id (str): Current thread identifier
-        tool_executor (StandardToolExecutor): Tool execution handler
-        tool_parser (StandardToolParser): Response parsing handler
-        available_functions (Dict): Available tool functions
-        add_message (Callable): Callback for adding messages
-        update_message (Callable): Callback for updating messages
-        list_messages (Callable): Callback for listing messages
-        threads_dir (str): Directory for thread storage
-        tool_calls_buffer (Dict): Buffer for incomplete tool calls
-        processed_tool_calls (Set): Set of executed tool call IDs
-        content_buffer (str): Buffer for accumulated content
-        tool_calls_accumulated (List): List of accumulated tool calls
-        message_added (bool): Flag for message addition status
-    """
+    """Handles LLM response processing and tool execution management."""
     
     def __init__(
         self,
@@ -395,23 +436,35 @@ class StandardLLMResponseProcessor:
         update_message_callback: Callable = None,
         list_messages_callback: Callable = None,
         parallel_tool_execution: bool = True,
-        threads_dir: str = "threads"
+        threads_dir: str = "threads",
+        tool_parser: Optional[ToolParserBase] = None,
+        tool_executor: Optional[ToolExecutorBase] = None,
+        results_adder: Optional[ResultsAdderBase] = None,
+        thread_manager = None  # Add thread_manager parameter
     ):
         self.thread_id = thread_id
-        self.tool_executor = StandardToolExecutor(parallel=parallel_tool_execution)
-        self.tool_parser = StandardToolParser()
+        self.tool_executor = tool_executor or StandardToolExecutor(parallel=parallel_tool_execution)
+        self.tool_parser = tool_parser or StandardToolParser()
         self.available_functions = available_functions or {}
-        self.add_message = add_message_callback
-        self.update_message = update_message_callback
-        self.list_messages = list_messages_callback
         self.threads_dir = threads_dir
+        
+        # Create a minimal thread manager if none provided
+        if thread_manager is None and (add_message_callback and update_message_callback and list_messages_callback):
+            class MinimalThreadManager:
+                def __init__(self, add_msg, update_msg, list_msg):
+                    self.add_message = add_msg
+                    self._update_message = update_msg
+                    self.list_messages = list_msg
+            thread_manager = MinimalThreadManager(add_message_callback, update_message_callback, list_messages_callback)
+        
+        # Initialize results adder
+        self.results_adder = results_adder or StandardResultsAdder(thread_manager)
         
         # State tracking for streaming responses
         self.tool_calls_buffer = {}
         self.processed_tool_calls = set()
         self.content_buffer = ""
         self.tool_calls_accumulated = []
-        self.message_added = False
 
     async def process_stream(
         self,
@@ -419,23 +472,17 @@ class StandardLLMResponseProcessor:
         execute_tools: bool = True,
         immediate_execution: bool = True 
     ) -> AsyncGenerator:
-        """
-        Process streaming LLM response and handle tool execution.
-        Yields chunks immediately while managing message state and tool execution efficiently.
-        """
+        """Process streaming LLM response and handle tool execution."""
         pending_tool_calls = []
         background_tasks = set()
-        tool_results = []  # Track tool results
 
         async def handle_message_management(chunk):
             try:
-                nonlocal tool_results
-
                 # Accumulate content
                 if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content:
                     self.content_buffer += chunk.choices[0].delta.content
                 
-                # Parse tool calls only if present in chunk
+                # Parse tool calls if present
                 if hasattr(chunk.choices[0].delta, 'tool_calls'):
                     parsed_message, is_complete = await self.tool_parser.parse_stream(
                         chunk, 
@@ -451,26 +498,21 @@ class StandardLLMResponseProcessor:
                         if tool_call['id'] not in self.processed_tool_calls
                     ]
 
-                    if new_tool_calls and immediate_execution:
-                        results = await self.tool_executor.execute_tool_calls(
-                            tool_calls=new_tool_calls,
-                            available_functions=self.available_functions,
-                            thread_id=self.thread_id,
-                            executed_tool_calls=self.processed_tool_calls
-                        )
-                        tool_results.extend(results)
-                        for result in results:
-                            self.processed_tool_calls.add(result['tool_call_id'])
-                    elif new_tool_calls:
-                        pending_tool_calls.extend(new_tool_calls)
+                    if new_tool_calls:
+                        if immediate_execution:
+                            results = await self.tool_executor.execute_tool_calls(
+                                tool_calls=new_tool_calls,
+                                available_functions=self.available_functions,
+                                thread_id=self.thread_id,
+                                executed_tool_calls=self.processed_tool_calls
+                            )
+                            for result in results:
+                                await self.results_adder.add_tool_result(self.thread_id, result)
+                                self.processed_tool_calls.add(result['tool_call_id'])
+                        else:
+                            pending_tool_calls.extend(new_tool_calls)
 
-                for result in tool_results:
-                    if not any(msg.get('tool_call_id') == result['tool_call_id'] 
-                             for msg in await self.list_messages(self.thread_id)):
-                        await self.add_message(self.thread_id, result)
-                tool_results = []  # Clear processed results
-
-                # Then add/update assistant message
+                # Add/update assistant message
                 message = {
                     "role": "assistant",
                     "content": self.content_buffer
@@ -478,11 +520,19 @@ class StandardLLMResponseProcessor:
                 if self.tool_calls_accumulated:
                     message["tool_calls"] = self.tool_calls_accumulated
 
-                if not self.message_added:
-                    await self.add_message(self.thread_id, message)
-                    self.message_added = True
+                if not hasattr(self, '_message_added'):
+                    await self.results_adder.add_initial_response(
+                        self.thread_id,
+                        self.content_buffer,
+                        self.tool_calls_accumulated
+                    )
+                    self._message_added = True
                 else:
-                    await self.update_message(self.thread_id, message)
+                    await self.results_adder.update_response(
+                        self.thread_id,
+                        self.content_buffer,
+                        self.tool_calls_accumulated
+                    )
 
                 # Handle stream completion
                 if chunk.choices[0].finish_reason:
@@ -494,50 +544,39 @@ class StandardLLMResponseProcessor:
                             executed_tool_calls=self.processed_tool_calls
                         )
                         for result in results:
-                            await self.add_message(self.thread_id, result)
+                            await self.results_adder.add_tool_result(self.thread_id, result)
                             self.processed_tool_calls.add(result['tool_call_id'])
                         pending_tool_calls.clear()
 
             except Exception as e:
                 logging.error(f"Error in background task: {e}")
-                return
 
         try:
             async for chunk in response_stream:
-                # Create and track background task
                 task = asyncio.create_task(handle_message_management(chunk))
                 background_tasks.add(task)
                 task.add_done_callback(background_tasks.discard)
-                
-                # Immediately yield the chunk
                 yield chunk
 
-            # Wait for all background tasks to complete
             if background_tasks:
                 await asyncio.gather(*background_tasks, return_exceptions=True)
                 
         except Exception as e:
             logging.error(f"Error in stream processing: {e}")
-            # Clean up any remaining background tasks
             for task in background_tasks:
                 if not task.done():
                     task.cancel()
             raise
 
-    async def process_response(
-        self,
-        response: Any,
-        execute_tools: bool = True
-    ) -> None:
-        """
-        Process complete LLM response and execute tools.
-        
-        Handles non-streaming responses, parsing the complete response and
-        executing any tool calls according to the configured execution strategy.
-        """
+    async def process_response(self, response: Any, execute_tools: bool = True) -> None:
+        """Process complete LLM response and execute tools."""
         try:
             assistant_message = await self.tool_parser.parse_response(response)
-            await self.add_message(self.thread_id, assistant_message)
+            await self.results_adder.add_initial_response(
+                self.thread_id,
+                assistant_message['content'],
+                assistant_message.get('tool_calls')
+            )
 
             if execute_tools and 'tool_calls' in assistant_message and assistant_message['tool_calls']:
                 results = await self.tool_executor.execute_tool_calls(
@@ -548,31 +587,10 @@ class StandardLLMResponseProcessor:
                 )
                 
                 for result in results:
-                    await self.add_message(self.thread_id, result)
+                    await self.results_adder.add_tool_result(self.thread_id, result)
                     logging.info(f"Tool execution result: {result}")
         
         except Exception as e:
             logging.error(f"Error processing response: {e}")
             response_content = response.choices[0].message.get('content', '')
-            await self.add_message(self.thread_id, {
-                "role": "assistant", 
-                "content": response_content or ""
-            })
-
-class ThreadManager:
-    """Manages conversation threads with LLM models and tool execution.
-    
-    The ThreadManager provides comprehensive conversation management, handling
-    message threading, tool registration, and LLM interactions.
-    
-    Attributes:
-        threads_dir (str): Directory for storing thread files
-        tool_registry (ToolRegistry): Registry for managing available tools
-        
-    Key Features:
-        - Thread creation and management
-        - Message handling with support for text and images
-        - Tool registration and execution
-        - LLM interaction with streaming support
-        - Error handling and cleanup
-    """
+            await self.results_adder.add_initial_response(self.thread_id, response_content)

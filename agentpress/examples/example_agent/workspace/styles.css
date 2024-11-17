@@ -1,13 +1,8 @@
 :root {
-    --bg-dark: #0b0e11;
-    --bg-darker: #121619;
-    --primary-color: #1b2028;
-    --accent-color: #2968ff;
-    --text-light: #ffffff;
-    --text-muted: #8a8f9b;
-    --green: #02c077;
-    --red: #f84960;
-    --border-color: #2c3035;
+    --primary-color: #3498db;
+    --secondary-color: #2ecc71;
+    --text-color: #333;
+    --background-color: #f4f4f4;
 }
 
 * {
@@ -18,230 +13,225 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-    background-color: var(--bg-dark);
-    color: var(--text-light);
     line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--background-color);
 }
 
-.app-container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0 15px;
+header {
+    position: fixed;
+    width: 100%;
+    background-color: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    z-index: 1000;
 }
 
-.navbar {
+nav {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px 0;
-    border-bottom: 1px solid var(--primary-color);
+    padding: 1rem 5%;
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
-.navbar .logo {
-    font-size: 24px;
+nav .logo {
+    font-size: 1.5rem;
     font-weight: bold;
-    color: var(--accent-color);
+    color: var(--primary-color);
 }
 
-.navbar nav ul {
+nav ul {
     display: flex;
     list-style: none;
 }
 
-.navbar nav ul li {
-    margin: 0 15px;
+nav ul li {
+    margin-left: 1.5rem;
 }
 
-.navbar nav ul li a {
-    color: var(--text-light);
+nav ul li a {
     text-decoration: none;
+    color: var(--text-color);
     transition: color 0.3s ease;
 }
 
-.navbar nav ul li a:hover {
-    color: var(--accent-color);
+nav ul li a:hover {
+    color: var(--primary-color);
 }
 
-.user-actions {
+main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 5%;
+}
+
+.hero {
     display: flex;
-    gap: 10px;
-}
-
-.login-btn, .signup-btn {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
-
-.login-btn {
-    background-color: var(--primary-color);
-    color: var(--text-light);
-}
-
-.signup-btn {
-    background-color: var(--accent-color);
-    color: var(--text-light);
-}
-
-.dashboard {
-    display: grid;
-    grid-template-columns: 3fr 1fr;
-    gap: 20px;
-    margin-top: 20px;
-}
-
-.trading-panel {
-    background-color: var(--bg-darker);
-    border-radius: 8px;
-    padding: 20px;
-}
-
-.market-overview {
-    margin-bottom: 20px;
-}
-
-.crypto-pairs {
-    display: flex;
-    gap: 15px;
-    margin-bottom: 15px;
-}
-
-.pair {
-    padding: 8px 15px;
-    background-color: var(--primary-color);
-    border-radius: 4px;
-    cursor: pointer;
-    opacity: 0.7;
-    transition: opacity 0.3s ease;
-}
-
-.pair.active {
-    opacity: 1;
-    background-color: var(--accent-color);
-}
-
-.price-chart {
-    background-color: var(--bg-dark);
-    height: 300px;
-    display: flex;
+    align-items: center;
     justify-content: center;
-    align-items: center;
-    border-radius: 8px;
-}
-
-.trading-interface {
-    background-color: var(--bg-dark);
-    border-radius: 8px;
-    padding: 20px;
-}
-
-.order-types {
-    display: flex;
-    gap: 15px;
-    margin-bottom: 20px;
-}
-
-.order-type {
-    padding: 10px 20px;
-    background-color: var(--primary-color);
-    border: none;
-    color: var(--text-light);
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
-
-.order-type.active {
-    background-color: var(--accent-color);
-}
-
-.order-form {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-}
-
-.amount-input, .price-input {
-    padding: 10px;
-    background-color: var(--primary-color);
-    border: none;
-    color: var(--text-light);
-    border-radius: 4px;
-}
-
-.buy-btn, .sell-btn {
-    padding: 12px;
-    border: none;
-    border-radius: 4px;
-    color: var(--text-light);
-    cursor: pointer;
-    transition: opacity 0.3s ease;
-}
-
-.buy-btn {
-    background-color: green;
-}
-
-.sell-btn {
-    background-color: red;
-}
-
-.bot-management {
-    background-color: var(--bg-darker);
-    border-radius: 8px;
-    padding: 20px;
-}
-
-.bot-list {
-    display: grid;
-    gap: 15px;
-}
-
-.bot-card {
-    background-color: var(--bg-dark);
-    padding: 15px;
-    border-radius: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.bot-stats {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-}
-
-.configure-bot {
-    background-color: var(--accent-color);
-    color: var(--text-light);
-    border: none;
-    padding: 8px 15px;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-footer {
-    margin-top: 20px;
-    padding: 20px 0;
-    border-top: 1px solid var(--primary-color);
+    height: 100vh;
     text-align: center;
 }
 
-.legal-links {
-    margin-top: 10px;
+.hero-content h1 {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
 }
 
-.legal-links a {
-    color: var(--text-muted);
+.hero-content p {
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+}
+
+.cta-button {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    background-color: var(--primary-color);
+    color: white;
     text-decoration: none;
-    margin: 0 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
 }
 
-@media (max-width: 1024px) {
-    .dashboard {
+.cta-button:hover {
+    background-color: #2980b9;
+}
+
+.features {
+    padding: 4rem 0;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+}
+
+.feature {
+    text-align: center;
+    padding: 2rem;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.feature h3 {
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+
+.about, .contact {
+    padding: 4rem 0;
+    text-align: center;
+}
+
+.contact-form {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.contact-form input,
+.contact-form textarea {
+    width: 100%;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.contact-form button {
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.contact-form button:hover {
+    background-color: #27ae60;
+}
+
+footer {
+    background-color: var(--text-color);
+    color: white;
+    text-align: center;
+    padding: 1rem;
+}
+
+@media screen and (max-width: 768px) {
+    .menu-toggle {
+        display: block;
+        cursor: pointer;
+    }
+
+    .nav-menu {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        position: absolute;
+        top: 60px;
+        left: 0;
+        background-color: white;
+        padding: 1rem;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .nav-menu.active {
+        display: flex;
+    }
+
+    .nav-menu li {
+        margin: 0.5rem 0;
+        text-align: center;
+    }
+
+    .feature-grid {
         grid-template-columns: 1fr;
     }
+
+    .hero-content h1 {
+        font-size: 2rem;
+    }
+}
+
+.menu-toggle {
+    display: none;
+    flex-direction: column;
+    width: 25px;
+}
+
+.menu-toggle span {
+    height: 3px;
+    width: 100%;
+    background-color: var(--text-color);
+    margin: 3px 0;
+    transition: 0.4s;
+}
+
+.feature-icon {
+    width: 50px;
+    height: 50px;
+    stroke: var(--primary-color);
+    margin-bottom: 1rem;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.feature {
+    animation: fadeIn 0.5s ease-out;
+}
+
+.feature:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.feature:nth-child(3) {
+    animation-delay: 0.4s;
 }
