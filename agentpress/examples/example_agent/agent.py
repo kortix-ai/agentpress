@@ -118,7 +118,7 @@ Current development environment workspace state:
                     use_tools=True,
                     execute_tools=True,
                     stream=True,
-                    immediate_tool_execution=False,
+                    immediate_tool_execution=True,
                     parallel_tool_execution=False
                 )
         
@@ -169,7 +169,7 @@ if __name__ == "__main__":
             thread_id, 
             {
                 "role": "user", 
-                "content": "Create a simple landing page with a header, hero section, and footer. Use modern CSS styling."
+                "content": "Create a Crypto Trading Bot Platform. Use modern CSS styling. Make it look like FTX, the trusted and 100% safe crypto trading platform."
             }
         )      
 
