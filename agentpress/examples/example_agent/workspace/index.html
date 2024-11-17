@@ -3,70 +3,152 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Landing Page</title>
+    <title>CryptoBot Trader</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <header>
-        <nav>
-            <div class="logo">Brand</div>
-            <ul>
-                <li><a href="#home">Home</a></li>
-                <li><a href="#features">Features</a></li>
-                <li><a href="#contact">Contact</a></li>
-            </ul>
-        </nav>
-    </header>
-
-    <main>
-        <section id="home" class="hero">
-            <div class="hero-content">
-                <h1>Transform Your Ideas into Reality</h1>
-                <p>Discover innovative solutions that drive your business forward.</p>
-                <a href="#contact" class="cta-button">Get Started</a>
-            </div>
-        </section>
-
-        <section id="features" class="features">
-            <div class="features-content">
-                <h2>Our Key Features</h2>
-                <div class="feature-grid">
-                    <div class="feature">
-                        <h3>Innovative Design</h3>
-                        <p>Cutting-edge solutions tailored to your needs.</p>
-                    </div>
-                    <div class="feature">
-                        <h3>Scalable Technology</h3>
-                        <p>Grow your business with flexible platforms.</p>
-                    </div>
-                    <div class="feature">
-                        <h3>Expert Support</h3>
-                        <p>24/7 professional assistance for your projects.</p>
-                    </div>
+    <div class="app-container">
+        <header class="main-header">
+            <div class="logo">CryptoBot Trader</div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="#dashboard">Dashboard</a></li>
+                    <li><a href="#trading">Trading</a></li>
+                    <li><a href="#bots">Bot Manager</a></li>
+                    <li><a href="#settings">Settings</a></li>
+                </ul>
+            </nav>
+            <div class="user-actions">
+                <button class="connect-wallet">Connect Wallet</button>
+                <div class="user-profile">
+                    <img src="user-avatar.png" alt="User Avatar">
                 </div>
             </div>
-        </section>
+        </header>
 
-        <section id="contact" class="contact">
-            <div class="contact-content">
-                <h2>Ready to Get Started?</h2>
-                <p>Connect with our team and unlock your potential.</p>
-                <a href="#" class="cta-button">Contact Us</a>
+        <main class="main-content">
+            <section id="dashboard" class="dashboard">
+                <div class="portfolio-overview">
+                    <h2>Portfolio Overview</h2>
+                    <div class="portfolio-stats">
+                        <div class="stat-card total-balance">
+                            <h3>Total Balance</h3>
+                            <p>$124,567.89</p>
+                        </div>
+                        <div class="stat-card daily-change">
+                            <h3>24h Change</h3>
+                            <p class="positive">+3.45%</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="active-bots">
+                    <h2>Active Trading Bots</h2>
+                    <div class="bot-list">
+                        <div class="bot-card">
+                            <h3>BTC Momentum Bot</h3>
+                            <div class="bot-stats">
+                                <span>Running</span>
+                                <span>Profit: +12.3%</span>
+                            </div>
+                        </div>
+                        <div class="bot-card">
+                            <h3>ETH Arbitrage Bot</h3>
+                            <div class="bot-stats">
+                                <span>Running</span>
+                                <span>Profit: +8.7%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="trading" class="trading-interface">
+                <div class="trading-panel">
+                    <div class="trading-header">
+                        <div class="trading-pair-selector">
+                            <select id="tradePairSelect">
+                                <option>BTC/USDT</option>
+                                <option>ETH/USDT</option>
+                                <option>BNB/USDT</option>
+                                <option>ADA/USDT</option>
+                                <option>DOT/USDT</option>
+                            </select>
+                        </div>
+                        <div class="trading-indicators">
+                            <div class="indicator">
+                                <span>24h Volume</span>
+                                <strong>$1.2B</strong>
+                            </div>
+                            <div class="indicator">
+                                <span>Last Price</span>
+                                <strong>$45,678</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="trading-chart">
+                        <div id="tradingview-chart"></div>
+                    </div>
+                    <div class="trading-order-types">
+                        <div class="order-type-selector">
+                            <button class="active">Market</button>
+                            <button>Limit</button>
+                            <button>Stop</button>
+                        </div>
+                    </div>
+                    <div class="trading-actions">
+                        <div class="trade-input">
+                            <label>Amount</label>
+                            <input type="number" placeholder="Enter trade amount">
+                        </div>
+                        <div class="action-buttons">
+                            <button class="buy-action">Buy</button>
+                            <button class="sell-action">Sell</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="bots" class="bot-configuration">
+                <div class="bot-manager">
+                    <h2>Bot Configuration</h2>
+                    <div class="bot-creation">
+                        <button class="create-bot-btn">Create New Bot</button>
+                    </div>
+                    <div class="bot-list-advanced">
+                        <div class="bot-card-advanced">
+                            <div class="bot-header">
+                                <h3>BTC Momentum Bot</h3>
+                                <div class="bot-status running">Running</div>
+                            </div>
+                            <div class="bot-details">
+                                <div class="bot-stat">
+                                    <span>Strategy</span>
+                                    <strong>Momentum Trading</strong>
+                                </div>
+                                <div class="bot-stat">
+                                    <span>Total Profit</span>
+                                    <strong class="positive">+12.3%</strong>
+                                </div>
+                                <div class="bot-actions">
+                                    <button class="edit-bot">Edit</button>
+                                    <button class="stop-bot">Stop</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="main-footer">
+            <div class="footer-content">
+                <p>&copy; 2023 CryptoBot Trader. All rights reserved.</p>
             </div>
-        </section>
-    </main>
-
-    <footer>
-        <div class="footer-content">
-            <p>&copy; 2023 Brand. All rights reserved.</p>
-            <div class="social-links">
-                <a href="#">Twitter</a>
-                <a href="#">LinkedIn</a>
-                <a href="#">GitHub</a>
-            </div>
-        </div>
-    </footer>
-
-    <script src="script.js"></script>
+        </footer>
+    </div>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="app.js"></script>
+    <script src="chart.js"></script>
 </body>
 </html>

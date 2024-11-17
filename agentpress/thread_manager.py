@@ -1,13 +1,10 @@
 import json
 import logging
-import asyncio
 import os
 from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator
 from agentpress.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
-from agentpress.tool_parser import ToolParser, StandardToolParser
-from agentpress.tool_executor import ToolExecutor
 from agentpress.response_processor import LLMResponseProcessor
 import uuid
 
@@ -25,27 +22,16 @@ class ThreadManager:
     Attributes:
         threads_dir (str): Directory where thread files are stored
         tool_registry (ToolRegistry): Registry for managing available tools
-        tool_parser (ToolParser): Parser for handling tool calls/responses
-        tool_executor (ToolExecutor): Executor for running tool functions
     """
 
-    def __init__(
-        self, 
-        threads_dir: str = "threads", 
-        tool_parser: Optional[ToolParser] = None,
-        tool_executor: Optional[ToolExecutor] = None
-    ):
-        """Initialize ThreadManager with optional custom tool parser and executor.
+    def __init__(self, threads_dir: str = "threads"):
+        """Initialize ThreadManager.
         
         Args:
             threads_dir (str): Directory to store thread files
-            tool_parser (Optional[ToolParser]): Custom tool parser implementation
-            tool_executor (Optional[ToolExecutor]): Custom tool executor implementation
         """
         self.threads_dir = threads_dir
         self.tool_registry = ToolRegistry()
-        self.tool_parser = tool_parser or StandardToolParser()
-        self.tool_executor = tool_executor or ToolExecutor(parallel=True)
         os.makedirs(self.threads_dir, exist_ok=True)
 
     def add_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
@@ -226,48 +212,33 @@ class ThreadManager:
         immediate_tool_execution: bool = True,
         parallel_tool_execution: bool = True
     ) -> Union[Dict[str, Any], AsyncGenerator]:
-        """
-        Run a conversation thread with the specified parameters.
-        
-        Args:
-            thread_id: ID of the thread to run
-            system_message: System message to guide model behavior
-            model_name: Name of the LLM model to use
-            temperature: Sampling temperature for model responses
-            max_tokens: Maximum tokens in model response
-            tool_choice: How tools should be selected ('auto' or 'none')
-            temporary_message: Extra temporary message for LLM request
-            use_tools: Whether to enable tool usage
-            execute_tools: Whether to execute tool calls at all
-            stream: Whether to stream the response
-            immediate_tool_execution: Execute tools as they appear in stream
-            parallel_tool_execution: Execute tools in parallel (True) or sequence (False)
-        """
-        messages = await self.list_messages(thread_id)
-        prepared_messages = [system_message] + messages
-        
-        if temporary_message:
-            prepared_messages.append(temporary_message)
-        
-        tools = self.tool_registry.get_all_tool_schemas() if use_tools else None
-        available_functions = self.tool_registry.get_available_functions() if use_tools else {}
-
+        """Run a conversation thread with the specified parameters."""
         try:
-            # Configure executor based on parallel_tool_execution
-            self.tool_executor.parallel = parallel_tool_execution
-            
-            response_handler = LLMResponseProcessor(
+            # Get thread messages and prepare for LLM call
+            messages = await self.list_messages(thread_id)
+            prepared_messages = [system_message] + messages
+            if temporary_message:
+                prepared_messages.append(temporary_message)
+
+            # Configure tools if enabled
+            tools = self.tool_registry.get_all_tool_schemas() if use_tools else None
+            available_functions = self.tool_registry.get_available_functions() if use_tools else {}
+
+            # Initialize response processor with list_messages callback
+            response_processor = LLMResponseProcessor(
                 thread_id=thread_id,
-                tool_executor=self.tool_executor,
-                tool_parser=self.tool_parser,
                 available_functions=available_functions,
                 add_message_callback=self.add_message,
-                update_message_callback=self._update_message
+                update_message_callback=self._update_message,
+                list_messages_callback=self.list_messages,
+                parallel_tool_execution=parallel_tool_execution,
+                threads_dir=self.threads_dir
             )
 
-            llm_response = await make_llm_api_call(
-                prepared_messages,
-                model_name,
+            # Get LLM response
+            llm_response = await self._run_thread_completion(
+                messages=prepared_messages,
+                model_name=model_name,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 tools=tools,
@@ -276,13 +247,14 @@ class ThreadManager:
             )
 
             if stream:
-                return response_handler.process_stream(
+                return response_processor.process_stream(
                     response_stream=llm_response,
                     execute_tools=execute_tools,
                     immediate_execution=immediate_tool_execution
                 )
-            
-            await response_handler.process_response(
+
+            # Process non-streaming response
+            await response_processor.process_response(
                 response=llm_response,
                 execute_tools=execute_tools
             )
@@ -306,7 +278,7 @@ class ThreadManager:
             }
 
         except Exception as e:
-            logging.error(f"Error in API call: {str(e)}")
+            logging.error(f"Error in run_thread: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
@@ -325,6 +297,27 @@ class ThreadManager:
                     "parallel_tool_execution": parallel_tool_execution
                 }
             }
+
+    async def _run_thread_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        model_name: str,
+        temperature: float,
+        max_tokens: Optional[int],
+        tools: Optional[List[Dict[str, Any]]],
+        tool_choice: Optional[str],
+        stream: bool
+    ) -> Union[Any, AsyncGenerator]:
+        """Get completion from LLM API."""
+        return await make_llm_api_call(
+            messages,
+            model_name,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            tools=tools,
+            tool_choice=tool_choice,
+            stream=stream
+        )
 
     async def _update_message(self, thread_id: str, message: Dict[str, Any]):
         """Update an existing message in the thread."""
@@ -432,3 +425,4 @@ if __name__ == "__main__":
             print(f"\n{role.upper()}: {content[:100]}...")
 
     asyncio.run(main())
+
