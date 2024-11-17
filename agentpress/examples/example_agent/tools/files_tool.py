@@ -145,7 +145,6 @@ class FilesTool(Tool):
             return self.success_response(f"File '{file_path}' deleted successfully.")
         except Exception as e:
             return self.fail_response(f"Error deleting file: {str(e)}")
-
     @tool_schema({
         "name": "str_replace",
         "description": "Replace a string with another string in a file",

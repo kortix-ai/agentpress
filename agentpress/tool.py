@@ -119,7 +119,6 @@ class Tool(ABC):
             A ToolResult indicating failure.
         """
         return ToolResult(success=False, output=msg)
-
 def tool_schema(schema: Dict[str, Any]):
     """
     A decorator for easily defining OpenAPI schemas for tool methods.
@@ -156,3 +155,4 @@ def tool_schema(schema: Dict[str, Any]):
         }
         return func
     return decorator
+

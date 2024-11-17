@@ -2,13 +2,18 @@ import json
 import logging
 import asyncio
 import os
-from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator
+from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator, Set
 from agentpress.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
-from agentpress.tool_parser import ToolParser, StandardToolParser
-from agentpress.tool_executor import ToolExecutor
-from agentpress.response_processor import LLMResponseProcessor
+from agentpress.interfaces import ResponseParser, ToolExecutionStrategy, ResultsHandler, ResponseProcessor
+from agentpress.implementations.openapi import (
+    OpenAPIResponseParser, 
+    ParallelToolExecutionStrategy,
+    SequentialToolExecutionStrategy,
+    StandardResultsHandler,
+    OpenAPIResponseProcessor
+)
 import uuid
 
 class ThreadManager:
@@ -31,22 +36,38 @@ class ThreadManager:
 
     def __init__(
         self, 
-        threads_dir: str = "threads", 
-        tool_parser: Optional[ToolParser] = None,
-        tool_executor: Optional[ToolExecutor] = None
+        threads_dir: str = "threads",
+        response_processor: Optional[ResponseProcessor] = None,
+        tool_execution_strategy: Optional[ToolExecutionStrategy] = None,
+        results_handler: Optional[ResultsHandler] = None
     ):
-        """Initialize ThreadManager with optional custom tool parser and executor.
+        """Initialize ThreadManager with optional custom implementations.
         
         Args:
             threads_dir (str): Directory to store thread files
-            tool_parser (Optional[ToolParser]): Custom tool parser implementation
-            tool_executor (Optional[ToolExecutor]): Custom tool executor implementation
+            response_processor (Optional[ResponseProcessor]): Custom response processor implementation
+            tool_execution_strategy (Optional[ToolExecutionStrategy]): Custom tool execution strategy
+            results_handler (Optional[ResultsHandler]): Custom results handler implementation
         """
         self.threads_dir = threads_dir
         self.tool_registry = ToolRegistry()
-        self.tool_parser = tool_parser or StandardToolParser()
-        self.tool_executor = tool_executor or ToolExecutor(parallel=True)
         os.makedirs(self.threads_dir, exist_ok=True)
+        
+        # Initialize components with defaults if not provided
+        self.results_handler = results_handler or StandardResultsHandler(
+            self.add_message,
+            self._update_message
+        )
+        
+        # Default to parallel execution strategy if none provided
+        self.tool_execution_strategy = tool_execution_strategy or ParallelToolExecutionStrategy()
+        
+        # Create default response processor with OpenAPI implementation if none provided
+        if response_processor is None:
+            parser = OpenAPIResponseParser()
+            self.response_processor = OpenAPIResponseProcessor(parser)
+        else:
+            self.response_processor = response_processor
 
     def add_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
         """
@@ -75,18 +96,7 @@ class ThreadManager:
         return thread_id
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
-        """
-        Add a message to an existing thread.
-        
-        Args:
-            thread_id (str): ID of the thread to add message to
-            message_data (Dict[str, Any]): Message data including role and content
-            images (Optional[List[Dict[str, Any]]]): List of image data to include
-                Each image dict should contain 'content_type' and 'base64' keys
-        
-        Raises:
-            Exception: If message addition fails
-        """
+        """Add a message to an existing thread."""
         logging.info(f"Adding message to thread {thread_id} with images: {images}")
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
         
@@ -97,18 +107,19 @@ class ThreadManager:
             messages = thread_data["messages"]
             
             if message_data['role'] == 'user':
-                last_assistant_index = next((i for i in reversed(range(len(messages))) if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
+                last_assistant_index = next((i for i in reversed(range(len(messages))) 
+                    if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
                 
                 if last_assistant_index is not None:
                     tool_call_count = len(messages[last_assistant_index]['tool_calls'])
-                    tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] if msg['role'] == 'tool')
+                    tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] 
+                        if msg['role'] == 'tool')
                     
                     if tool_call_count != tool_response_count:
                         await self.cleanup_incomplete_tool_calls(thread_id)
 
-            for key, value in message_data.items():
-                if isinstance(value, ToolResult):
-                    message_data[key] = str(value)
+            # Convert any special objects to strings
+            message_data = json.loads(json.dumps(message_data, default=str))
 
             if images:
                 if isinstance(message_data['content'], str):
@@ -223,11 +234,10 @@ class ThreadManager:
         use_tools: bool = False,
         execute_tools: bool = True,
         stream: bool = False,
-        immediate_tool_execution: bool = True,
-        parallel_tool_execution: bool = True
+        immediate_tool_execution: bool = True
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """
-        Run a conversation thread with the specified parameters.
+        Run a conversation thread with the specified parameters and processing implementations.
         
         Args:
             thread_id: ID of the thread to run
@@ -238,10 +248,8 @@ class ThreadManager:
             tool_choice: How tools should be selected ('auto' or 'none')
             temporary_message: Extra temporary message for LLM request
             use_tools: Whether to enable tool usage
-            execute_tools: Whether to execute tool calls at all
+            execute_tools: Whether to execute tool calls
             stream: Whether to stream the response
-            immediate_tool_execution: Execute tools as they appear in stream
-            parallel_tool_execution: Execute tools in parallel (True) or sequence (False)
         """
         messages = await self.list_messages(thread_id)
         prepared_messages = [system_message] + messages
@@ -251,20 +259,8 @@ class ThreadManager:
         
         tools = self.tool_registry.get_all_tool_schemas() if use_tools else None
         available_functions = self.tool_registry.get_available_functions() if use_tools else {}
-
+        
         try:
-            # Configure executor based on parallel_tool_execution
-            self.tool_executor.parallel = parallel_tool_execution
-            
-            response_handler = LLMResponseProcessor(
-                thread_id=thread_id,
-                tool_executor=self.tool_executor,
-                tool_parser=self.tool_parser,
-                available_functions=available_functions,
-                add_message_callback=self.add_message,
-                update_message_callback=self._update_message
-            )
-
             llm_response = await make_llm_api_call(
                 prepared_messages,
                 model_name,
@@ -276,34 +272,41 @@ class ThreadManager:
             )
 
             if stream:
-                return response_handler.process_stream(
+                # Return the generator directly without awaiting it
+                return self.response_processor.process_stream(
+                    thread_id=thread_id,
                     response_stream=llm_response,
                     execute_tools=execute_tools,
-                    immediate_execution=immediate_tool_execution
+                    tool_execution_strategy=self.tool_execution_strategy,
+                    available_functions=available_functions,
+                    results_handler=self.results_handler,
+                    immediate_tool_execution=immediate_tool_execution
                 )
-            
-            await response_handler.process_response(
-                response=llm_response,
-                execute_tools=execute_tools
-            )
+            else:
+                await self.response_processor.process_response(
+                    thread_id=thread_id,
+                    response=llm_response,
+                    execute_tools=execute_tools,
+                    tool_execution_strategy=self.tool_execution_strategy,
+                    available_functions=available_functions,
+                    results_handler=self.results_handler
+                )
 
-            return {
-                "llm_response": llm_response,
-                "run_thread_params": {
-                    "thread_id": thread_id,
-                    "system_message": system_message,
-                    "model_name": model_name,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "tool_choice": tool_choice,
-                    "temporary_message": temporary_message,
-                    "execute_tools": execute_tools,
-                    "use_tools": use_tools,
-                    "stream": stream,
-                    "immediate_tool_execution": immediate_tool_execution,
-                    "parallel_tool_execution": parallel_tool_execution
+                return {
+                    "llm_response": llm_response,
+                    "run_thread_params": {
+                        "thread_id": thread_id,
+                        "system_message": system_message,
+                        "model_name": model_name,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "tool_choice": tool_choice,
+                        "temporary_message": temporary_message,
+                        "execute_tools": execute_tools,
+                        "use_tools": use_tools,
+                        "stream": stream
+                    }
                 }
-            }
 
         except Exception as e:
             logging.error(f"Error in API call: {str(e)}")
@@ -320,9 +323,7 @@ class ThreadManager:
                     "temporary_message": temporary_message,
                     "execute_tools": execute_tools,
                     "use_tools": use_tools,
-                    "stream": stream,
-                    "immediate_tool_execution": immediate_tool_execution,
-                    "parallel_tool_execution": parallel_tool_execution
+                    "stream": stream
                 }
             }
 
@@ -362,7 +363,7 @@ if __name__ == "__main__":
         # Add a test message
         await thread_manager.add_message(thread_id, {
             "role": "user", 
-            "content": "Please create 10x files – Each should be a chapter of a book about an Introduction to Robotics.."
+            "content": "Please create 10x files – Each should be a chapter of a book about an Introduction to Robotics."
         })
 
         # Define system message
@@ -381,15 +382,12 @@ if __name__ == "__main__":
             max_tokens=4096,
             stream=True,
             use_tools=True,
-            execute_tools=True,
-            immediate_tool_execution=True,
-            parallel_tool_execution=True
+            execute_tools=True
         )
 
         # Handle streaming response
         if isinstance(response, AsyncGenerator):
             print("\nAssistant is responding:")
-            content_buffer = ""
             try:
                 async for chunk in response:
                     if hasattr(chunk.choices[0], 'delta'):
@@ -397,38 +395,21 @@ if __name__ == "__main__":
                         
                         # Handle content streaming
                         if hasattr(delta, 'content') and delta.content is not None:
-                            content_buffer += delta.content
-                            if delta.content.endswith((' ', '\n')):
-                                print(content_buffer, end='', flush=True)
-                                content_buffer = ""
+                            print(delta.content, end='', flush=True)
                         
                         # Handle tool calls
                         if hasattr(delta, 'tool_calls') and delta.tool_calls:
                             for tool_call in delta.tool_calls:
-                                # Print tool name when it first appears
                                 if tool_call.function and tool_call.function.name:
                                     print(f"\n🛠️  Tool Call: {tool_call.function.name}", flush=True)
-                                
-                                # Print arguments as they stream in
                                 if tool_call.function and tool_call.function.arguments:
                                     print(f"   {tool_call.function.arguments}", end='', flush=True)
                 
-                # Print any remaining content
-                if content_buffer:
-                    print(content_buffer, flush=True)
                 print("\n✨ Response completed\n")
                 
             except Exception as e:
                 print(f"\n❌ Error processing stream: {e}")
         else:
             print("\n✨ Response completed\n")
-
-        # Display final thread state
-        messages = await thread_manager.list_messages(thread_id)
-        print("\n📝 Final Thread State:")
-        for msg in messages:
-            role = msg.get('role', 'unknown')
-            content = msg.get('content', '')
-            print(f"\n{role.upper()}: {content[:100]}...")
 
     asyncio.run(main())

@@ -1,16 +1,18 @@
 import asyncio
 import json
+from typing import AsyncGenerator
 from agentpress.thread_manager import ThreadManager
 from tools.files_tool import FilesTool
 from agentpress.state_manager import StateManager
 from tools.terminal_tool import TerminalTool
+
 import logging
-from typing import AsyncGenerator
 import sys
 
 async def run_agent(thread_id: str, max_iterations: int = 5):
-    # Initialize managers and tools
-    thread_manager = ThreadManager()
+    # Initialize managers and tools with defaults
+    thread_manager = ThreadManager(
+    )  
     state_manager = StateManager()
     
     thread_manager.add_tool(FilesTool)
@@ -108,24 +110,22 @@ Current development environment workspace state:
         model_name = "anthropic/claude-3-5-haiku-latest"
 
         response = await thread_manager.run_thread(
-                    thread_id=thread_id,
-                    system_message=system_message,
-                    model_name=model_name,
-                    temperature=0.1,
-                    max_tokens=8096,
-                    tool_choice="auto",
-                    temporary_message=state_message,
-                    use_tools=True,
-                    execute_tools=True,
-                    stream=True,
-                    immediate_tool_execution=False,
-                    parallel_tool_execution=False
-                )
+            thread_id=thread_id,
+            system_message=system_message,
+            model_name=model_name,
+            temperature=0.1,
+            max_tokens=8096,
+            tool_choice="auto",
+            temporary_message=state_message,
+            use_tools=True,
+            execute_tools=True,
+            stream=True,
+            immediate_tool_execution=True
+        )
         
         # Handle streaming response
         if isinstance(response, AsyncGenerator):
             print("\n🤖 Assistant is responding:")
-            content_buffer = ""
             try:
                 async for chunk in response:
                     if hasattr(chunk.choices[0], 'delta'):
@@ -154,11 +154,9 @@ Current development environment workspace state:
         else:
             print("\n❌ Non-streaming response received:", response)
 
-        # Call after_iteration without arguments
         await after_iteration()
 
     await finalizer()
-
 
 if __name__ == "__main__":
     async def main():
