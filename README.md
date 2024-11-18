@@ -2,47 +2,16 @@
 
 AgentPress is a collection of _simple, but powerful_ utilities that serve as building blocks for creating AI agents. *Plug, play, and customize.*
 
-## How It Works
+![AgentPress Flow](images/cover.png)
 
-Each AI agent iteration follows a clear, modular flow:
+See [How It Works](#how-it-works) for an explanation of this flow.
 
-1. **Message & LLM Handling**
-   - Messages are managed in threads via `ThreadManager`
-   - LLM API calls are made through a unified interface (`llm.py`)
-   - Supports streaming responses for real-time interaction
-
-2. **Response Processing**
-   - LLM returns both content and tool calls
-   - Content is streamed in real-time
-   - Tool calls are parsed using either:
-     - Standard OpenAPI function calling
-     - XML-based tool definitions
-     - Custom parsers (extend `ToolParserBase`)
-
-3. **Tool Execution**
-   - Tools are executed either:
-     - In real-time during streaming (`execute_tools_on_stream`)
-     - After complete response
-     - In parallel or sequential order
-   - Supports both standard and XML tool formats
-   - Extensible through `ToolExecutorBase`
-
-4. **Results Management**
-   - Results from both content and tool executions are handled
-   - Supports different result formats (standard/XML)
-   - Customizable through `ResultsAdderBase`
-
-This modular architecture allows you to:
-- Use standard OpenAPI function calling
-- Switch to XML-based tool definitions
-- Create custom processors by extending base classes
-- Mix and match different approaches
-
-- **Threads**: Simple message thread handling utilities with streaming support
-- **Tools**: Flexible tool definition with both OpenAPI and XML formats
+## Core Components
+- **Threads**: Manage Messages[] as threads.
+- **Tools**: Register code as callable tools with definitions in both OpenAPI and XML
+- **Response Processing**: Support for both native-LLM OpenAPI and XML-based tool calling
 - **State Management**: Thread-safe JSON key-value state management
-- **LLM Integration**: Provider-agnostic LLM calls via LiteLLM
-- **Response Processing**: Support for both standard and XML-based tool calling
+- **LLM**: +100 LLMs using the OpenAI I/O Format powered by LiteLLM
 
 ## Installation & Setup
 
@@ -64,6 +33,8 @@ Check out [File Overview](#file-overview) for explanations of the generated file
      - `files_tool.py`: File operations (create/update files, read directory and load into state)
      - `terminal_tool.py`: Terminal command execution
    - Creates a `workspace` directory for the agent to work in
+
+
 
 
 ## Quick Start
@@ -174,6 +145,42 @@ asyncio.run(main())
 ```bash
 streamlit run agentpress/thread_viewer_ui.py
 ```
+
+## How It Works
+
+Each AI agent iteration follows a clear, modular flow:
+
+1. **Message & LLM Handling**
+   - Messages are managed in threads via `ThreadManager`
+   - LLM API calls are made through a unified interface (`llm.py`)
+   - Supports streaming responses for real-time interaction
+
+2. **Response Processing**
+   - LLM returns both content and tool calls
+   - Content is streamed in real-time
+   - Tool calls are parsed using either:
+     - Standard OpenAPI function calling
+     - XML-based tool definitions
+     - Custom parsers (extend `ToolParserBase`)
+
+3. **Tool Execution**
+   - Tools are executed either:
+     - In real-time during streaming (`execute_tools_on_stream`)
+     - After complete response
+     - In parallel or sequential order
+   - Supports both standard and XML tool formats
+   - Extensible through `ToolExecutorBase`
+
+4. **Results Management**
+   - Results from both content and tool executions are handled
+   - Supports different result formats (standard/XML)
+   - Customizable through `ResultsAdderBase`
+
+This modular architecture allows you to:
+- Use standard OpenAPI function calling
+- Switch to XML-based tool definitions
+- Create custom processors by extending base classes
+- Mix and match different approaches
 
 ## File Overview
 
