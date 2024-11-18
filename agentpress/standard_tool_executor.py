@@ -1,15 +1,30 @@
-from typing import List, Dict, Any, Set, Callable, Optional
 import asyncio
 import json
 import logging
+from typing import Dict, Any, List, Set, Callable, Optional
 from agentpress.base_processors import ToolExecutorBase
 from agentpress.tool import ToolResult
-from agentpress.tool_registry import ToolRegistry
 
-class XMLToolExecutor(ToolExecutorBase):
-    def __init__(self, parallel: bool = True, tool_registry: Optional[ToolRegistry] = None):
+# --- Standard Tool Executor Implementation ---
+
+class StandardToolExecutor(ToolExecutorBase):
+    """Standard implementation of tool execution with configurable strategies.
+    
+    Provides a flexible tool execution implementation that supports both parallel
+    and sequential execution patterns, with built-in error handling and result
+    formatting.
+    
+    Attributes:
+        parallel (bool): Whether to execute tools in parallel
+        
+    Methods:
+        execute_tool_calls: Main execution entry point
+        _execute_parallel: Parallel execution implementation
+        _execute_sequential: Sequential execution implementation
+    """
+    
+    def __init__(self, parallel: bool = True):
         self.parallel = parallel
-        self.tool_registry = tool_registry or ToolRegistry()
     
     async def execute_tool_calls(
         self,
@@ -18,7 +33,6 @@ class XMLToolExecutor(ToolExecutorBase):
         thread_id: str,
         executed_tool_calls: Optional[Set[str]] = None
     ) -> List[Dict[str, Any]]:
-        logging.info(f"Executing {len(tool_calls)} tool calls")
         if executed_tool_calls is None:
             executed_tool_calls = set()
             
@@ -46,33 +60,17 @@ class XMLToolExecutor(ToolExecutorBase):
     ) -> List[Dict[str, Any]]:
         async def execute_single_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
             if tool_call['id'] in executed_tool_calls:
-                logging.info(f"Tool call {tool_call['id']} already executed")
                 return None
                 
             try:
                 function_name = tool_call['function']['name']
                 function_args = tool_call['function']['arguments']
-                logging.info(f"Executing tool: {function_name} with args: {function_args}")
-                
                 if isinstance(function_args, str):
                     function_args = json.loads(function_args)
                 
-                # Get tool info from registry
-                tool_info = self.tool_registry.get_tool(function_name)
-                if not tool_info:
-                    error_msg = f"Function {function_name} not found in registry"
-                    logging.error(error_msg)
-                    return {
-                        "role": "tool",
-                        "tool_call_id": tool_call['id'],
-                        "name": function_name,
-                        "content": str(ToolResult(success=False, output=error_msg))
-                    }
-
-                # Get function from tool instance
-                function_to_call = getattr(tool_info['instance'], function_name)
+                function_to_call = available_functions.get(function_name)
                 if not function_to_call:
-                    error_msg = f"Function {function_name} not found on tool instance"
+                    error_msg = f"Function {function_name} not found"
                     logging.error(error_msg)
                     return {
                         "role": "tool",
@@ -81,11 +79,10 @@ class XMLToolExecutor(ToolExecutorBase):
                         "content": str(ToolResult(success=False, output=error_msg))
                     }
 
-                logging.info(f"Calling function {function_name} with args: {function_args}")
                 result = await function_to_call(**function_args)
+                logging.info(f"Tool execution result for {function_name}: {result}")
                 executed_tool_calls.add(tool_call['id'])
                 
-                logging.info(f"Function {function_name} completed with result: {result}")
                 return {
                     "role": "tool",
                     "tool_call_id": tool_call['id'],
@@ -124,22 +121,15 @@ class XMLToolExecutor(ToolExecutorBase):
                 if isinstance(function_args, str):
                     function_args = json.loads(function_args)
                 
-                # Get tool info from registry
-                tool_info = self.tool_registry.get_tool(function_name)
-                if not tool_info:
-                    error_msg = f"Function {function_name} not found in registry"
+                function_to_call = available_functions.get(function_name)
+                if not function_to_call:
+                    error_msg = f"Function {function_name} not found"
                     logging.error(error_msg)
                     result = ToolResult(success=False, output=error_msg)
                 else:
-                    # Get function from tool instance
-                    function_to_call = getattr(tool_info['instance'], function_name, None)
-                    if not function_to_call:
-                        error_msg = f"Function {function_name} not found on tool instance"
-                        logging.error(error_msg)
-                        result = ToolResult(success=False, output=error_msg)
-                    else:
-                        result = await function_to_call(**function_args)
-                        executed_tool_calls.add(tool_call['id'])
+                    result = await function_to_call(**function_args)
+                    logging.info(f"Tool execution result for {function_name}: {result}")
+                    executed_tool_calls.add(tool_call['id'])
                 
                 results.append({
                     "role": "tool",
@@ -157,4 +147,5 @@ class XMLToolExecutor(ToolExecutorBase):
                     "content": str(ToolResult(success=False, output=error_msg))
                 })
         
-        return results 
+        return results
+
