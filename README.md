@@ -9,7 +9,7 @@ See [How It Works](#how-it-works) for an explanation of this flow.
 ## Core Components
 - **Threads**: Manage Messages[] as threads.
 - **Tools**: Register code as callable tools with definitions in both OpenAPI and XML
-- **Response Processing**: Support for both native-LLM OpenAPI and XML-based tool calling
+- **Response Processing**: Support for native-LLM OpenAPI and XML-based tool calling
 - **State Management**: Thread-safe JSON key-value state management
 - **LLM**: +100 LLMs using the OpenAI I/O Format powered by LiteLLM
 
