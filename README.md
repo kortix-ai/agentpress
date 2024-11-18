@@ -2,10 +2,47 @@
 
 AgentPress is a collection of _simple, but powerful_ utilities that serve as building blocks for creating AI agents. *Plug, play, and customize.*
 
-- **Threads**: Simple message thread handling utilities
-- **Tools**: Flexible tool definition and automatic execution
-- **State Management**: Simple JSON key-value state management
+## How It Works
+
+Each AI agent iteration follows a clear, modular flow:
+
+1. **Message & LLM Handling**
+   - Messages are managed in threads via `ThreadManager`
+   - LLM API calls are made through a unified interface (`llm.py`)
+   - Supports streaming responses for real-time interaction
+
+2. **Response Processing**
+   - LLM returns both content and tool calls
+   - Content is streamed in real-time
+   - Tool calls are parsed using either:
+     - Standard OpenAPI function calling
+     - XML-based tool definitions
+     - Custom parsers (extend `ToolParserBase`)
+
+3. **Tool Execution**
+   - Tools are executed either:
+     - In real-time during streaming (`execute_tools_on_stream`)
+     - After complete response
+     - In parallel or sequential order
+   - Supports both standard and XML tool formats
+   - Extensible through `ToolExecutorBase`
+
+4. **Results Management**
+   - Results from both content and tool executions are handled
+   - Supports different result formats (standard/XML)
+   - Customizable through `ResultsAdderBase`
+
+This modular architecture allows you to:
+- Use standard OpenAPI function calling
+- Switch to XML-based tool definitions
+- Create custom processors by extending base classes
+- Mix and match different approaches
+
+- **Threads**: Simple message thread handling utilities with streaming support
+- **Tools**: Flexible tool definition with both OpenAPI and XML formats
+- **State Management**: Thread-safe JSON key-value state management
 - **LLM Integration**: Provider-agnostic LLM calls via LiteLLM
+- **Response Processing**: Support for both standard and XML-based tool calling
 
 ## Installation & Setup
 
@@ -19,7 +56,7 @@ pip install agentpress
 agentpress init
 ```
 Creates a `agentpress` directory with all the core utilities.
-Check out [File Overview](#file-overview) for explanations of the generated util files.
+Check out [File Overview](#file-overview) for explanations of the generated files.
 
 3. If you selected the example agent during initialization:
    - Creates an `agent.py` file with a web development agent example
@@ -31,24 +68,31 @@ Check out [File Overview](#file-overview) for explanations of the generated util
 
 ## Quick Start
 
-1. Set up your environment variables (API keys, etc.) in a `.env` file.
-- OPENAI_API_KEY, ANTHROPIC_API_KEY, GROQ_API_KEY, etc... Whatever LLM you want to use, we use LiteLLM (https://litellm.ai) (Call 100+ LLMs using the OpenAI Input/Output Format) – set it up in your `.env` file.. Also check out the agentpress/llm.py and modify as needed to support your wanted LLM.
+1. Set up your environment variables in a `.env` file:
+```bash
+OPENAI_API_KEY=your_key_here
+ANTHROPIC_API_KEY=your_key_here
+GROQ_API_KEY=your_key_here
+```
 
-2. Create a calculator_tool.py 
+2. Create a calculator tool with OpenAPI schema:
 ```python
-from agentpress.tool import Tool, ToolResult, tool_schema
+from agentpress.tool import Tool, ToolResult, openapi_schema
 
 class CalculatorTool(Tool):
-    @tool_schema({
-        "name": "add",
-        "description": "Add two numbers",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "a": {"type": "number"},
-                "b": {"type": "number"}
-            },
-            "required": ["a", "b"]
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "add",
+            "description": "Add two numbers",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "a": {"type": "number"},
+                    "b": {"type": "number"}
+                },
+                "required": ["a", "b"]
+            }
         }
     })
     async def add(self, a: float, b: float) -> ToolResult:
@@ -59,7 +103,29 @@ class CalculatorTool(Tool):
             return self.fail_response(f"Failed to add numbers: {str(e)}")
 ```
 
-3. Use the Thread Manager, create a new thread – or access an existing one. Then Add the Calculator Tool, and run the thread. It will automatically use & execute the python function associated with the tool:
+3. Or create a tool with XML schema:
+```python
+from agentpress.tool import Tool, ToolResult, xml_schema
+
+class FilesTool(Tool):
+    @xml_schema(
+        tag_name="create-file",
+        mappings=[
+            {"param_name": "file_path", "node_type": "attribute", "path": "."},
+            {"param_name": "file_contents", "node_type": "content", "path": "."}
+        ],
+        example='''
+        <create-file file_path="path/to/file">
+        File contents go here
+        </create-file>
+        '''
+    )
+    async def create_file(self, file_path: str, file_contents: str) -> ToolResult:
+        # Implementation here
+        pass
+```
+
+4. Use the Thread Manager with streaming and tool execution:
 ```python
 import asyncio
 from agentpress.thread_manager import ThreadManager
@@ -71,67 +137,93 @@ async def main():
     manager.add_tool(CalculatorTool)
 
     # Create a new thread
-    # Alternatively, you could use an existing thread_id like:
-    # thread_id = "existing-thread-uuid" 
     thread_id = await manager.create_thread()
     
-    # Add your custom logic here
+    # Add your message
     await manager.add_message(thread_id, {
         "role": "user", 
         "content": "What's 2 + 2?"
     })
     
+    # Run with streaming and tool execution
     response = await manager.run_thread(
         thread_id=thread_id,
         system_message={
             "role": "system", 
             "content": "You are a helpful assistant with calculation abilities."
         },
-        model_name="gpt-4",
-        use_tools=True,
-        execute_tool_calls=True
+        model_name="anthropic/claude-3-5-sonnet-latest",
+        stream=True,
+        native_tool_calling=True,
+        execute_tools=True,
+        execute_tools_on_stream=True
     )
-    print("Response:", response)
+
+    # Handle streaming response
+    if isinstance(response, AsyncGenerator):
+        async for chunk in response:
+            if hasattr(chunk.choices[0], 'delta'):
+                delta = chunk.choices[0].delta
+                if hasattr(delta, 'content') and delta.content:
+                    print(delta.content, end='', flush=True)
 
 asyncio.run(main())
 ```
 
-4. Autonomous Web Developer Agent (the standard example)
-
-When you run `agentpress init` and select the example agent – you will get code for a simple implementation of an AI Web Developer Agent that leverages architecture similar to platforms like our own [Softgen](https://softgen.ai/) Platform. 
-
-- **Files Tool**: Allows the agent to create, read, update, and delete files within the workspace.
-- **Terminal Tool**: Enables the agent to execute terminal commands.
-- **State Workspace Management**: The agent has access to a workspace whose state is stored and sent on every request. This state includes all file contents, ensuring the agent knows what it is editing.
-- **User Interaction via CLI**: After each action, the agent pauses and allows the user to provide further instructions through the CLI.
-
-You can find the complete implementation in our [example-agent](agentpress/examples/example-agent/agent.py) directory.
-
-5. Thread Viewer 
-
-Run the thread viewer to view messages of threads in a stylised web UI:
+5. View conversation threads in a web UI:
 ```bash
 streamlit run agentpress/thread_viewer_ui.py
 ```
 
-
 ## File Overview
 
-### agentpress/llm.py
-Core LLM API interface using LiteLLM. Supports 100+ LLMs using the OpenAI Input/Output Format. Easy to extend for custom model configurations and API endpoints. `make_llm_api_call()` can be imported to make LLM calls.
+### Core Components
 
-### agentpress/thread_manager.py
-Orchestrates conversations between users, LLMs, and tools. Manages message history and automatically handles tool execution when LLMs request them. Tools registered here become available for LLM function calls.
+#### agentpress/llm.py
+LLM API interface using LiteLLM. Supports 100+ LLMs with OpenAI-compatible format. Includes streaming, retry logic, and error handling.
 
-### agentpress/tool.py
-Base infrastructure for LLM-compatible tools. Inherit from `Tool` class and use `@tool_schema` decorator to create tools that are automatically registered for LLM function calling. Returns standardized `ToolResult` responses.
+#### agentpress/thread_manager.py
+Manages conversation threads with support for:
+- Message history management
+- Tool registration and execution
+- Streaming responses
+- Both OpenAPI and XML tool calling patterns
 
-### agentpress/tool_registry.py
-Central registry for tool management. Keeps track of available tools and their schemas, allowing selective function registration. Works with `thread_manager.py` to expose tools to LLMs.
+#### agentpress/tool.py
+Base infrastructure for tools with:
+- OpenAPI schema decorator for standard function calling
+- XML schema decorator for XML-based tool calls
+- Standardized ToolResult responses
 
-### agentpress/state_manager.py
-Simple key-value based state persistence using JSON files. For maintaining environment state, settings, or other persistent data.
+#### agentpress/tool_registry.py
+Central registry for tool management:
+- Registers both OpenAPI and XML tools
+- Maintains tool schemas and implementations
+- Provides tool lookup and validation
 
+#### agentpress/state_manager.py
+Thread-safe state persistence:
+- JSON-based key-value storage
+- Atomic operations with locking
+- Automatic file handling
+
+### Response Processing
+
+#### agentpress/llm_response_processor.py
+Handles LLM response processing with support for:
+- Streaming and complete responses
+- Tool call extraction and execution
+- Result formatting and message management
+
+#### Standard Processing
+- `standard_tool_parser.py`: Parses OpenAPI function calls
+- `standard_tool_executor.py`: Executes standard tool calls
+- `standard_results_adder.py`: Manages standard results
+
+#### XML Processing
+- `xml_tool_parser.py`: Parses XML-formatted tool calls
+- `xml_tool_executor.py`: Executes XML tool calls
+- `xml_results_adder.py`: Manages XML results
 
 ## Philosophy
 - **Plug & Play**: Start with our defaults, then customize to your needs.
@@ -160,7 +252,7 @@ pip install poetry
 poetry install
 ```
 
-3. For quick testing, you can install directly from the current directory:
+3. For quick testing:
 ```bash
 pip install -e .
 ```
