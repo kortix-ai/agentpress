@@ -1,8 +1,18 @@
 from typing import Dict, Type, Any, List, Optional, Callable
-from agentpress.tool import Tool
+from agentpress.tool import Tool, SchemaType, ToolSchema
+import logging
 
 
 class ToolRegistry:
+    _instance = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.tools = {}
+            cls._instance.xml_tools = {}
+        return cls._instance
+    
     """
     Registry for managing and accessing tools in the AgentPress system.
     
@@ -13,11 +23,9 @@ class ToolRegistry:
     Attributes:
         tools (Dict[str, Dict[str, Any]]): Dictionary mapping function names to
             their tool instances and schemas
+        xml_tools (Dict[str, Dict[str, Any]]): Dictionary mapping XML tag names to
+            their tool instances and schemas
     """
-
-    def __init__(self):
-        """Initialize an empty tool registry."""
-        self.tools: Dict[str, Dict[str, Any]] = {}
 
     def register_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
         """
@@ -35,23 +43,27 @@ class ToolRegistry:
         tool_instance = tool_class(**kwargs)
         schemas = tool_instance.get_schemas()
         
-        if function_names is None:
-            # Register all functions
-            for func_name, schema in schemas.items():
-                self.tools[func_name] = {
-                    "instance": tool_instance,
-                    "schema": schema
-                }
-        else:
-            # Register only specified functions
-            for func_name in function_names:
-                if func_name in schemas:
-                    self.tools[func_name] = {
-                        "instance": tool_instance,
-                        "schema": schemas[func_name]
-                    }
-                else:
-                    raise ValueError(f"Function '{func_name}' not found in {tool_class.__name__}")
+        logging.info(f"Registering tool class: {tool_class.__name__}")
+        logging.info(f"Available schemas: {list(schemas.keys())}")
+        
+        for func_name, schema_list in schemas.items():
+            if function_names is None or func_name in function_names:
+                # Register each schema type appropriately
+                for schema in schema_list:
+                    if schema.schema_type == SchemaType.OPENAPI:
+                        self.tools[func_name] = {
+                            "instance": tool_instance,
+                            "schema": schema
+                        }
+                        logging.info(f"Registered OpenAPI function {func_name}")
+                    
+                    if schema.schema_type == SchemaType.XML and schema.xml_schema:
+                        self.xml_tools[schema.xml_schema.tag_name] = {
+                            "instance": tool_instance,
+                            "method": func_name,
+                            "schema": schema
+                        }
+                        logging.info(f"Registered XML tag {schema.xml_schema.tag_name} -> {func_name}")
 
     def get_available_functions(self) -> Dict[str, Callable]:
         """
@@ -100,3 +112,20 @@ class ToolRegistry:
                 registered tool functions
         """
         return [tool_info['schema'] for tool_info in self.tools.values()]
+
+    def get_xml_tool(self, tag_name: str) -> Dict[str, Any]:
+        """Get tool info by XML tag name."""
+        return self.xml_tools.get(tag_name, {})
+
+    def get_openapi_schemas(self) -> List[Dict[str, Any]]:
+        """
+        Get only OpenAPI schemas for native function calling.
+        
+        Returns:
+            List[Dict[str, Any]]: List of OpenAPI-compatible schemas
+        """
+        return [
+            tool_info['schema'].schema 
+            for tool_info in self.tools.values()
+            if tool_info['schema'].schema_type == SchemaType.OPENAPI
+        ]
