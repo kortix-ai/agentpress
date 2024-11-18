@@ -1,3 +1,10 @@
+"""
+XML-specific implementation for parsing tool calls from LLM responses.
+
+This module provides specialized parsing for XML-formatted tool calls, supporting both
+complete and streaming responses with robust XML parsing and validation capabilities.
+"""
+
 import logging
 from typing import Dict, Any, Optional, List, Tuple
 from agentpress.base_processors import ToolParserBase
@@ -6,19 +13,43 @@ import re
 from agentpress.tool_registry import ToolRegistry
 
 class XMLToolParser(ToolParserBase):
-    def __init__(self, tool_registry: Optional[ToolRegistry] = None):
-        self.tool_registry = tool_registry or ToolRegistry()
+    """XML-specific implementation for parsing tool calls from LLM responses.
+    
+    This implementation handles the parsing of XML-formatted tool calls, providing
+    robust XML parsing with support for attributes, nested elements, and proper
+    error handling.
+    
+    Attributes:
+        tool_registry (ToolRegistry): Registry containing XML tool schemas and mappings
         
-    def _extract_tag_content(self, xml_chunk: str, tag_name: str) -> Tuple[Optional[str], Optional[str]]:
+    Methods:
+        parse_response: Process complete XML responses
+        parse_stream: Handle streaming XML chunks
+    """
+    
+    def __init__(self, tool_registry: Optional[ToolRegistry] = None):
+        """Initialize parser with tool registry.
+        
+        Args:
+            tool_registry: Registry containing XML tool definitions (optional)
         """
-        Extract content between opening and closing tags, handling nested tags.
+        self.tool_registry = tool_registry or ToolRegistry()
+    
+    def _extract_tag_content(self, xml_chunk: str, tag_name: str) -> Tuple[Optional[str], Optional[str]]:
+        """Extract content between opening and closing tags, handling nested tags.
         
         Args:
             xml_chunk: The XML content to parse
             tag_name: Name of the tag to find
             
         Returns:
-            Tuple of (content, remaining_chunk)
+            Tuple containing:
+                - str: Extracted content if found, None otherwise
+                - str: Remaining XML chunk after extraction
+                
+        Notes:
+            - Handles nested tags of the same name correctly
+            - Preserves XML structure within extracted content
         """
         start_tag = f'<{tag_name}'
         end_tag = f'</{tag_name}>'
@@ -65,15 +96,18 @@ class XMLToolParser(ToolParserBase):
             return None, xml_chunk
 
     def _extract_attribute(self, opening_tag: str, attr_name: str) -> Optional[str]:
-        """
-        Extract attribute value from opening tag, handling different quote types and escaping.
+        """Extract attribute value from opening tag.
         
         Args:
             opening_tag: The opening XML tag
             attr_name: Name of the attribute to find
             
         Returns:
-            Attribute value if found, None otherwise
+            str: Attribute value if found, None otherwise
+            
+        Notes:
+            - Handles both single and double quoted attributes
+            - Unescapes XML entities in attribute values
         """
         try:
             # Handle both single and double quotes with raw strings
@@ -100,7 +134,18 @@ class XMLToolParser(ToolParserBase):
             return None
 
     def _extract_xml_chunks(self, content: str) -> List[str]:
-        """Extract complete XML chunks using start and end pattern matching."""
+        """Extract complete XML chunks using start and end pattern matching.
+        
+        Args:
+            content: The XML content to parse
+            
+        Returns:
+            List[str]: Complete XML chunks found in the content
+            
+        Notes:
+            - Matches only registered XML tool tags
+            - Handles nested tags correctly
+        """
         chunks = []
         pos = 0
         
@@ -165,7 +210,19 @@ class XMLToolParser(ToolParserBase):
         return chunks
 
     async def _parse_xml_to_tool_call(self, xml_chunk: str) -> Optional[Dict[str, Any]]:
-        """Parse XML chunk into tool call."""
+        """Parse XML chunk into tool call format.
+        
+        Args:
+            xml_chunk: Complete XML chunk to parse
+            
+        Returns:
+            Dict containing tool call information if successful, None otherwise
+            
+        Notes:
+            - Validates against registered XML schemas
+            - Extracts parameters according to schema mappings
+            - Handles both attribute and element-based parameters
+        """
         try:
             # Extract tag name and validate
             tag_match = re.match(r'<([^\s>]+)', xml_chunk)

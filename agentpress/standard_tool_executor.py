@@ -1,3 +1,10 @@
+"""
+Standard implementation of tool execution with configurable execution strategies.
+
+This module provides the default implementation for executing tool calls, supporting
+both parallel and sequential execution patterns with comprehensive error handling.
+"""
+
 import asyncio
 import json
 import logging
@@ -24,6 +31,11 @@ class StandardToolExecutor(ToolExecutorBase):
     """
     
     def __init__(self, parallel: bool = True):
+        """Initialize the executor with execution strategy.
+        
+        Args:
+            parallel: Whether to execute tools in parallel (default: True)
+        """
         self.parallel = parallel
     
     async def execute_tool_calls(
@@ -33,6 +45,21 @@ class StandardToolExecutor(ToolExecutorBase):
         thread_id: str,
         executed_tool_calls: Optional[Set[str]] = None
     ) -> List[Dict[str, Any]]:
+        """Execute a list of tool calls using the configured strategy.
+        
+        Args:
+            tool_calls: List of tool calls to execute
+            available_functions: Dictionary mapping function names to implementations
+            thread_id: ID of the current conversation thread
+            executed_tool_calls: Set tracking already executed tool call IDs
+            
+        Returns:
+            List of tool execution results
+            
+        Notes:
+            - Automatically chooses between parallel and sequential execution
+            - Maintains execution history to prevent duplicate executions
+        """
         if executed_tool_calls is None:
             executed_tool_calls = set()
             

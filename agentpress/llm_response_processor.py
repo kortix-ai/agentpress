@@ -1,3 +1,13 @@
+"""
+Response processing system for handling LLM outputs and tool execution.
+
+This module provides comprehensive processing of LLM responses, including:
+- Parsing and validation of responses
+- Tool execution management
+- Message and result handling
+- Support for both streaming and complete responses
+"""
+
 import asyncio
 from typing import Callable, Dict, Any, AsyncGenerator, Optional
 import logging
@@ -6,10 +16,23 @@ from agentpress.standard_tool_parser import StandardToolParser
 from agentpress.standard_tool_executor import StandardToolExecutor
 from agentpress.standard_results_adder import StandardResultsAdder
 
-# --- Response Processor ---
-
 class LLMResponseProcessor:
-    """Handles LLM response processing and tool execution management."""
+    """Handles LLM response processing and tool execution management.
+    
+    Coordinates the parsing of LLM responses, execution of tools, and management
+    of results, supporting both streaming and complete response patterns.
+    
+    Attributes:
+        thread_id (str): ID of the current conversation thread
+        tool_executor (ToolExecutorBase): Strategy for executing tools
+        tool_parser (ToolParserBase): Strategy for parsing responses
+        available_functions (Dict): Available tool functions
+        results_adder (ResultsAdderBase): Strategy for adding results
+        
+    Methods:
+        process_stream: Handle streaming LLM responses
+        process_response: Handle complete LLM responses
+    """
     
     def __init__(
         self,
@@ -23,15 +46,30 @@ class LLMResponseProcessor:
         tool_parser: Optional[ToolParserBase] = None,
         tool_executor: Optional[ToolExecutorBase] = None,
         results_adder: Optional[ResultsAdderBase] = None,
-        thread_manager = None  # Add thread_manager parameter
+        thread_manager = None
     ):
+        """Initialize the response processor.
+        
+        Args:
+            thread_id: ID of the conversation thread
+            available_functions: Dictionary of available tool functions
+            add_message_callback: Callback for adding messages
+            update_message_callback: Callback for updating messages
+            list_messages_callback: Callback for listing messages
+            parallel_tool_execution: Whether to execute tools in parallel
+            threads_dir: Directory for thread storage
+            tool_parser: Custom tool parser implementation
+            tool_executor: Custom tool executor implementation
+            results_adder: Custom results adder implementation
+            thread_manager: Optional thread manager instance
+        """
         self.thread_id = thread_id
         self.tool_executor = tool_executor or StandardToolExecutor(parallel=parallel_tool_execution)
         self.tool_parser = tool_parser or StandardToolParser()
         self.available_functions = available_functions or {}
         self.threads_dir = threads_dir
         
-        # Create a minimal thread manager if none provided
+        # Create minimal thread manager if needed
         if thread_manager is None and (add_message_callback and update_message_callback and list_messages_callback):
             class MinimalThreadManager:
                 def __init__(self, add_msg, update_msg, list_msg):
@@ -40,10 +78,9 @@ class LLMResponseProcessor:
                     self.list_messages = list_msg
             thread_manager = MinimalThreadManager(add_message_callback, update_message_callback, list_messages_callback)
         
-        # Initialize results adder
         self.results_adder = results_adder or StandardResultsAdder(thread_manager)
         
-        # State tracking for streaming responses
+        # State tracking for streaming
         self.tool_calls_buffer = {}
         self.processed_tool_calls = set()
         self.content_buffer = ""

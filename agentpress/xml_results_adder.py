@@ -5,16 +5,37 @@ from agentpress.base_processors import ResultsAdderBase
 class XMLResultsAdder(ResultsAdderBase):
     """XML-specific implementation for handling tool results and message processing.
     
-    This implementation combines tool calls and their results into a single XML-formatted
-    message, avoiding the need for separate tool_calls and tool_results messages.
+    This implementation combines tool calls and their results into XML-formatted
+    messages, maintaining proper XML structure and relationships between calls
+    and results.
+    
+    Methods:
+        add_initial_response: Add initial XML response
+        update_response: Update existing XML response
+        add_tool_result: Add XML tool result
     """
     
     def __init__(self, thread_manager):
+        """Initialize with ThreadManager instance.
+        
+        Args:
+            thread_manager: Instance providing message management capabilities
+        """
         super().__init__(thread_manager)
         self.message_added = False
     
     async def add_initial_response(self, thread_id: str, content: str, tool_calls: Optional[List[Dict[str, Any]]] = None):
-        """Add initial response without modifications."""
+        """Add initial XML response without modifications.
+        
+        Args:
+            thread_id: ID of the conversation thread
+            content: XML content of the response
+            tool_calls: Optional list of tool calls (not used in XML format)
+            
+        Notes:
+            - Preserves XML structure in the content
+            - Sets message_added flag after successful addition
+        """
         message = {
             "role": "assistant",
             "content": content
@@ -23,7 +44,17 @@ class XMLResultsAdder(ResultsAdderBase):
         self.message_added = True
     
     async def update_response(self, thread_id: str, content: str, tool_calls: Optional[List[Dict[str, Any]]] = None):
-        """Update response without modifications."""
+        """Update existing XML response.
+        
+        Args:
+            thread_id: ID of the conversation thread
+            content: Updated XML content
+            tool_calls: Optional list of tool calls (not used in XML format)
+            
+        Notes:
+            - Creates initial message if none exists
+            - Preserves XML structure in updates
+        """
         if not self.message_added:
             await self.add_initial_response(thread_id, content, tool_calls)
             return
@@ -35,7 +66,17 @@ class XMLResultsAdder(ResultsAdderBase):
         await self.update_message(thread_id, message)
     
     async def add_tool_result(self, thread_id: str, result: Dict[str, Any]):
-        """Add tool result as a user message."""
+        """Add XML tool result with proper referencing.
+        
+        Args:
+            thread_id: ID of the conversation thread
+            result: Tool execution result to add
+            
+        Notes:
+            - Links result to original XML tool call
+            - Formats result as user message for clarity
+            - Handles cases where original XML tag cannot be found
+        """
         try:
             # Get the original tool call to find the root tag
             messages = await self.list_messages(thread_id)

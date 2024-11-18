@@ -13,35 +13,52 @@ MODULES = {
     "llm": {
         "required": True,
         "files": ["llm.py"],
-        "description": "Core LLM integration module - Handles API calls to language models like GPT-4, Claude, etc."
+        "description": "LLM Interface - Core module for interacting with large language models (OpenAI, Anthropic, 100+ LLMs using the OpenAI Input/Output Format powered by LiteLLM). Handles API calls, response streaming, and model-specific configurations."
     },
-    "thread_manager": {
-        "required": True,
-        "files": ["thread_manager.py", "thread_viewer_ui.py"],
-        "description": "Message thread management module - Manages conversation history and message flows"
-    },
-    "tool_system": {
+    "tool": {
         "required": True,
         "files": [
-            "tool.py", 
+            "tool.py",
             "tool_registry.py"
         ],
-        "description": "Tool execution system - Enables LLMs to use Python functions as tools"
+        "description": "Tool System Foundation - Defines the base architecture for creating and managing tools. Includes the tool registry for registering, organizing, and accessing tool functions."
     },
-    "state_manager": {
+    "processors": {
+        "required": True,
+        "files": [
+            "base_processors.py",
+            "llm_response_processor.py",
+            "standard_tool_parser.py",
+            "standard_tool_executor.py", 
+            "standard_results_adder.py",
+            "xml_tool_parser.py",
+            "xml_tool_executor.py",
+            "xml_results_adder.py"
+        ],
+        "description": "Response Processing System - Handles parsing and executing LLM responses, managing tool calls, and processing results. Supports both standard OpenAI-style function calling and XML-based tool execution patterns."
+    },
+    "thread_management": {
+        "required": True,
+        "files": [
+            "thread_manager.py",
+            "thread_viewer_ui.py"
+        ],
+        "description": "Conversation Management System - Handles message threading, conversation history, and provides a UI for viewing conversation threads. Manages the flow of messages between the user, LLM, and tools."
+    },
+    "state_management": {
         "required": False,
         "files": ["state_manager.py"],
-        "description": "State persistence module - Saves and loads conversation state and tool data"
+        "description": "State Persistence System - Provides thread-safe storage and retrieval of conversation state, tool data, and other persistent information. Enables maintaining context across sessions and managing shared state between components."
     }
 }
 
 STARTER_EXAMPLES = {
-    "example_agent": {
-        "description": "Web development agent with file and terminal tools",
+    "simple_web_dev_example_agent": {
+        "description": "Interactive web development agent with file and terminal manipulation capabilities. Demonstrates both standard and XML-based tool calling patterns.",
         "files": {
-            "agent.py": "examples/example_agent/agent.py",
-            "tools/files_tool.py": "examples/example_agent/tools/files_tool.py",
-            "tools/terminal_tool.py": "examples/example_agent/tools/terminal_tool.py",
+            "agent.py": "agents/simple_web_dev/agent.py",
+            "tools/files_tool.py": "agents/simple_web_dev/tools/files_tool.py",
+            "tools/terminal_tool.py": "agents/simple_web_dev/tools/terminal_tool.py",
         }
     }
 }
@@ -178,7 +195,7 @@ def init():
     # Show required modules including state_manager
     click.echo("📦 Required Modules (pre-selected):")
     required_modules = {name: module for name, module in MODULES.items() 
-                       if module["required"] or name == "state_manager"}
+                       if module["required"] or name == "state_management"}
     for name, module in required_modules.items():
         click.echo(f"  ✓ {click.style(name, fg='green')} - {module['description']}")
     
