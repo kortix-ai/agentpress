@@ -46,7 +46,11 @@ class TerminalTool(Tool):
         mappings=[
             {"param_name": "command", "node_type": "content", "path": "."}
         ],
-        description="Execute a shell command in the workspace directory"
+        example='''
+        <execute-command>
+        npm install package-name
+        </execute-command>
+        '''
     )
     async def execute_command(self, command: str) -> ToolResult:
         original_dir = os.getcwd()

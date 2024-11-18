@@ -26,7 +26,7 @@ class XMLTagSchema:
     """Schema for XML tool tags with improved node mapping"""
     tag_name: str  # Root tag name (e.g. "str-replace")
     mappings: List[XMLNodeMapping] = field(default_factory=list)
-    description: Optional[str] = None
+    example: Optional[str] = None  # Changed from description to example
     
     def add_mapping(self, param_name: str, node_type: str = "element", path: str = ".") -> None:
         """Add a new node mapping"""
@@ -97,7 +97,7 @@ def openapi_schema(schema: Dict[str, Any]):
 def xml_schema(
     tag_name: str,
     mappings: List[Dict[str, str]] = None,
-    description: str = None
+    example: str = None  # Changed from description to example
 ):
     """
     Decorator for XML schema tools with improved node mapping.
@@ -108,7 +108,7 @@ def xml_schema(
             - param_name: Name of the function parameter
             - node_type: "element", "attribute", or "content" 
             - path: Path to the node (default "." for root)
-        description: Optional description of the tool
+        example: Optional example showing how to use the XML tag
     
     Example:
         @xml_schema(
@@ -118,11 +118,16 @@ def xml_schema(
                 {"param_name": "old_str", "node_type": "element", "path": "old_str"},
                 {"param_name": "new_str", "node_type": "element", "path": "new_str"}
             ],
-            description="Replace text in a file"
+            example='''
+            <str-replace file_path="path/to/file">
+                <old_str>text to replace</old_str>
+                <new_str>replacement text</new_str>
+            </str-replace>
+            '''
         )
     """
     def decorator(func):
-        xml_schema = XMLTagSchema(tag_name=tag_name, description=description)
+        xml_schema = XMLTagSchema(tag_name=tag_name, example=example)
         
         # Add mappings
         if mappings:
