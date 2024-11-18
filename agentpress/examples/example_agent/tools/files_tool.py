@@ -134,8 +134,11 @@ class FilesTool(Tool):
     })
     @xml_schema(
         tag_name="create-file",
-        attributes={"file_path": "file_path"},
-        param_mapping={".": "file_contents"}
+        mappings=[
+            {"param_name": "file_path", "node_type": "attribute", "path": "."},
+            {"param_name": "file_contents", "node_type": "content", "path": "."}
+        ],
+        description="Create a new file with the provided contents"
     )
     async def create_file(self, file_path: str, file_contents: str) -> ToolResult:
         try:
@@ -171,7 +174,10 @@ class FilesTool(Tool):
     })
     @xml_schema(
         tag_name="delete-file",
-        attributes={"file_path": "file_path"}
+        mappings=[
+            {"param_name": "file_path", "node_type": "attribute", "path": "."}
+        ],
+        description="Delete a file at the given path"
     )
     async def delete_file(self, file_path: str) -> ToolResult:
         try:
@@ -210,11 +216,12 @@ class FilesTool(Tool):
     })
     @xml_schema(
         tag_name="str-replace",
-        attributes={"file_path": "file_path"},
-        param_mapping={
-            "old_str": "old_str",
-            "new_str": "new_str"
-        }
+        mappings=[
+            {"param_name": "file_path", "node_type": "attribute", "path": "file_path"},
+            {"param_name": "old_str", "node_type": "element", "path": "old_str"},
+            {"param_name": "new_str", "node_type": "element", "path": "new_str"}
+        ],
+        description="Replace text in a file"
     )
     async def str_replace(self, file_path: str, old_str: str, new_str: str) -> ToolResult:
         try:

@@ -78,7 +78,9 @@ Use XML tags to specify file operations:
 file contents here
 </create-file>
 
-<str-replace file_path="path/to/file" old_str="old_str" new_str="new_str">
+<str-replace file_path="path/to/file">
+<old_str>text to replace</old_str>
+<new_str>replacement text</new_str>
 </str-replace>
 
 <delete-file file_path="path/to/file">
@@ -137,7 +139,7 @@ Current development environment workspace state:
             """
         }
 
-        model_name = "anthropic/claude-3-5-haiku-latest"
+        model_name = "anthropic/claude-3-5-sonnet-latest"
 
         registry = thread_manager.tool_registry 
         tool_parser = XMLToolParser(tool_registry=registry)
