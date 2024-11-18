@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from agentpress.thread_llm_response_processor import ToolParserBase
 import json
 import re
@@ -9,6 +9,239 @@ class XMLToolParser(ToolParserBase):
     def __init__(self, tool_registry: Optional[ToolRegistry] = None):
         self.tool_registry = tool_registry or ToolRegistry()
         
+    def _extract_tag_content(self, xml_chunk: str, tag_name: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Extract content between opening and closing tags, handling nested tags.
+        
+        Args:
+            xml_chunk: The XML content to parse
+            tag_name: Name of the tag to find
+            
+        Returns:
+            Tuple of (content, remaining_chunk)
+        """
+        start_tag = f'<{tag_name}'
+        end_tag = f'</{tag_name}>'
+        
+        try:
+            # Find start tag position
+            start_pos = xml_chunk.find(start_tag)
+            if start_pos == -1:
+                return None, xml_chunk
+                
+            # Find end of opening tag
+            tag_end = xml_chunk.find('>', start_pos)
+            if tag_end == -1:
+                return None, xml_chunk
+                
+            # Find matching closing tag
+            content_start = tag_end + 1
+            nesting_level = 1
+            pos = content_start
+            
+            while nesting_level > 0 and pos < len(xml_chunk):
+                next_start = xml_chunk.find(start_tag, pos)
+                next_end = xml_chunk.find(end_tag, pos)
+                
+                if next_end == -1:
+                    return None, xml_chunk
+                    
+                if next_start != -1 and next_start < next_end:
+                    nesting_level += 1
+                    pos = next_start + len(start_tag)
+                else:
+                    nesting_level -= 1
+                    pos = next_end + len(end_tag)
+            
+            if nesting_level == 0:
+                content = xml_chunk[content_start:pos - len(end_tag)]
+                remaining = xml_chunk[pos:]
+                return content, remaining
+                
+            return None, xml_chunk
+            
+        except Exception as e:
+            logging.error(f"Error extracting tag content: {e}")
+            return None, xml_chunk
+
+    def _extract_attribute(self, opening_tag: str, attr_name: str) -> Optional[str]:
+        """
+        Extract attribute value from opening tag, handling different quote types and escaping.
+        
+        Args:
+            opening_tag: The opening XML tag
+            attr_name: Name of the attribute to find
+            
+        Returns:
+            Attribute value if found, None otherwise
+        """
+        try:
+            # Handle both single and double quotes with raw strings
+            patterns = [
+                fr'{attr_name}="([^"]*)"',  # Double quotes
+                fr"{attr_name}='([^']*)'",  # Single quotes
+                fr'{attr_name}=([^\s/>;]+)'  # No quotes - fixed escape sequence
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, opening_tag)
+                if match:
+                    value = match.group(1)
+                    # Unescape common XML entities
+                    value = value.replace('&quot;', '"').replace('&apos;', "'")
+                    value = value.replace('&lt;', '<').replace('&gt;', '>')
+                    value = value.replace('&amp;', '&')
+                    return value
+            
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error extracting attribute: {e}")
+            return None
+
+    def _extract_xml_chunks(self, content: str) -> List[str]:
+        """Extract complete XML chunks using start and end pattern matching."""
+        chunks = []
+        pos = 0
+        
+        try:
+            while pos < len(content):
+                # Find the next tool tag
+                next_tag_start = -1
+                current_tag = None
+                
+                # Find the earliest occurrence of any registered tag
+                for tag_name in self.tool_registry.xml_tools.keys():
+                    start_pattern = f'<{tag_name}'
+                    tag_pos = content.find(start_pattern, pos)
+                    
+                    if tag_pos != -1 and (next_tag_start == -1 or tag_pos < next_tag_start):
+                        next_tag_start = tag_pos
+                        current_tag = tag_name
+                
+                if next_tag_start == -1 or not current_tag:
+                    break
+                
+                # Find the matching end tag
+                end_pattern = f'</{current_tag}>'
+                tag_stack = []
+                chunk_start = next_tag_start
+                current_pos = next_tag_start
+                
+                while current_pos < len(content):
+                    # Look for next start or end tag of the same type
+                    next_start = content.find(f'<{current_tag}', current_pos + 1)
+                    next_end = content.find(end_pattern, current_pos)
+                    
+                    if next_end == -1:  # No closing tag found
+                        break
+                    
+                    if next_start != -1 and next_start < next_end:
+                        # Found nested start tag
+                        tag_stack.append(next_start)
+                        current_pos = next_start + 1
+                    else:
+                        # Found end tag
+                        if not tag_stack:  # This is our matching end tag
+                            chunk_end = next_end + len(end_pattern)
+                            chunk = content[chunk_start:chunk_end]
+                            chunks.append(chunk)
+                            pos = chunk_end
+                            break
+                        else:
+                            # Pop nested tag
+                            tag_stack.pop()
+                            current_pos = next_end + 1
+                
+                if current_pos >= len(content):  # Reached end without finding closing tag
+                    break
+                
+                pos = max(pos + 1, current_pos)
+        
+        except Exception as e:
+            logging.error(f"Error extracting XML chunks: {e}")
+            logging.error(f"Content was: {content}")
+        
+        return chunks
+
+    async def _parse_xml_to_tool_call(self, xml_chunk: str) -> Optional[Dict[str, Any]]:
+        """Parse XML chunk into tool call."""
+        try:
+            # Extract tag name and validate
+            tag_match = re.match(r'<([^\s>]+)', xml_chunk)
+            if not tag_match:
+                logging.error(f"No tag found in XML chunk: {xml_chunk}")
+                return None
+                
+            tag_name = tag_match.group(1)
+            logging.info(f"Found XML tag: {tag_name}")
+            
+            # Get tool info and schema
+            tool_info = self.tool_registry.get_xml_tool(tag_name)
+            if not tool_info or not tool_info['schema'].xml_schema:
+                logging.error(f"No tool or schema found for tag: {tag_name}")
+                return None
+                
+            schema = tool_info['schema'].xml_schema
+            params = {}
+            remaining_chunk = xml_chunk
+            
+            # Process each mapping
+            for mapping in schema.mappings:
+                try:
+                    if mapping.node_type == "attribute":
+                        # Extract attribute from opening tag
+                        opening_tag = remaining_chunk.split('>', 1)[0]
+                        value = self._extract_attribute(opening_tag, mapping.path)
+                        if value is not None:
+                            params[mapping.param_name] = value
+                            logging.info(f"Found attribute {mapping.path} -> {mapping.param_name}: {value}")
+                    
+                    elif mapping.node_type == "element":
+                        # Extract element content
+                        content, remaining_chunk = self._extract_tag_content(remaining_chunk, mapping.path)
+                        if content is not None:
+                            params[mapping.param_name] = content.strip()
+                            logging.info(f"Found element {mapping.path} -> {mapping.param_name}")
+                    
+                    elif mapping.node_type == "content":
+                        if mapping.path == ".":
+                            # Extract root content
+                            content, _ = self._extract_tag_content(remaining_chunk, tag_name)
+                            if content is not None:
+                                params[mapping.param_name] = content.strip()
+                                logging.info(f"Found root content for {mapping.param_name}")
+                
+                except Exception as e:
+                    logging.error(f"Error processing mapping {mapping}: {e}")
+                    continue
+            
+            # Validate required parameters
+            missing = [mapping.param_name for mapping in schema.mappings if mapping.param_name not in params]
+            if missing:
+                logging.error(f"Missing required parameters: {missing}")
+                logging.error(f"Current params: {params}")
+                logging.error(f"XML chunk: {xml_chunk}")
+                return None
+            
+            # Create tool call
+            tool_call = {
+                "id": f"tool_{hash(xml_chunk)}",
+                "type": "function",
+                "function": {
+                    "name": tool_info['method'],
+                    "arguments": json.dumps(params)
+                }
+            }
+            
+            logging.info(f"Created tool call: {tool_call}")
+            return tool_call
+            
+        except Exception as e:
+            logging.error(f"Error parsing XML chunk: {e}")
+            logging.error(f"XML chunk was: {xml_chunk}")
+            return None
+
     async def parse_response(self, response: Any) -> Dict[str, Any]:
         response_message = response.choices[0].message
         content = response_message.get('content') or ""
@@ -107,106 +340,3 @@ class XMLToolParser(ToolParserBase):
                 start_idx = end_idx + len(end_tag)
         
         return tool_calls
-
-    def _extract_xml_chunks(self, content: str) -> List[str]:
-        chunks = []
-        current_chunk = []
-        in_tag = False
-        
-        lines = content.split('\n')
-        for line in lines:
-            # Check for registered XML tags
-            for tag_name in self.tool_registry.xml_tools.keys():
-                if f'<{tag_name}' in line:
-                    if in_tag:  # Close previous tag if any
-                        chunks.append('\n'.join(current_chunk))
-                        current_chunk = []
-                    in_tag = True
-                    current_chunk = [line]
-                    break
-                elif f'</{tag_name}>' in line and in_tag:
-                    current_chunk.append(line)
-                    chunks.append('\n'.join(current_chunk))
-                    current_chunk = []
-                    in_tag = False
-                    break
-            else:
-                if in_tag:
-                    current_chunk.append(line)
-        
-        if current_chunk and in_tag:
-            chunks.append('\n'.join(current_chunk))
-        
-        return chunks
-
-    async def _parse_xml_to_tool_call(self, xml_chunk: str) -> Optional[Dict[str, Any]]:
-        try:
-            # Extract tag name to look up tool
-            tag_match = re.match(r'<([^\s>]+)', xml_chunk)
-            if not tag_match:
-                logging.error(f"No tag found in XML chunk: {xml_chunk}")
-                return None
-                
-            tag_name = tag_match.group(1)
-            logging.info(f"Found XML tag: {tag_name}")
-            
-            tool_info = self.tool_registry.get_xml_tool(tag_name)
-            if not tool_info:
-                logging.error(f"No tool found for tag: {tag_name}")
-                return None
-                
-            schema = tool_info['schema'].xml_schema
-            if not schema:
-                logging.error(f"No XML schema found for tag: {tag_name}")
-                return None
-                
-            # Extract parameters
-            params = {}
-            
-            # Extract attributes
-            for attr_name, param_name in schema.attributes.items():
-                attr_match = re.search(f'{attr_name}="([^"]+)"', xml_chunk)
-                if attr_match:
-                    params[param_name] = attr_match.group(1)
-                    logging.info(f"Found attribute {attr_name} -> {param_name}: {attr_match.group(1)}")
-            
-            # Extract mapped parameters (both direct content and nested tags)
-            for xml_element, param_name in schema.param_mapping.items():
-                if xml_element == ".":  # Root tag content
-                    content_match = re.search(r'>(.*?)</[^>]+>$', xml_chunk, re.DOTALL)
-                    if content_match:
-                        content = content_match.group(1).strip()
-                        if content:  # Only set if there's actual content
-                            params[param_name] = content
-                            logging.info(f"Found root content for {param_name}: {content}")
-                else:  # Nested tag
-                    # Updated regex pattern to handle multiline content
-                    pattern = f'<{xml_element}>(.*?)</{xml_element}>'
-                    nested_match = re.search(pattern, xml_chunk, re.DOTALL | re.MULTILINE)
-                    if nested_match:
-                        params[param_name] = nested_match.group(1).strip()
-                        logging.info(f"Found nested tag {xml_element} -> {param_name}: {nested_match.group(1)}")
-            
-            if not all(param in params for param in schema.param_mapping.values()):
-                missing = [param for param in schema.param_mapping.values() if param not in params]
-                logging.error(f"Missing required parameters: {missing}")
-                logging.error(f"Current params: {params}")
-                logging.error(f"XML chunk: {xml_chunk}")
-                return None
-            
-            tool_call = {
-                "id": f"tool_{hash(xml_chunk)}",
-                "type": "function",
-                "function": {
-                    "name": tool_info['method'],
-                    "arguments": json.dumps(params)
-                }
-            }
-            
-            logging.info(f"Created tool call: {tool_call}")
-            return tool_call
-                
-        except Exception as e:
-            logging.error(f"Error parsing XML chunk: {e}")
-            logging.error(f"XML chunk was: {xml_chunk}")
-            return None 

@@ -43,8 +43,10 @@ class TerminalTool(Tool):
     })
     @xml_schema(
         tag_name="execute-command",
-        attributes={},
-        param_mapping={".": "command"}
+        mappings=[
+            {"param_name": "command", "node_type": "content", "path": "."}
+        ],
+        description="Execute a shell command in the workspace directory"
     )
     async def execute_command(self, command: str) -> ToolResult:
         original_dir = os.getcwd()

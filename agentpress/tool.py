@@ -15,11 +15,26 @@ class SchemaType(Enum):
     CUSTOM = "custom"
 
 @dataclass
+class XMLNodeMapping:
+    """Maps an XML node (element or attribute) to a function parameter"""
+    param_name: str  # Name of the function parameter
+    node_type: str = "element"  # "element", "attribute", or "content"
+    path: str = "."  # XPath-like path to the node, "." means root element
+
+@dataclass
 class XMLTagSchema:
-    """Schema for XML tool tags"""
-    tag_name: str  # e.g. "str-replace"
-    param_mapping: Dict[str, str] = field(default_factory=dict)  # Maps XML elements to function params
-    attributes: Dict[str, str] = field(default_factory=dict)  # Maps XML attributes to function params
+    """Schema for XML tool tags with improved node mapping"""
+    tag_name: str  # Root tag name (e.g. "str-replace")
+    mappings: List[XMLNodeMapping] = field(default_factory=list)
+    description: Optional[str] = None
+    
+    def add_mapping(self, param_name: str, node_type: str = "element", path: str = ".") -> None:
+        """Add a new node mapping"""
+        self.mappings.append(XMLNodeMapping(
+            param_name=param_name,
+            node_type=node_type, 
+            path=path
+        ))
 
 @dataclass
 class ToolSchema:
@@ -81,37 +96,47 @@ def openapi_schema(schema: Dict[str, Any]):
 
 def xml_schema(
     tag_name: str,
-    param_mapping: Dict[str, str] = None,
-    attributes: Dict[str, str] = None
+    mappings: List[Dict[str, str]] = None,
+    description: str = None
 ):
     """
-    Decorator for XML schema tools with flexible content mapping.
+    Decorator for XML schema tools with improved node mapping.
     
     Args:
         tag_name: Name of the root XML tag
-        param_mapping: Maps XML elements (content or nested tags) to function parameters
-        attributes: Maps XML attributes to function parameters
+        mappings: List of mapping definitions, each containing:
+            - param_name: Name of the function parameter
+            - node_type: "element", "attribute", or "content" 
+            - path: Path to the node (default "." for root)
+        description: Optional description of the tool
     
     Example:
         @xml_schema(
             tag_name="str-replace",
-            attributes={"file_path": "file_path"},
-            param_mapping={
-                ".": "new_str",  # "." means root tag content
-                "old_str": "old_str",  # nested tag name -> param name
-                "new_str": "new_str"
-            }
+            mappings=[
+                {"param_name": "file_path", "node_type": "attribute", "path": "."},
+                {"param_name": "old_str", "node_type": "element", "path": "old_str"},
+                {"param_name": "new_str", "node_type": "element", "path": "new_str"}
+            ],
+            description="Replace text in a file"
         )
     """
     def decorator(func):
+        xml_schema = XMLTagSchema(tag_name=tag_name, description=description)
+        
+        # Add mappings
+        if mappings:
+            for mapping in mappings:
+                xml_schema.add_mapping(
+                    param_name=mapping["param_name"],
+                    node_type=mapping.get("node_type", "element"),
+                    path=mapping.get("path", ".")
+                )
+                
         return _add_schema(func, ToolSchema(
             schema_type=SchemaType.XML,
-            schema={},
-            xml_schema=XMLTagSchema(
-                tag_name=tag_name,
-                param_mapping=param_mapping or {},
-                attributes=attributes or {}
-            )
+            schema={},  # OpenAPI schema could be added here if needed
+            xml_schema=xml_schema
         ))
     return decorator
 
