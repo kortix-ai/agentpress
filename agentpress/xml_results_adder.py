@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, List, Optional
-from agentpress.thread_llm_response_processor import ResultsAdderBase
+from agentpress.base_processors import ResultsAdderBase
 
 class XMLResultsAdder(ResultsAdderBase):
     """XML-specific implementation for handling tool results and message processing.

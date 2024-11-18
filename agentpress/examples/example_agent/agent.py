@@ -16,7 +16,7 @@ async def run_agent(thread_id: str, max_iterations: int = 5):
     thread_manager = ThreadManager()
     state_manager = StateManager()
     
-    # Initialize tools with XML schema support
+    # Initialize tools
     thread_manager.add_tool(FilesTool)
     thread_manager.add_tool(TerminalTool)
 
@@ -60,7 +60,9 @@ async def run_agent(thread_id: str, max_iterations: int = 5):
 # file contents here
 # </create-file>
 
-# <str-replace file_path="path/to/file" old_str="old_str" new_str="new_str">
+# <str-replace file_path="path/to/file">
+# <old_str>text to replace</old_str>
+# <new_str>replacement text</new_str>
 # </str-replace>
 
 # <delete-file file_path="path/to/file">
@@ -71,7 +73,7 @@ async def run_agent(thread_id: str, max_iterations: int = 5):
             "content": """
 You are a world-class web developer who can create, edit, and delete files, and execute terminal commands. You write clean, well-structured code. Keep iterating on existing files, continue working on this existing codebase - do not omit previous progress; instead, keep iterating.
 
-FORMAT:
+RESPONSE FORMAT:
 Use XML tags to specify file operations:
 
 <create-file file_path="path/to/file">
@@ -141,11 +143,6 @@ Current development environment workspace state:
 
         model_name = "anthropic/claude-3-5-sonnet-latest"
 
-        registry = thread_manager.tool_registry 
-        tool_parser = XMLToolParser(tool_registry=registry)
-        tool_executor = XMLToolExecutor(parallel=True, tool_registry=registry)
-        results_adder = XMLResultsAdder(thread_manager)
-
         response = await thread_manager.run_thread(
                     thread_id=thread_id,
                     system_message=system_message,
@@ -154,15 +151,11 @@ Current development environment workspace state:
                     max_tokens=8096,
                     tool_choice="auto",
                     temporary_message=state_message,
-                    use_tools=True,
-                    native_tool_calling=False,
-                    execute_tools=True,
+                    native_tool_calling=True,
+                    xml_tool_calling=False,
                     stream=True,
-                    immediate_tool_execution=True,
-                    parallel_tool_execution=True,
-                    tool_parser=tool_parser,
-                    tool_executor=tool_executor,
-                    results_adder=results_adder
+                    execute_tools_on_stream=True,
+                    parallel_tool_execution=True
                 )
         
         if isinstance(response, AsyncGenerator):

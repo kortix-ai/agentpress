@@ -5,11 +5,16 @@ from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator
 from agentpress.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
-from agentpress.thread_llm_response_processor import StandardLLMResponseProcessor
-from agentpress.thread_llm_response_processor import ToolParserBase
-from agentpress.thread_llm_response_processor import ToolExecutorBase
-from agentpress.thread_llm_response_processor import ResultsAdderBase
+from agentpress.llm_response_processor import LLMResponseProcessor
+from agentpress.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
 import uuid
+
+from agentpress.xml_tool_parser import XMLToolParser
+from agentpress.xml_tool_executor import XMLToolExecutor
+from agentpress.xml_results_adder import XMLResultsAdder
+from agentpress.standard_tool_parser import StandardToolParser
+from agentpress.standard_tool_executor import StandardToolExecutor
+from agentpress.standard_results_adder import StandardResultsAdder
 
 class ThreadManager:
     """Manages conversation threads with LLM models and tool execution.
@@ -217,32 +222,49 @@ class ThreadManager:
         max_tokens: Optional[int] = None,
         tool_choice: str = "auto",
         temporary_message: Optional[Dict[str, Any]] = None,
-        use_tools: bool = False,
         native_tool_calling: bool = False,
+        xml_tool_calling: bool = False,
         execute_tools: bool = True,
         stream: bool = False,
-        immediate_tool_execution: bool = True,
-        parallel_tool_execution: bool = True,
+        execute_tools_on_stream: bool = False,
+        parallel_tool_execution: bool = False,
         tool_parser: Optional[ToolParserBase] = None,
         tool_executor: Optional[ToolExecutorBase] = None,
         results_adder: Optional[ResultsAdderBase] = None
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Run a conversation thread with specified parameters."""
+        
+        # Validate tool calling configuration
+        if native_tool_calling and xml_tool_calling:
+            raise ValueError("Cannot use both native LLM tool calling and XML tool calling simultaneously")
+
+        # Initialize tool components if any tool calling is enabled
+        if native_tool_calling or xml_tool_calling:
+            if tool_parser is None:
+                tool_parser = XMLToolParser(tool_registry=self.tool_registry) if xml_tool_calling else StandardToolParser()
+            
+            if tool_executor is None:
+                tool_executor = XMLToolExecutor(parallel=parallel_tool_execution, tool_registry=self.tool_registry) if xml_tool_calling else StandardToolExecutor(parallel=parallel_tool_execution)
+            
+            if results_adder is None:
+                results_adder = XMLResultsAdder(self) if xml_tool_calling else StandardResultsAdder(self)
+
         try:
             messages = await self.list_messages(thread_id)
             prepared_messages = [system_message] + messages
             if temporary_message:
                 prepared_messages.append(temporary_message)
 
-            tool_schemas = None
-            if use_tools:
-                if native_tool_calling:
-                    tool_schemas = self.tool_registry.get_openapi_schemas()
+            openapi_tool_schemas = None
+            if native_tool_calling:
+                openapi_tool_schemas = self.tool_registry.get_openapi_schemas()
+                available_functions = self.tool_registry.get_available_functions()
+            elif xml_tool_calling:
                 available_functions = self.tool_registry.get_available_functions()
             else:
                 available_functions = {}
 
-            response_processor = StandardLLMResponseProcessor(
+            response_processor = LLMResponseProcessor(
                 thread_id=thread_id,
                 available_functions=available_functions,
                 add_message_callback=self.add_message,
@@ -260,7 +282,7 @@ class ThreadManager:
                 model_name=model_name,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                tools=tool_schemas,
+                tools=openapi_tool_schemas,
                 tool_choice=tool_choice if native_tool_calling else None,
                 stream=stream
             )
@@ -269,7 +291,7 @@ class ThreadManager:
                 return response_processor.process_stream(
                     response_stream=llm_response,
                     execute_tools=execute_tools,
-                    immediate_execution=immediate_tool_execution
+                    execute_tools_on_stream=execute_tools_on_stream
                 )
 
             await response_processor.process_response(
@@ -361,9 +383,9 @@ if __name__ == "__main__":
             temperature=0.7,
             max_tokens=4096,
             stream=True,
-            use_tools=True,
+            native_tool_calling=True,
             execute_tools=True,
-            immediate_tool_execution=True,
+            execute_tools_on_stream=True,
             parallel_tool_execution=True
         )
 

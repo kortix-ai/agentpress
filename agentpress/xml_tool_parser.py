@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, Optional, List, Tuple
-from agentpress.thread_llm_response_processor import ToolParserBase
+from agentpress.base_processors import ToolParserBase
 import json
 import re
 from agentpress.tool_registry import ToolRegistry
