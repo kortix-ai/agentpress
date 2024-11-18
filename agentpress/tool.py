@@ -1,8 +1,13 @@
 """
-This module provides a flexible foundation for creating and managing tools in the AgentPress system.
+Core tool system providing the foundation for creating and managing tools.
+
+This module defines the base classes and decorators for creating tools in AgentPress:
+- Tool base class for implementing tool functionality
+- Schema decorators for OpenAPI and XML tool definitions
+- Result containers for standardized tool outputs
 """
 
-from typing import Dict, Any, Union, Optional, List
+from typing import Dict, Any, Union, Optional, List, Type
 from dataclasses import dataclass, field
 from abc import ABC
 import json
@@ -10,26 +15,48 @@ import inspect
 from enum import Enum
 
 class SchemaType(Enum):
+    """Enumeration of supported schema types for tool definitions."""
     OPENAPI = "openapi"
     XML = "xml"
     CUSTOM = "custom"
 
 @dataclass
 class XMLNodeMapping:
-    """Maps an XML node (element or attribute) to a function parameter"""
-    param_name: str  # Name of the function parameter
-    node_type: str = "element"  # "element", "attribute", or "content"
-    path: str = "."  # XPath-like path to the node, "." means root element
+    """Maps an XML node to a function parameter.
+    
+    Attributes:
+        param_name (str): Name of the function parameter
+        node_type (str): Type of node ("element", "attribute", or "content")
+        path (str): XPath-like path to the node ("." means root element)
+    """
+    param_name: str
+    node_type: str = "element"
+    path: str = "."
 
 @dataclass
 class XMLTagSchema:
-    """Schema for XML tool tags with improved node mapping"""
-    tag_name: str  # Root tag name (e.g. "str-replace")
+    """Schema definition for XML tool tags.
+    
+    Attributes:
+        tag_name (str): Root tag name for the tool
+        mappings (List[XMLNodeMapping]): Parameter mappings for the tag
+        example (str, optional): Example showing tag usage
+        
+    Methods:
+        add_mapping: Add a new parameter mapping to the schema
+    """
+    tag_name: str
     mappings: List[XMLNodeMapping] = field(default_factory=list)
-    example: Optional[str] = None  # Changed from description to example
+    example: Optional[str] = None
     
     def add_mapping(self, param_name: str, node_type: str = "element", path: str = ".") -> None:
-        """Add a new node mapping"""
+        """Add a new node mapping to the schema.
+        
+        Args:
+            param_name: Name of the function parameter
+            node_type: Type of node ("element", "attribute", or "content")
+            path: XPath-like path to the node
+        """
         self.mappings.append(XMLNodeMapping(
             param_name=param_name,
             node_type=node_type, 
@@ -38,21 +65,45 @@ class XMLTagSchema:
 
 @dataclass
 class ToolSchema:
-    """Container for tool schemas with type information"""
+    """Container for tool schemas with type information.
+    
+    Attributes:
+        schema_type (SchemaType): Type of schema (OpenAPI, XML, or Custom)
+        schema (Dict[str, Any]): The actual schema definition
+        xml_schema (XMLTagSchema, optional): XML-specific schema if applicable
+    """
     schema_type: SchemaType
     schema: Dict[str, Any]
     xml_schema: Optional[XMLTagSchema] = None
 
 @dataclass
 class ToolResult:
-    """Container for tool execution results."""
+    """Container for tool execution results.
+    
+    Attributes:
+        success (bool): Whether the tool execution succeeded
+        output (str): Output message or error description
+    """
     success: bool
     output: str
 
 class Tool(ABC):
-    """Abstract base class for all tools."""
+    """Abstract base class for all tools.
+    
+    Provides the foundation for implementing tools with schema registration
+    and result handling capabilities.
+    
+    Attributes:
+        _schemas (Dict[str, List[ToolSchema]]): Registered schemas for tool methods
+        
+    Methods:
+        get_schemas: Get all registered tool schemas
+        success_response: Create a successful result
+        fail_response: Create a failed result
+    """
     
     def __init__(self):
+        """Initialize tool with empty schema registry."""
         self._schemas: Dict[str, List[ToolSchema]] = {}
         self._register_schemas()
 
@@ -63,11 +114,22 @@ class Tool(ABC):
                 self._schemas[name] = method.tool_schemas
 
     def get_schemas(self) -> Dict[str, List[ToolSchema]]:
-        """Get all registered tool schemas."""
+        """Get all registered tool schemas.
+        
+        Returns:
+            Dict mapping method names to their schema definitions
+        """
         return self._schemas
 
     def success_response(self, data: Union[Dict[str, Any], str]) -> ToolResult:
-        """Create a successful tool result."""
+        """Create a successful tool result.
+        
+        Args:
+            data: Result data (dictionary or string)
+            
+        Returns:
+            ToolResult with success=True and formatted output
+        """
         if isinstance(data, str):
             text = data
         else:
@@ -75,7 +137,14 @@ class Tool(ABC):
         return ToolResult(success=True, output=text)
 
     def fail_response(self, msg: str) -> ToolResult:
-        """Create a failed tool result."""
+        """Create a failed tool result.
+        
+        Args:
+            msg: Error message describing the failure
+            
+        Returns:
+            ToolResult with success=False and error message
+        """
         return ToolResult(success=False, output=msg)
 
 def _add_schema(func, schema: ToolSchema):

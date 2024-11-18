@@ -1,3 +1,14 @@
+"""
+Conversation thread management system for AgentPress.
+
+This module provides comprehensive conversation management, including:
+- Thread creation and persistence
+- Message handling with support for text and images
+- Tool registration and execution
+- LLM interaction with streaming support
+- Error handling and cleanup
+"""
+
 import json
 import logging
 import os
@@ -19,54 +30,60 @@ from agentpress.standard_results_adder import StandardResultsAdder
 class ThreadManager:
     """Manages conversation threads with LLM models and tool execution.
     
-    The ThreadManager provides comprehensive conversation management, handling
-    message threading, tool registration, and LLM interactions.
+    Provides comprehensive conversation management, handling message threading,
+    tool registration, and LLM interactions with support for both standard and
+    XML-based tool execution patterns.
     
     Attributes:
         threads_dir (str): Directory for storing thread files
         tool_registry (ToolRegistry): Registry for managing available tools
         
-    Key Features:
-        - Thread creation and management
-        - Message handling with support for text and images
-        - Tool registration and execution
-        - LLM interaction with streaming support
-        - Error handling and cleanup
+    Methods:
+        add_tool: Register a tool with optional function filtering
+        create_thread: Create a new conversation thread
+        add_message: Add a message to a thread
+        list_messages: Retrieve messages from a thread
+        run_thread: Execute a conversation thread with LLM
     """
 
     def __init__(self, threads_dir: str = "threads"):
         """Initialize ThreadManager.
         
         Args:
-            threads_dir (str): Directory to store thread files
+            threads_dir: Directory to store thread files
+            
+        Notes:
+            Creates the threads directory if it doesn't exist
         """
         self.threads_dir = threads_dir
         self.tool_registry = ToolRegistry()
         os.makedirs(self.threads_dir, exist_ok=True)
 
     def add_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
-        """
-        Add a tool to the ThreadManager.
-        If function_names is provided, only register those specific functions.
-        If function_names is None, register all functions from the tool.
+        """Add a tool to the ThreadManager.
         
         Args:
             tool_class: The tool class to register
-            function_names: Optional list of function names to register
-            **kwargs: Additional keyword arguments passed to tool initialization
+            function_names: Optional list of specific functions to register
+            **kwargs: Additional arguments passed to tool initialization
+            
+        Notes:
+            - If function_names is None, all functions are registered
+            - Tool instances are created with provided kwargs
         """
         self.tool_registry.register_tool(tool_class, function_names, **kwargs)
 
     async def create_thread(self) -> str:
         """Create a new conversation thread.
         
-        Creates a new thread with a unique identifier and initializes its storage.
-        
         Returns:
             str: Unique thread ID for the created thread
             
         Raises:
             IOError: If thread file creation fails
+            
+        Notes:
+            Creates a new thread file with an empty messages list
         """
         thread_id = str(uuid.uuid4())
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
@@ -77,9 +94,6 @@ class ThreadManager:
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
         """Add a message to an existing thread.
         
-        Adds a new message to the specified thread, with support for text content
-        and image attachments. Handles message cleanup and state management.
-        
         Args:
             thread_id: ID of the target thread
             message_data: Message content and metadata
@@ -88,6 +102,11 @@ class ThreadManager:
         Raises:
             FileNotFoundError: If thread doesn't exist
             Exception: For other operation failures
+            
+        Notes:
+            - Handles cleanup of incomplete tool calls
+            - Supports both text and image content
+            - Converts ToolResult instances to strings
         """
         logging.info(f"Adding message to thread {thread_id} with images: {images}")
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
@@ -98,20 +117,25 @@ class ThreadManager:
             
             messages = thread_data["messages"]
             
+            # Handle cleanup of incomplete tool calls
             if message_data['role'] == 'user':
-                last_assistant_index = next((i for i in reversed(range(len(messages))) if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
+                last_assistant_index = next((i for i in reversed(range(len(messages))) 
+                    if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
                 
                 if last_assistant_index is not None:
                     tool_call_count = len(messages[last_assistant_index]['tool_calls'])
-                    tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] if msg['role'] == 'tool')
+                    tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] 
+                                           if msg['role'] == 'tool')
                     
                     if tool_call_count != tool_response_count:
                         await self.cleanup_incomplete_tool_calls(thread_id)
 
+            # Convert ToolResult instances to strings
             for key, value in message_data.items():
                 if isinstance(value, ToolResult):
                     message_data[key] = str(value)
 
+            # Handle image attachments
             if images:
                 if isinstance(message_data['content'], str):
                     message_data['content'] = [{"type": "text", "text": message_data['content']}]
@@ -139,18 +163,27 @@ class ThreadManager:
             logging.error(f"Failed to add message to thread {thread_id}: {e}")
             raise e
 
-    async def list_messages(self, thread_id: str, hide_tool_msgs: bool = False, only_latest_assistant: bool = False, regular_list: bool = True) -> List[Dict[str, Any]]:
-        """
-        Retrieve messages from a thread with optional filtering.
+    async def list_messages(
+        self, 
+        thread_id: str, 
+        hide_tool_msgs: bool = False, 
+        only_latest_assistant: bool = False, 
+        regular_list: bool = True
+    ) -> List[Dict[str, Any]]:
+        """Retrieve messages from a thread with optional filtering.
         
         Args:
-            thread_id (str): ID of the thread to retrieve messages from
-            hide_tool_msgs (bool): If True, excludes tool messages and tool calls
-            only_latest_assistant (bool): If True, returns only the most recent assistant message
-            regular_list (bool): If True, only includes standard message types
-        
+            thread_id: ID of the thread to retrieve messages from
+            hide_tool_msgs: If True, excludes tool messages and tool calls
+            only_latest_assistant: If True, returns only the most recent assistant message
+            regular_list: If True, only includes standard message types
+            
         Returns:
-            List[Dict[str, Any]]: List of messages matching the filter criteria
+            List of messages matching the filter criteria
+            
+        Notes:
+            - Returns empty list if thread doesn't exist
+            - Filters can be combined for different views of the conversation
         """
         thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
         
@@ -185,12 +218,26 @@ class ThreadManager:
             return []
 
     async def cleanup_incomplete_tool_calls(self, thread_id: str):
+        """Clean up incomplete tool calls in a thread.
+        
+        Args:
+            thread_id: ID of the thread to clean up
+            
+        Returns:
+            bool: True if cleanup was performed, False otherwise
+            
+        Notes:
+            - Adds failure results for incomplete tool calls
+            - Maintains thread consistency after interruptions
+        """
         messages = await self.list_messages(thread_id)
-        last_assistant_message = next((m for m in reversed(messages) if m['role'] == 'assistant' and 'tool_calls' in m), None)
+        last_assistant_message = next((m for m in reversed(messages) 
+            if m['role'] == 'assistant' and 'tool_calls' in m), None)
 
         if last_assistant_message:
             tool_calls = last_assistant_message.get('tool_calls', [])
-            tool_responses = [m for m in messages[messages.index(last_assistant_message)+1:] if m['role'] == 'tool']
+            tool_responses = [m for m in messages[messages.index(last_assistant_message)+1:] 
+                            if m['role'] == 'tool']
 
             if len(tool_calls) != len(tool_responses):
                 failed_tool_results = []
@@ -232,8 +279,37 @@ class ThreadManager:
         tool_executor: Optional[ToolExecutorBase] = None,
         results_adder: Optional[ResultsAdderBase] = None
     ) -> Union[Dict[str, Any], AsyncGenerator]:
-        """Run a conversation thread with specified parameters."""
+        """Run a conversation thread with specified parameters.
         
+        Args:
+            thread_id: ID of the thread to run
+            system_message: System message for the conversation
+            model_name: Name of the LLM model to use
+            temperature: Model temperature (0-1)
+            max_tokens: Maximum tokens in response
+            tool_choice: Tool selection strategy ("auto" or "none")
+            temporary_message: Optional message to include temporarily
+            native_tool_calling: Whether to use native LLM function calling
+            xml_tool_calling: Whether to use XML-based tool calling
+            execute_tools: Whether to execute tool calls
+            stream: Whether to stream the response
+            execute_tools_on_stream: Whether to execute tools during streaming
+            parallel_tool_execution: Whether to execute tools in parallel
+            tool_parser: Custom tool parser implementation
+            tool_executor: Custom tool executor implementation
+            results_adder: Custom results adder implementation
+            
+        Returns:
+            Union[Dict[str, Any], AsyncGenerator]: Response or stream
+            
+        Raises:
+            ValueError: If incompatible tool calling options are specified
+            Exception: For other execution failures
+            
+        Notes:
+            - Cannot use both native and XML tool calling simultaneously
+            - Streaming responses include both content and tool results
+        """
         # Validate tool calling configuration
         if native_tool_calling and xml_tool_calling:
             raise ValueError("Cannot use both native LLM tool calling and XML tool calling simultaneously")

@@ -5,10 +5,11 @@ from agentpress.base_processors import ToolParserBase
 # --- Standard Tool Parser Implementation ---
 
 class StandardToolParser(ToolParserBase):
-    """Standard implementation of tool parsing for OpenAI-compatible API responses.
+    """Standard implementation for parsing OpenAI-compatible tool calls.
     
     This implementation handles the parsing of tool calls from responses that follow
-    the OpenAI API format, supporting both complete and streaming responses.
+    the OpenAI API format, supporting both complete and streaming responses. It provides
+    robust handling of function calls, arguments, and streaming chunks.
     
     Methods:
         parse_response: Process complete LLM responses
@@ -16,6 +17,28 @@ class StandardToolParser(ToolParserBase):
     """
     
     async def parse_response(self, response: Any) -> Dict[str, Any]:
+        """Parse a complete LLM response and extract tool calls.
+        
+        Args:
+            response: The complete response from the LLM in OpenAI format
+            
+        Returns:
+            Dict containing:
+                - role (str): Always 'assistant'
+                - content (str): Text content of the response
+                - tool_calls (List[Dict], optional): List of extracted tool calls
+                
+        Notes:
+            Tool calls are extracted in the format:
+            {
+                "id": str,
+                "type": "function",
+                "function": {
+                    "name": str,
+                    "arguments": str (JSON)
+                }
+            }
+        """
         response_message = response.choices[0].message
         message = {
             "role": "assistant",
@@ -38,6 +61,22 @@ class StandardToolParser(ToolParserBase):
         return message
 
     async def parse_stream(self, chunk: Any, tool_calls_buffer: Dict[int, Dict]) -> tuple[Optional[Dict[str, Any]], bool]:
+        """Parse a streaming response chunk and manage tool call accumulation.
+        
+        Args:
+            chunk: A single chunk from the streaming response
+            tool_calls_buffer: Buffer storing incomplete tool calls
+            
+        Returns:
+            Tuple containing:
+                - Optional[Dict]: Parsed message if complete tool calls found, None otherwise
+                - bool: True if stream is complete, False otherwise
+                
+        Notes:
+            - Accumulates partial tool calls in the buffer until they are complete
+            - A tool call is considered complete when it has an ID, name, and valid JSON arguments
+            - The buffer is keyed by tool call index to handle multiple concurrent tool calls
+        """
         content_chunk = ""
         is_complete = False
         has_complete_tool_call = False

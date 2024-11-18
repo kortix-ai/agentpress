@@ -1,3 +1,10 @@
+"""
+XML-specific implementation of tool execution with registry integration.
+
+This module provides specialized tool execution for XML-formatted tool calls,
+with integrated tool registry support and comprehensive error handling.
+"""
+
 from typing import List, Dict, Any, Set, Callable, Optional
 import asyncio
 import json
@@ -7,7 +14,28 @@ from agentpress.tool import ToolResult
 from agentpress.tool_registry import ToolRegistry
 
 class XMLToolExecutor(ToolExecutorBase):
+    """XML-specific implementation of tool execution with registry integration.
+    
+    Provides tool execution specifically designed for XML-formatted tool calls,
+    with integrated tool registry support and proper error handling.
+    
+    Attributes:
+        parallel (bool): Whether to execute tools in parallel
+        tool_registry (ToolRegistry): Registry containing tool implementations
+        
+    Methods:
+        execute_tool_calls: Main execution entry point
+        _execute_parallel: Parallel execution implementation
+        _execute_sequential: Sequential execution implementation
+    """
+    
     def __init__(self, parallel: bool = True, tool_registry: Optional[ToolRegistry] = None):
+        """Initialize executor with execution strategy and tool registry.
+        
+        Args:
+            parallel: Whether to execute tools in parallel (default: True)
+            tool_registry: Registry containing tool implementations (optional)
+        """
         self.parallel = parallel
         self.tool_registry = tool_registry or ToolRegistry()
     
@@ -18,6 +46,21 @@ class XMLToolExecutor(ToolExecutorBase):
         thread_id: str,
         executed_tool_calls: Optional[Set[str]] = None
     ) -> List[Dict[str, Any]]:
+        """Execute XML-formatted tool calls using the configured strategy.
+        
+        Args:
+            tool_calls: List of tool calls to execute
+            available_functions: Dictionary of available functions
+            thread_id: ID of the current conversation thread
+            executed_tool_calls: Set tracking executed tool call IDs
+            
+        Returns:
+            List of tool execution results
+            
+        Notes:
+            - Uses tool registry to look up implementations
+            - Maintains execution history to prevent duplicates
+        """
         logging.info(f"Executing {len(tool_calls)} tool calls")
         if executed_tool_calls is None:
             executed_tool_calls = set()
