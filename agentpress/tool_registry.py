@@ -129,3 +129,16 @@ class ToolRegistry:
             for tool_info in self.tools.values()
             if tool_info['schema'].schema_type == SchemaType.OPENAPI
         ]
+
+    def get_xml_examples(self) -> Dict[str, str]:
+        """Get all XML tag examples from registered tools.
+        
+        Returns:
+            Dict[str, str]: Dictionary mapping tag names to their examples
+        """
+        examples = {}
+        for tool_info in self.xml_tools.values():
+            schema = tool_info['schema']
+            if schema.xml_schema and schema.xml_schema.example:
+                examples[schema.xml_schema.tag_name] = schema.xml_schema.example
+        return examples

@@ -138,7 +138,11 @@ class FilesTool(Tool):
             {"param_name": "file_path", "node_type": "attribute", "path": "."},
             {"param_name": "file_contents", "node_type": "content", "path": "."}
         ],
-        description="Create a new file with the provided contents"
+        example='''
+        <create-file file_path="path/to/file">
+        File contents go here
+        </create-file>
+        '''
     )
     async def create_file(self, file_path: str, file_contents: str) -> ToolResult:
         try:
@@ -177,7 +181,10 @@ class FilesTool(Tool):
         mappings=[
             {"param_name": "file_path", "node_type": "attribute", "path": "."}
         ],
-        description="Delete a file at the given path"
+        example='''
+        <delete-file file_path="path/to/file">
+        </delete-file>
+        '''
     )
     async def delete_file(self, file_path: str) -> ToolResult:
         try:
@@ -221,7 +228,12 @@ class FilesTool(Tool):
             {"param_name": "old_str", "node_type": "element", "path": "old_str"},
             {"param_name": "new_str", "node_type": "element", "path": "new_str"}
         ],
-        description="Replace text in a file"
+        example='''
+        <str-replace file_path="path/to/file">
+            <old_str>text to replace</old_str>
+            <new_str>replacement text</new_str>
+        </str-replace>
+        '''
     )
     async def str_replace(self, file_path: str, old_str: str, new_str: str) -> ToolResult:
         try:

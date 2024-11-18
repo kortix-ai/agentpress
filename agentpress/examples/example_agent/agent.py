@@ -7,16 +7,11 @@ from tools.terminal_tool import TerminalTool
 import logging
 from typing import AsyncGenerator
 import sys
-from agentpress.xml_tool_parser import XMLToolParser
-from agentpress.xml_tool_executor import XMLToolExecutor
-from agentpress.xml_results_adder import XMLResultsAdder
 
 async def run_agent(thread_id: str, max_iterations: int = 5):
-    # Initialize managers and tools
     thread_manager = ThreadManager()
     state_manager = StateManager()
     
-    # Initialize tools
     thread_manager.add_tool(FilesTool)
     thread_manager.add_tool(TerminalTool)
 
@@ -24,12 +19,10 @@ async def run_agent(thread_id: str, max_iterations: int = 5):
         pass
 
     async def pre_iteration():
-        # Update files state
         files_tool = FilesTool()
         await files_tool._init_workspace_state()
 
     async def after_iteration():
-        # Ask the user for a custom message or use the default
         custom_message = input("Enter a message to send (or press Enter to use 'Continue!!!' as message): ")
 
         message_content = custom_message if custom_message else """ 
@@ -151,8 +144,8 @@ Current development environment workspace state:
                     max_tokens=8096,
                     tool_choice="auto",
                     temporary_message=state_message,
-                    native_tool_calling=True,
-                    xml_tool_calling=False,
+                    native_tool_calling=False,
+                    xml_tool_calling=True,
                     stream=True,
                     execute_tools_on_stream=True,
                     parallel_tool_execution=True
