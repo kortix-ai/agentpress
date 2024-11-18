@@ -218,6 +218,7 @@ class ThreadManager:
         tool_choice: str = "auto",
         temporary_message: Optional[Dict[str, Any]] = None,
         use_tools: bool = False,
+        native_tool_calling: bool = False,
         execute_tools: bool = True,
         stream: bool = False,
         immediate_tool_execution: bool = True,
@@ -233,8 +234,13 @@ class ThreadManager:
             if temporary_message:
                 prepared_messages.append(temporary_message)
 
-            tools = self.tool_registry.get_all_tool_schemas() if use_tools else None
-            available_functions = self.tool_registry.get_available_functions() if use_tools else {}
+            tool_schemas = None
+            if use_tools:
+                if native_tool_calling:
+                    tool_schemas = self.tool_registry.get_openapi_schemas()
+                available_functions = self.tool_registry.get_available_functions()
+            else:
+                available_functions = {}
 
             response_processor = StandardLLMResponseProcessor(
                 thread_id=thread_id,
@@ -244,9 +250,9 @@ class ThreadManager:
                 list_messages_callback=self.list_messages,
                 parallel_tool_execution=parallel_tool_execution,
                 threads_dir=self.threads_dir,
-                tool_parser=tool_parser,  # Use provided parser or default to Standard
-                tool_executor=tool_executor,  # Use provided executor or default to Standard
-                results_adder=results_adder  # Use provided adder or default to Standard
+                tool_parser=tool_parser,
+                tool_executor=tool_executor,
+                results_adder=results_adder
             )
 
             llm_response = await self._run_thread_completion(
@@ -254,8 +260,8 @@ class ThreadManager:
                 model_name=model_name,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                tools=tools,
-                tool_choice=tool_choice if use_tools else None,
+                tools=tool_schemas,
+                tool_choice=tool_choice if native_tool_calling else None,
                 stream=stream
             )
 

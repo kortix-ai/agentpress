@@ -1,7 +1,7 @@
 import os
 import asyncio
 from pathlib import Path
-from agentpress.tool import Tool, ToolResult, tool_schema
+from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 
 class FilesTool(Tool):
@@ -111,7 +111,7 @@ class FilesTool(Tool):
         """Update the workspace state after any file operation"""
         await self._init_workspace_state()
 
-    @tool_schema({
+    @openapi_schema({
         "type": "function",
         "function": {
             "name": "create_file",
@@ -132,6 +132,11 @@ class FilesTool(Tool):
             }
         }
     })
+    @xml_schema(
+        tag_name="create-file",
+        attributes={"file_path": "file_path"},
+        param_mapping={".": "file_contents"}
+    )
     async def create_file(self, file_path: str, file_contents: str) -> ToolResult:
         try:
             full_path = os.path.join(self.workspace, file_path)
@@ -147,11 +152,11 @@ class FilesTool(Tool):
         except Exception as e:
             return self.fail_response(f"Error creating file: {str(e)}")
 
-    @tool_schema({
+    @openapi_schema({
         "type": "function",
         "function": {
             "name": "delete_file",
-            "description": "Delete a file at the given path in the workspace",
+            "description": "Delete a file at the given path",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -164,6 +169,10 @@ class FilesTool(Tool):
             }
         }
     })
+    @xml_schema(
+        tag_name="delete-file",
+        attributes={"file_path": "file_path"}
+    )
     async def delete_file(self, file_path: str) -> ToolResult:
         try:
             full_path = os.path.join(self.workspace, file_path)
@@ -174,11 +183,11 @@ class FilesTool(Tool):
         except Exception as e:
             return self.fail_response(f"Error deleting file: {str(e)}")
 
-    @tool_schema({
+    @openapi_schema({
         "type": "function",
         "function": {
             "name": "str_replace",
-            "description": "Replace a specific string with another string in a file. The old string must appear exactly once in the file.",
+            "description": "Replace text in file",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -199,6 +208,14 @@ class FilesTool(Tool):
             }
         }
     })
+    @xml_schema(
+        tag_name="str-replace",
+        attributes={"file_path": "file_path"},
+        param_mapping={
+            "old_str": "old_str",
+            "new_str": "new_str"
+        }
+    )
     async def str_replace(self, file_path: str, old_str: str, new_str: str) -> ToolResult:
         try:
             full_path = Path(os.path.join(self.workspace, file_path))
@@ -230,7 +247,6 @@ class FilesTool(Tool):
             
         except Exception as e:
             return self.fail_response(f"Error replacing string: {str(e)}")
-
 
 if __name__ == "__main__":
     async def test_files_tool():

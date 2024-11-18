@@ -1,18 +1,11 @@
 import os
 import asyncio
 import subprocess
-from agentpress.tool import Tool, ToolResult, tool_schema
+from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 
 class TerminalTool(Tool):
-    """Terminal command execution tool for workspace operations.
-    
-    Provides secure command execution within a workspace directory,
-    with command history tracking and output management.
-    
-    Attributes:
-        workspace (str): Path to the workspace directory
-    """
+    """Terminal command execution tool for workspace operations."""
     
     def __init__(self):
         super().__init__()
@@ -31,11 +24,11 @@ class TerminalTool(Tool):
         })
         await self.state_manager.set("terminal_history", history)
 
-    @tool_schema({
+    @openapi_schema({
         "type": "function",
         "function": {
             "name": "execute_command",
-            "description": "Execute a shell command in the workspace directory. Commands are executed in an isolated environment.",
+            "description": "Execute a shell command in the workspace directory",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -48,27 +41,28 @@ class TerminalTool(Tool):
             }
         }
     })
+    @xml_schema(
+        tag_name="execute-command",
+        attributes={},
+        param_mapping={".": "command"}
+    )
     async def execute_command(self, command: str) -> ToolResult:
         original_dir = os.getcwd()
         try:
-            # Always change to workspace directory before executing
             os.chdir(self.workspace)
             
-            # Execute command
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=self.workspace  # Explicitly set working directory
+                cwd=self.workspace
             )
             stdout, stderr = await process.communicate()
             
-            # Prepare output
             output = stdout.decode() if stdout else ""
             error = stderr.decode() if stderr else ""
             success = process.returncode == 0
             
-            # Update state with command history
             await self._update_command_history(
                 command=command,
                 output=output + error,
@@ -93,5 +87,4 @@ class TerminalTool(Tool):
             )
             return self.fail_response(f"Error executing command: {str(e)}")
         finally:
-            # Always restore original directory
             os.chdir(original_dir)

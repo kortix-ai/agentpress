@@ -4,86 +4,108 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Modern Landing Page</title>
+    <link rel="preload" href="styles.css" as="style">
+    <link rel="preload" href="script.js" as="script">
     <link rel="stylesheet" href="styles.css">
-    <script src="script.js" defer></script>
+    <meta name="description" content="Innovative solutions for modern business challenges">
+    <meta name="keywords" content="business, technology, innovation, solutions">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+    <meta name="theme-color" content="#3498db">
 </head>
 <body>
     <header>
         <nav>
             <div class="logo">Brand</div>
-            <div class="menu-toggle" aria-label="Toggle mobile menu">
+            <div class="nav-links">
+                <a href="#home">Home</a>
+                <a href="#features">Features</a>
+                <a href="#about">About</a>
+                <a href="#contact" class="cta-button">Contact</a>
+            </div>
+            <div class="mobile-menu">
                 <span></span>
                 <span></span>
                 <span></span>
             </div>
-            <ul class="nav-menu">
-                <li><a href="#home">Home</a></li>
-                <li><a href="#features">Features</a></li>
-                <li><a href="#about">About</a></li>
-                <li><a href="#contact">Contact</a></li>
-            </ul>
         </nav>
     </header>
 
     <main>
         <section id="home" class="hero">
             <div class="hero-content">
-                <h1>Welcome to Our Platform</h1>
-                <p>Simplify your workflow with our innovative solution</p>
-                <a href="#" class="cta-button">Get Started</a>
+                <h1>Transform Your Business</h1>
+                <p>Innovative solutions for modern challenges</p>
+                <a href="#features" class="primary-button">Get Started</a>
             </div>
         </section>
 
         <section id="features" class="features">
             <div class="feature-grid">
                 <div class="feature">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="feature-icon">
-                        <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m3.343-5.657L5.929 5.929m12.728 12.728 1.414 1.414M6.343 5.657 4.929 4.243m12.728 12.728 1.414-1.414"/>
-                        <circle cx="12" cy="12" r="4"/>
+                    <svg class="feature-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
                     </svg>
-                    <h3>Efficiency</h3>
-                    <p>Streamline your process with our first key feature</p>
+                    <h3>Smart Design</h3>
+                    <p>Elegant and intuitive user interfaces</p>
                 </div>
                 <div class="feature">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="feature-icon">
-                        <path d="M20 7l-8-4-8 4m16 0-8 4m8-4v10l-8 4m0-10L4 7m8 4v10m0-10l8-4"/>
-                        <circle cx="12" cy="12" r="3"/>
+                    <svg class="feature-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/>
+                    </svg>
+                    <h3>Performance</h3>
+                    <p>High-speed, optimized solutions</p>
+                </div>
+                <div class="feature">
+                    <svg class="feature-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-8c0 1.93-1.57 3.5-3.5 3.5S8.5 13.93 8.5 12 10.07 8.5 12 8.5s3.5 1.57 3.5 3.5z"/>
                     </svg>
                     <h3>Scalability</h3>
-                    <p>Enhance productivity with our second key feature</p>
-                </div>
-                <div class="feature">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="feature-icon">
-                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <h3>Reliability</h3>
-                    <p>Optimize your workflow with our third key feature</p>
+                    <p>Grow without limitations</p>
                 </div>
             </div>
         </section>
 
         <section id="about" class="about">
             <div class="about-content">
-                <h2>About Us</h2>
-                <p>We are dedicated to creating simple, powerful solutions that transform how you work.</p>
+                <h2>About Our Company</h2>
+                <div class="about-grid">
+                    <div class="about-text">
+                        <p>We are a passionate team dedicated to delivering cutting-edge solutions that transform businesses. Our mission is to empower organizations through innovative technology and strategic design.</p>
+                        <p>With years of experience and a commitment to excellence, we help our clients achieve their goals and stay ahead in a rapidly evolving digital landscape.</p>
+                    </div>
+                    <div class="about-image">
+                        <img src="https://via.placeholder.com/500x300" alt="Team Working">
+                    </div>
+                </div>
             </div>
         </section>
 
         <section id="contact" class="contact">
-            <div class="contact-form">
+            <div class="contact-container">
                 <h2>Contact Us</h2>
-                <form>
-                    <input type="text" placeholder="Name" required>
-                    <input type="email" placeholder="Email" required>
-                    <textarea placeholder="Your Message" required></textarea>
-                    <button type="submit">Send Message</button>
+                <form id="contact-form" class="contact-form">
+                    <input type="text" name="name" placeholder="Your Name" required>
+                    <input type="email" name="email" placeholder="Your Email" required>
+                    <textarea name="message" placeholder="Your Message" required></textarea>
+                    <button type="submit" class="submit-button">Send Message</button>
                 </form>
             </div>
         </section>
     </main>
 
     <footer>
-        <p>&copy; 2023 Your Brand. All rights reserved.</p>
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="#home">Home</a>
+                <a href="#features">Features</a>
+                <a href="#about">About</a>
+                <a href="#contact">Contact</a>
+            </div>
+            <p>&copy; 2023 Brand. All rights reserved.</p>
+        </div>
     </footer>
+
+    <script src="script.js"></script>
 </body>
 </html>
