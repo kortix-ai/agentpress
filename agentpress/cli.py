@@ -59,6 +59,7 @@ STARTER_EXAMPLES = {
             "agent.py": "agents/simple_web_dev/agent.py",
             "tools/files_tool.py": "agents/simple_web_dev/tools/files_tool.py",
             "tools/terminal_tool.py": "agents/simple_web_dev/tools/terminal_tool.py",
+            ".env.example": "agents/.env.example"
         }
     }
 }
