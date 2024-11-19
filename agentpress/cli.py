@@ -222,20 +222,7 @@ def init():
         components_dir_path = os.path.abspath(components_dir)
         copy_module_files(package_dir, components_dir_path, all_files)
         
-        # Update paths in thread_manager.py and state_manager.py
-        project_dir = os.getcwd()
-        thread_manager_path = os.path.join(components_dir_path, "thread_manager.py")
-        state_manager_path = os.path.join(components_dir_path, "state_manager.py")
 
-        if os.path.exists(thread_manager_path):
-            update_file_paths(thread_manager_path, {
-                'threads_dir: str = "threads"': f'threads_dir: str = "{os.path.join(project_dir, "threads")}"'
-            })
-
-        if os.path.exists(state_manager_path):
-            update_file_paths(state_manager_path, {
-                'store_file: str = "state.json"': f'store_file: str = "{os.path.join(project_dir, "state.json")}"'
-            })
 
         # Copy example only if a valid example (not None) was selected
         if selected_example and selected_example in STARTER_EXAMPLES:
@@ -245,9 +232,7 @@ def init():
                 os.getcwd(),  # Use current working directory
                 STARTER_EXAMPLES[selected_example]["files"]
             )
-            # Create threads directory
-            os.makedirs(os.path.join(project_dir, "threads"), exist_ok=True)
-        
+            
         click.echo("\n✨ Success! Your AgentPress is ready.")
         click.echo(f"\n📁 Components created in: {click.style(components_dir_path, fg='green')}")
         if selected_example and selected_example in STARTER_EXAMPLES:
