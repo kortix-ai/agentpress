@@ -121,6 +121,7 @@ async def run_agent(thread_id: str, use_xml: bool = True, max_iterations: int = 
         await pre_iteration()
 
         state = await state_manager.export_store()
+        
         state_message = {
             "role": "user",
             "content": f"""
