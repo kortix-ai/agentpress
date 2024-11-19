@@ -96,7 +96,7 @@ class FilesTool(Tool):
         pass
 ```
 
-4. Use the Thread Manager with streaming and tool execution:
+4. Use the Thread Manager with tool execution:
 ```python
 import asyncio
 from agentpress.thread_manager import ThreadManager
@@ -124,19 +124,10 @@ async def main():
             "content": "You are a helpful assistant with calculation abilities."
         },
         model_name="anthropic/claude-3-5-sonnet-latest",
-        stream=True,
-        native_tool_calling=True,
         execute_tools=True,
-        execute_tools_on_stream=True
+        native_tool_calling=True, # Contrary to xml_tool_calling = True
+        parallel_tool_execution=True # Will execute tools in parallel, contrary to sequential (one after another)
     )
-
-    # Handle streaming response
-    if isinstance(response, AsyncGenerator):
-        async for chunk in response:
-            if hasattr(chunk.choices[0], 'delta'):
-                delta = chunk.choices[0].delta
-                if hasattr(delta, 'content') and delta.content:
-                    print(delta.content, end='', flush=True)
 
 asyncio.run(main())
 ```
