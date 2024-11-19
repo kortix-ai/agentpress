@@ -11,21 +11,22 @@ This module provides comprehensive conversation management, including:
 
 import json
 import logging
-import os
+import asyncio
 import uuid
 from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator
 from agentpress.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
-from agentpress.llm_response_processor import LLMResponseProcessor
-from agentpress.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
+from agentpress.processor.llm_response_processor import LLMResponseProcessor
+from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
+from agentpress.db_connection import DBConnection
 
-from agentpress.xml_tool_parser import XMLToolParser
-from agentpress.xml_tool_executor import XMLToolExecutor
-from agentpress.xml_results_adder import XMLResultsAdder
-from agentpress.standard_tool_parser import StandardToolParser
-from agentpress.standard_tool_executor import StandardToolExecutor
-from agentpress.standard_results_adder import StandardResultsAdder
+from agentpress.processor.xml.xml_tool_parser import XMLToolParser
+from agentpress.processor.xml.xml_tool_executor import XMLToolExecutor
+from agentpress.processor.xml.xml_results_adder import XMLResultsAdder
+from agentpress.processor.standard.standard_tool_parser import StandardToolParser
+from agentpress.processor.standard.standard_tool_executor import StandardToolExecutor
+from agentpress.processor.standard.standard_results_adder import StandardResultsAdder
 
 class ThreadManager:
     """Manages conversation threads with LLM models and tool execution.
@@ -33,204 +34,163 @@ class ThreadManager:
     Provides comprehensive conversation management, handling message threading,
     tool registration, and LLM interactions with support for both standard and
     XML-based tool execution patterns.
-    
-    Attributes:
-        threads_dir (str): Directory for storing thread files
-        tool_registry (ToolRegistry): Registry for managing available tools
-        
-    Methods:
-        add_tool: Register a tool with optional function filtering
-        create_thread: Create a new conversation thread
-        add_message: Add a message to a thread
-        list_messages: Retrieve messages from a thread
-        run_thread: Execute a conversation thread with LLM
     """
 
-    def __init__(self, threads_dir: str = "threads"):
-        """Initialize ThreadManager.
-        
-        Args:
-            threads_dir: Directory to store thread files
-            
-        Notes:
-            Creates the threads directory if it doesn't exist
-        """
-        self.threads_dir = threads_dir
+    def __init__(self):
+        """Initialize ThreadManager."""
+        self.db = DBConnection()
         self.tool_registry = ToolRegistry()
-        os.makedirs(self.threads_dir, exist_ok=True)
 
     def add_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
-        """Add a tool to the ThreadManager.
-        
-        Args:
-            tool_class: The tool class to register
-            function_names: Optional list of specific functions to register
-            **kwargs: Additional arguments passed to tool initialization
-            
-        Notes:
-            - If function_names is None, all functions are registered
-            - Tool instances are created with provided kwargs
-        """
+        """Add a tool to the ThreadManager."""
         self.tool_registry.register_tool(tool_class, function_names, **kwargs)
 
     async def create_thread(self) -> str:
-        """Create a new conversation thread.
-        
-        Returns:
-            str: Unique thread ID for the created thread
-            
-        Raises:
-            IOError: If thread file creation fails
-            
-        Notes:
-            Creates a new thread file with an empty messages list
-        """
+        """Create a new conversation thread."""
         thread_id = str(uuid.uuid4())
-        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
-        with open(thread_path, 'w') as f:
-            json.dump({"messages": []}, f)
+        await self.db.execute(
+            "INSERT INTO threads (thread_id, messages) VALUES (?, ?)",
+            (thread_id, json.dumps([]))
+        )
         return thread_id
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
-        """Add a message to an existing thread.
-        
-        Args:
-            thread_id: ID of the target thread
-            message_data: Message content and metadata
-            images: Optional list of image data dictionaries
-            
-        Raises:
-            FileNotFoundError: If thread doesn't exist
-            Exception: For other operation failures
-            
-        Notes:
-            - Handles cleanup of incomplete tool calls
-            - Supports both text and image content
-            - Converts ToolResult instances to strings
-        """
+        """Add a message to an existing thread."""
         logging.info(f"Adding message to thread {thread_id} with images: {images}")
-        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
         
         try:
-            with open(thread_path, 'r') as f:
-                thread_data = json.load(f)
-            
-            messages = thread_data["messages"]
-            
-            # Handle cleanup of incomplete tool calls
-            if message_data['role'] == 'user':
-                last_assistant_index = next((i for i in reversed(range(len(messages))) 
-                    if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
-                
-                if last_assistant_index is not None:
-                    tool_call_count = len(messages[last_assistant_index]['tool_calls'])
-                    tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] 
-                                           if msg['role'] == 'tool')
+            async with self.db.transaction() as conn:
+                # Handle cleanup of incomplete tool calls
+                if message_data['role'] == 'user':
+                    messages = await self.get_messages(thread_id)
+                    last_assistant_index = next((i for i in reversed(range(len(messages))) 
+                        if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
                     
-                    if tool_call_count != tool_response_count:
-                        await self.cleanup_incomplete_tool_calls(thread_id)
+                    if last_assistant_index is not None:
+                        tool_call_count = len(messages[last_assistant_index]['tool_calls'])
+                        tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] 
+                                               if msg['role'] == 'tool')
+                        
+                        if tool_call_count != tool_response_count:
+                            await self.cleanup_incomplete_tool_calls(thread_id)
 
-            # Convert ToolResult instances to strings
-            for key, value in message_data.items():
-                if isinstance(value, ToolResult):
-                    message_data[key] = str(value)
+                # Convert ToolResult instances to strings
+                for key, value in message_data.items():
+                    if isinstance(value, ToolResult):
+                        message_data[key] = str(value)
 
-            # Handle image attachments
-            if images:
-                if isinstance(message_data['content'], str):
-                    message_data['content'] = [{"type": "text", "text": message_data['content']}]
-                elif not isinstance(message_data['content'], list):
-                    message_data['content'] = []
+                # Handle image attachments
+                if images:
+                    if isinstance(message_data['content'], str):
+                        message_data['content'] = [{"type": "text", "text": message_data['content']}]
+                    elif not isinstance(message_data['content'], list):
+                        message_data['content'] = []
 
-                for image in images:
-                    image_content = {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{image['content_type']};base64,{image['base64']}",
-                            "detail": "high"
+                    for image in images:
+                        image_content = {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{image['content_type']};base64,{image['base64']}",
+                                "detail": "high"
+                            }
                         }
-                    }
-                    message_data['content'].append(image_content)
+                        message_data['content'].append(image_content)
 
-            messages.append(message_data)
-            thread_data["messages"] = messages
+                # Get current messages
+                row = await self.db.fetch_one(
+                    "SELECT messages FROM threads WHERE thread_id = ?",
+                    (thread_id,)
+                )
+                if not row:
+                    raise ValueError(f"Thread {thread_id} not found")
+                
+                messages = json.loads(row[0])
+                messages.append(message_data)
+                
+                # Update thread
+                await conn.execute(
+                    """
+                    UPDATE threads 
+                    SET messages = ?, updated_at = CURRENT_TIMESTAMP 
+                    WHERE thread_id = ?
+                    """,
+                    (json.dumps(messages), thread_id)
+                )
+
+                logging.info(f"Message added to thread {thread_id}: {message_data}")
             
-            with open(thread_path, 'w') as f:
-                json.dump(thread_data, f)
-            
-            logging.info(f"Message added to thread {thread_id}: {message_data}")
         except Exception as e:
             logging.error(f"Failed to add message to thread {thread_id}: {e}")
             raise e
 
-    async def list_messages(
+    async def get_messages(
         self, 
-        thread_id: str, 
-        hide_tool_msgs: bool = False, 
-        only_latest_assistant: bool = False, 
+        thread_id: str,
+        hide_tool_msgs: bool = False,
+        only_latest_assistant: bool = False,
         regular_list: bool = True
     ) -> List[Dict[str, Any]]:
-        """Retrieve messages from a thread with optional filtering.
-        
-        Args:
-            thread_id: ID of the thread to retrieve messages from
-            hide_tool_msgs: If True, excludes tool messages and tool calls
-            only_latest_assistant: If True, returns only the most recent assistant message
-            regular_list: If True, only includes standard message types
-            
-        Returns:
-            List of messages matching the filter criteria
-            
-        Notes:
-            - Returns empty list if thread doesn't exist
-            - Filters can be combined for different views of the conversation
-        """
-        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
-        
-        try:
-            with open(thread_path, 'r') as f:
-                thread_data = json.load(f)
-            messages = thread_data["messages"]
-            
-            if only_latest_assistant:
-                for msg in reversed(messages):
-                    if msg.get('role') == 'assistant':
-                        return [msg]
-                return []
-            
-            filtered_messages = messages
-            
-            if hide_tool_msgs:
-                filtered_messages = [
-                    {k: v for k, v in msg.items() if k != 'tool_calls'}
-                    for msg in filtered_messages
-                    if msg.get('role') != 'tool'
-                ]
-        
-            if regular_list:
-                filtered_messages = [
-                    msg for msg in filtered_messages
-                    if msg.get('role') in ['system', 'assistant', 'tool', 'user']
-                ]
-            
-            return filtered_messages
-        except FileNotFoundError:
+        """Retrieve messages from a thread with optional filtering."""
+        row = await self.db.fetch_one(
+            "SELECT messages FROM threads WHERE thread_id = ?",
+            (thread_id,)
+        )
+        if not row:
             return []
+        
+        messages = json.loads(row[0])
+        
+        if only_latest_assistant:
+            for msg in reversed(messages):
+                if msg.get('role') == 'assistant':
+                    return [msg]
+            return []
+        
+        if hide_tool_msgs:
+            messages = [
+                {k: v for k, v in msg.items() if k != 'tool_calls'}
+                for msg in messages
+                if msg.get('role') != 'tool'
+            ]
+        
+        if regular_list:
+            messages = [
+                msg for msg in messages
+                if msg.get('role') in ['system', 'assistant', 'tool', 'user']
+            ]
+        
+        return messages
+
+    async def _update_message(self, thread_id: str, message: Dict[str, Any]):
+        """Update an existing message in the thread."""
+        async with self.db.transaction() as conn:
+            row = await self.db.fetch_one(
+                "SELECT messages FROM threads WHERE thread_id = ?",
+                (thread_id,)
+            )
+            if not row:
+                return
+            
+            messages = json.loads(row[0])
+            
+            # Find and update the last assistant message
+            for i in reversed(range(len(messages))):
+                if messages[i].get('role') == 'assistant':
+                    messages[i] = message
+                    break
+            
+            await conn.execute(
+                """
+                UPDATE threads 
+                SET messages = ?, updated_at = CURRENT_TIMESTAMP 
+                WHERE thread_id = ?
+                """,
+                (json.dumps(messages), thread_id)
+            )
 
     async def cleanup_incomplete_tool_calls(self, thread_id: str):
-        """Clean up incomplete tool calls in a thread.
-        
-        Args:
-            thread_id: ID of the thread to clean up
-            
-        Returns:
-            bool: True if cleanup was performed, False otherwise
-            
-        Notes:
-            - Adds failure results for incomplete tool calls
-            - Maintains thread consistency after interruptions
-        """
-        messages = await self.list_messages(thread_id)
+        """Clean up incomplete tool calls in a thread."""
+        messages = await self.get_messages(thread_id)
         last_assistant_message = next((m for m in reversed(messages) 
             if m['role'] == 'assistant' and 'tool_calls' in m), None)
 
@@ -253,10 +213,15 @@ class ThreadManager:
                 assistant_index = messages.index(last_assistant_message)
                 messages[assistant_index+1:assistant_index+1] = failed_tool_results
 
-                thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
-                with open(thread_path, 'w') as f:
-                    json.dump({"messages": messages}, f)
-
+                async with self.db.transaction() as conn:
+                    await conn.execute(
+                        """
+                        UPDATE threads 
+                        SET messages = ?, updated_at = CURRENT_TIMESTAMP 
+                        WHERE thread_id = ?
+                        """,
+                        (json.dumps(messages), thread_id)
+                    )
                 return True
         return False
 
@@ -326,7 +291,7 @@ class ThreadManager:
                 results_adder = XMLResultsAdder(self) if xml_tool_calling else StandardResultsAdder(self)
 
         try:
-            messages = await self.list_messages(thread_id)
+            messages = await self.get_messages(thread_id)
             prepared_messages = [system_message] + messages
             if temporary_message:
                 prepared_messages.append(temporary_message)
@@ -345,9 +310,8 @@ class ThreadManager:
                 available_functions=available_functions,
                 add_message_callback=self.add_message,
                 update_message_callback=self._update_message,
-                list_messages_callback=self.list_messages,
+                get_messages_callback=self.get_messages,
                 parallel_tool_execution=parallel_tool_execution,
-                threads_dir=self.threads_dir,
                 tool_parser=tool_parser,
                 tool_executor=tool_executor,
                 results_adder=results_adder
@@ -404,25 +368,6 @@ class ThreadManager:
             tool_choice=tool_choice,
             stream=stream
         )
-
-    async def _update_message(self, thread_id: str, message: Dict[str, Any]):
-        """Update an existing message in the thread."""
-        thread_path = os.path.join(self.threads_dir, f"{thread_id}.json")
-        try:
-            with open(thread_path, 'r') as f:
-                thread_data = json.load(f)
-            
-            # Find and update the last assistant message
-            for i in reversed(range(len(thread_data["messages"]))):
-                if thread_data["messages"][i]["role"] == "assistant":
-                    thread_data["messages"][i] = message
-                    break
-            
-            with open(thread_path, 'w') as f:
-                json.dump(thread_data, f)
-        except Exception as e:
-            logging.error(f"Error updating message in thread {thread_id}: {e}")
-            raise e
 
 if __name__ == "__main__":
     import asyncio
@@ -503,7 +448,7 @@ if __name__ == "__main__":
             print("\n✨ Response completed\n")
 
         # Display final thread state
-        messages = await thread_manager.list_messages(thread_id)
+        messages = await thread_manager.get_messages(thread_id)
         print("\n📝 Final Thread State:")
         for msg in messages:
             role = msg.get('role', 'unknown')

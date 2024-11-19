@@ -172,7 +172,7 @@ class ResultsAdderBase(ABC):
     Attributes:
         add_message: Callback for adding new messages
         update_message: Callback for updating existing messages
-        list_messages: Callback for retrieving thread messages
+        get_messages: Callback for retrieving thread messages
         message_added: Flag tracking if initial message has been added
     """
     
@@ -184,7 +184,7 @@ class ResultsAdderBase(ABC):
         """
         self.add_message = thread_manager.add_message
         self.update_message = thread_manager._update_message
-        self.list_messages = thread_manager.list_messages
+        self.get_messages = thread_manager.get_messages
         self.message_added = False
 
     @abstractmethod

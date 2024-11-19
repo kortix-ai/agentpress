@@ -91,12 +91,13 @@ file contents here
 async def run_agent(thread_id: str, use_xml: bool = True, max_iterations: int = 5):
     """Run the development agent with specified configuration."""
     thread_manager = ThreadManager()
-    state_manager = StateManager()
-    
-    thread_manager.add_tool(FilesTool)
-    thread_manager.add_tool(TerminalTool)
 
-    # Combine base message with XML format if needed
+    store_id = await StateManager.create_store()
+    state_manager = StateManager(store_id)
+    
+    thread_manager.add_tool(FilesTool, store_id=store_id)
+    thread_manager.add_tool(TerminalTool, store_id=store_id)
+
     system_message = {
         "role": "system",
         "content": BASE_SYSTEM_MESSAGE + (XML_FORMAT if use_xml else "")
@@ -199,6 +200,7 @@ def main():
     
     async def async_main():
         thread_manager = ThreadManager()
+        
         thread_id = await thread_manager.create_thread()
         await thread_manager.add_message(
             thread_id, 

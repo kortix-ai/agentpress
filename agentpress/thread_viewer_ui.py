@@ -1,21 +1,8 @@
 import streamlit as st
-import json
-import os
 from datetime import datetime
-
-def load_thread_files(threads_dir: str):
-    """Load all thread files from the threads directory."""
-    thread_files = []
-    if os.path.exists(threads_dir):
-        for file in os.listdir(threads_dir):
-            if file.endswith('.json'):
-                thread_files.append(file)
-    return thread_files
-
-def load_thread_content(thread_file: str, threads_dir: str):
-    """Load the content of a specific thread file."""
-    with open(os.path.join(threads_dir, thread_file), 'r') as f:
-        return json.load(f)
+from agentpress.thread_manager import ThreadManager
+from agentpress.db_connection import DBConnection
+import asyncio
 
 def format_message_content(content):
     """Format message content handling both string and list formats."""
@@ -31,89 +18,123 @@ def format_message_content(content):
         return "\n".join(formatted_content)
     return str(content)
 
+async def load_threads():
+    """Load all thread IDs from the database."""
+    db = DBConnection()
+    rows = await db.fetch_all("SELECT thread_id, created_at FROM threads ORDER BY created_at DESC")
+    return rows
+
+async def load_thread_content(thread_id: str):
+    """Load the content of a specific thread from the database."""
+    thread_manager = ThreadManager()
+    return await thread_manager.get_messages(thread_id)
+
+def render_message(role, content, avatar):
+    """Render a message with a consistent chat-like style."""
+    # Create columns for avatar and message
+    col1, col2 = st.columns([1, 11])
+    
+    # Style based on role
+    if role == "assistant":
+        bgcolor = "rgba(25, 25, 25, 0.05)"
+    elif role == "user":
+        bgcolor = "rgba(25, 120, 180, 0.05)"
+    elif role == "system":
+        bgcolor = "rgba(180, 25, 25, 0.05)"
+    else:
+        bgcolor = "rgba(100, 100, 100, 0.05)"
+    
+    # Display avatar in first column
+    with col1:
+        st.markdown(f"<div style='text-align: center; font-size: 24px;'>{avatar}</div>", unsafe_allow_html=True)
+    
+    # Display message in second column
+    with col2:
+        st.markdown(
+            f"""
+            <div style='background-color: {bgcolor}; padding: 10px; border-radius: 5px;'>
+                <strong>{role.upper()}</strong><br>
+                {content}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
 def main():
     st.title("Thread Viewer")
     
-    # Directory selection in sidebar
-    st.sidebar.title("Configuration")
+    # Initialize thread data in session state
+    if 'threads' not in st.session_state:
+        st.session_state.threads = asyncio.run(load_threads())
     
-    # Initialize session state with default directory
-    if 'threads_dir' not in st.session_state:
-        default_dir = "./threads"
-        if os.path.exists(default_dir):
-            st.session_state.threads_dir = default_dir
-
-    # Use Streamlit's file uploader for directory selection
-    uploaded_dir = st.sidebar.text_input(
-        "Enter threads directory path",
-        value="./threads" if not st.session_state.threads_dir else st.session_state.threads_dir,
-        placeholder="/path/to/threads",
-        help="Enter the full path to your threads directory"
+    # Thread selection in sidebar
+    st.sidebar.title("Select Thread")
+    
+    if not st.session_state.threads:
+        st.warning("No threads found in database")
+        return
+    
+    # Format thread options with creation date
+    thread_options = {
+        f"{row[0]} ({datetime.fromisoformat(row[1]).strftime('%Y-%m-%d %H:%M')})"
+        : row[0] for row in st.session_state.threads
+    }
+    
+    selected_thread_display = st.sidebar.selectbox(
+        "Choose a thread",
+        options=list(thread_options.keys()),
     )
-
-    # Automatically load directory if it exists
-    if os.path.exists(uploaded_dir):
-        st.session_state.threads_dir = uploaded_dir
-    else:
-        st.sidebar.error("Directory not found!")
     
-    if st.session_state.threads_dir:
-        st.sidebar.success(f"Selected directory: {st.session_state.threads_dir}")
-        threads_dir = st.session_state.threads_dir
+    if selected_thread_display:
+        # Get the actual thread ID from the display string
+        selected_thread_id = thread_options[selected_thread_display]
         
-        # Thread selection
-        st.sidebar.title("Select Thread")
-        thread_files = load_thread_files(threads_dir)
+        # Display thread ID in sidebar
+        st.sidebar.text(f"Thread ID: {selected_thread_id}")
         
-        if not thread_files:
-            st.warning(f"No thread files found in '{threads_dir}'")
-            return
+        # Add refresh button
+        if st.sidebar.button("🔄 Refresh Thread"):
+            st.session_state.threads = asyncio.run(load_threads())
+            st.experimental_rerun()
         
-        selected_thread = st.sidebar.selectbox(
-            "Choose a thread file",
-            thread_files,
-            format_func=lambda x: f"Thread: {x.replace('.json', '')}"
-        )
+        # Load and display messages
+        messages = asyncio.run(load_thread_content(selected_thread_id))
         
-        if selected_thread:
-            thread_data = load_thread_content(selected_thread, threads_dir)
-            messages = thread_data.get("messages", [])
+        # Display messages in chat-like interface
+        for message in messages:
+            role = message.get("role", "unknown")
+            content = message.get("content", "")
             
-            # Display thread ID in sidebar
-            st.sidebar.text(f"Thread ID: {selected_thread.replace('.json', '')}")
+            # Determine avatar based on role
+            if role == "assistant":
+                avatar = "🤖"
+            elif role == "user":
+                avatar = "👤"
+            elif role == "system":
+                avatar = "⚙️"
+            elif role == "tool":
+                avatar = "🔧"
+            else:
+                avatar = "❓"
             
-            # Display messages in chat-like interface
-            for message in messages:
-                role = message.get("role", "unknown")
-                content = message.get("content", "")
-                
-                # Determine avatar based on role
-                if role == "assistant":
-                    avatar = "🤖"
-                elif role == "user":
-                    avatar = "👤"
-                elif role == "system":
-                    avatar = "⚙️"
-                elif role == "tool":
-                    avatar = "🔧"
-                else:
-                    avatar = "❓"
-                
-                # Format the message container
-                with st.chat_message(role, avatar=avatar):
-                    formatted_content = format_message_content(content)
-                    st.markdown(formatted_content)
-                    
-                    if "tool_calls" in message:
-                        st.markdown("**Tool Calls:**")
-                        for tool_call in message["tool_calls"]:
-                            st.code(
-                                f"Function: {tool_call['function']['name']}\n"
-                                f"Arguments: {tool_call['function']['arguments']}",
-                                language="json"
-                            )
-    else:
-        st.sidebar.warning("Please enter and load a threads directory")
+            # Format the content
+            formatted_content = format_message_content(content)
+            
+            # Render the message
+            render_message(role, formatted_content, avatar)
+            
+            # Display tool calls if present
+            if "tool_calls" in message:
+                with st.expander("🛠️ Tool Calls"):
+                    for tool_call in message["tool_calls"]:
+                        st.code(
+                            f"Function: {tool_call['function']['name']}\n"
+                            f"Arguments: {tool_call['function']['arguments']}",
+                            language="json"
+                        )
+            
+            # Add some spacing between messages
+            st.markdown("<br>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

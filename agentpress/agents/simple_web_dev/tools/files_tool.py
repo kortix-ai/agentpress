@@ -1,8 +1,9 @@
 import os
 import asyncio
 from pathlib import Path
-from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
+from agentpress.tools.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
+from typing import Optional
 
 class FilesTool(Tool):
     """File management tool for creating, updating, and deleting files.
@@ -53,11 +54,11 @@ class FilesTool(Tool):
         ".sql"
     }
 
-    def __init__(self):
+    def __init__(self, store_id: Optional[str] = None):
         super().__init__()
         self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
         os.makedirs(self.workspace, exist_ok=True)
-        self.state_manager = StateManager("state.json")
+        self.state_manager = StateManager(store_id)
         self.SNIPPET_LINES = 4  # Number of context lines to show around edits
         asyncio.create_task(self._init_workspace_state())
 
