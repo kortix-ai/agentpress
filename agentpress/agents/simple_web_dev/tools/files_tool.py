@@ -1,7 +1,7 @@
 import os
 import asyncio
 from pathlib import Path
-from agentpress.tools.tool import Tool, ToolResult, openapi_schema, xml_schema
+from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
 from typing import Optional
 

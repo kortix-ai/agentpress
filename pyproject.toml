@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "agentpress"
-version = "0.1.9"
+version = "0.1.10"
 description = "Building blocks for AI Agents"
 authors = ["marko-kraemer <mail@markokraemer.com>"]
 readme = "README.md"
