@@ -11,10 +11,10 @@ This module provides comprehensive processing of LLM responses, including:
 import asyncio
 from typing import Callable, Dict, Any, AsyncGenerator, Optional
 import logging
-from agentpress.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
-from agentpress.standard_tool_parser import StandardToolParser
-from agentpress.standard_tool_executor import StandardToolExecutor
-from agentpress.standard_results_adder import StandardResultsAdder
+from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
+from agentpress.processor.standard.standard_tool_parser import StandardToolParser
+from agentpress.processor.standard.standard_tool_executor import StandardToolExecutor
+from agentpress.processor.standard.standard_results_adder import StandardResultsAdder
 
 class LLMResponseProcessor:
     """Handles LLM response processing and tool execution management.
@@ -40,9 +40,8 @@ class LLMResponseProcessor:
         available_functions: Dict = None,
         add_message_callback: Callable = None,
         update_message_callback: Callable = None,
-        list_messages_callback: Callable = None,
+        get_messages_callback: Callable = None,
         parallel_tool_execution: bool = True,
-        threads_dir: str = "threads",
         tool_parser: Optional[ToolParserBase] = None,
         tool_executor: Optional[ToolExecutorBase] = None,
         results_adder: Optional[ResultsAdderBase] = None,
@@ -55,9 +54,8 @@ class LLMResponseProcessor:
             available_functions: Dictionary of available tool functions
             add_message_callback: Callback for adding messages
             update_message_callback: Callback for updating messages
-            list_messages_callback: Callback for listing messages
+            get_messages_callback: Callback for listing messages
             parallel_tool_execution: Whether to execute tools in parallel
-            threads_dir: Directory for thread storage
             tool_parser: Custom tool parser implementation
             tool_executor: Custom tool executor implementation
             results_adder: Custom results adder implementation
@@ -67,16 +65,15 @@ class LLMResponseProcessor:
         self.tool_executor = tool_executor or StandardToolExecutor(parallel=parallel_tool_execution)
         self.tool_parser = tool_parser or StandardToolParser()
         self.available_functions = available_functions or {}
-        self.threads_dir = threads_dir
         
         # Create minimal thread manager if needed
-        if thread_manager is None and (add_message_callback and update_message_callback and list_messages_callback):
+        if thread_manager is None and (add_message_callback and update_message_callback and get_messages_callback):
             class MinimalThreadManager:
                 def __init__(self, add_msg, update_msg, list_msg):
                     self.add_message = add_msg
                     self._update_message = update_msg
-                    self.list_messages = list_msg
-            thread_manager = MinimalThreadManager(add_message_callback, update_message_callback, list_messages_callback)
+                    self.get_messages = list_msg
+            thread_manager = MinimalThreadManager(add_message_callback, update_message_callback, get_messages_callback)
         
         self.results_adder = results_adder or StandardResultsAdder(thread_manager)
         

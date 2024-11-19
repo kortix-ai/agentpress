@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, List, Optional
-from agentpress.base_processors import ResultsAdderBase
+from agentpress.processor.base_processors import ResultsAdderBase
 
 class XMLResultsAdder(ResultsAdderBase):
     """XML-specific implementation for handling tool results and message processing.
@@ -79,7 +79,7 @@ class XMLResultsAdder(ResultsAdderBase):
         """
         try:
             # Get the original tool call to find the root tag
-            messages = await self.list_messages(thread_id)
+            messages = await self.get_messages(thread_id)
             assistant_msg = next((msg for msg in reversed(messages) 
                                if msg['role'] == 'assistant'), None)
             

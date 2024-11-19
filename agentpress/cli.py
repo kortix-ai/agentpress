@@ -26,14 +26,14 @@ MODULES = {
     "processors": {
         "required": True,
         "files": [
-            "base_processors.py",
-            "llm_response_processor.py",
-            "standard_tool_parser.py",
-            "standard_tool_executor.py", 
-            "standard_results_adder.py",
-            "xml_tool_parser.py",
-            "xml_tool_executor.py",
-            "xml_results_adder.py"
+            "processor/base_processors.py",
+            "processor/llm_response_processor.py",
+            "processor/standard/standard_tool_parser.py",
+            "processor/standard/standard_tool_executor.py", 
+            "processor/standard/standard_results_adder.py",
+            "processor/xml/xml_tool_parser.py",
+            "processor/xml/xml_tool_executor.py",
+            "processor/xml/xml_results_adder.py"
         ],
         "description": "Response Processing System - Handles parsing and executing LLM responses, managing tool calls, and processing results. Supports both standard OpenAI-style function calling and XML-based tool execution patterns."
     },

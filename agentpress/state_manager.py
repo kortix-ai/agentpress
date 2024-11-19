@@ -1,76 +1,100 @@
 import json
-import os
 import logging
-from typing import Any
+from typing import Any, Optional, List, Dict, Union, AsyncGenerator
 from asyncio import Lock
 from contextlib import asynccontextmanager
+import uuid
+from agentpress.db_connection import DBConnection
+import asyncio
 
 class StateManager:
     """
     Manages persistent state storage for AgentPress components.
     
-    The StateManager provides thread-safe access to a JSON-based state store,
-    allowing components to save and retrieve data across sessions. It handles
-    concurrent access using asyncio locks and provides atomic operations for
-    state modifications.
+    The StateManager provides thread-safe access to a SQLite-based state store,
+    allowing components to save and retrieve data across sessions. Each store
+    has a unique ID and contains multiple key-value pairs in a single JSON object.
     
     Attributes:
         lock (Lock): Asyncio lock for thread-safe state access
-        store_file (str): Path to the JSON file storing the state
+        db (DBConnection): Database connection manager
+        store_id (str): Unique identifier for this state store
     """
 
-    def __init__(self, store_file: str = "state.json"):
+    def __init__(self, store_id: Optional[str] = None):
         """
-        Initialize StateManager with custom store file name.
+        Initialize StateManager with optional store ID.
         
         Args:
-            store_file (str): Path to the JSON file to store state.
-                Defaults to "state.json" in the current directory.
+            store_id (str, optional): Unique identifier for the store. If None, creates new.
         """
         self.lock = Lock()
-        self.store_file = store_file
-        logging.info(f"StateManager initialized with store file: {store_file}")
+        self.db = DBConnection()
+        self.store_id = store_id or str(uuid.uuid4())
+        logging.info(f"StateManager initialized with store_id: {self.store_id}")
+        asyncio.create_task(self._ensure_store_exists())
+
+    @classmethod
+    async def create_store(cls) -> str:
+        """Create a new state store and return its ID."""
+        store_id = str(uuid.uuid4())
+        manager = cls(store_id)
+        await manager._ensure_store_exists()
+        return store_id
+
+    async def _ensure_store_exists(self):
+        """Ensure store exists in database."""
+        async with self.db.transaction() as conn:
+            await conn.execute("""
+                INSERT OR IGNORE INTO state_stores (store_id, store_data)
+                VALUES (?, ?)
+            """, (self.store_id, json.dumps({})))
 
     @asynccontextmanager
     async def store_scope(self):
         """
         Context manager for atomic state operations.
         
-        Provides thread-safe access to the state store, handling file I/O
-        and ensuring proper cleanup. Automatically loads the current state
-        and saves changes when the context exits.
+        Provides thread-safe access to the state store, handling database
+        operations and ensuring proper cleanup.
         
         Yields:
             dict: The current state store contents
             
         Raises:
-            Exception: If there are errors reading from or writing to the store file
+            Exception: If there are errors with database operations
         """
-        try:
-            # Read current state
-            if os.path.exists(self.store_file):
-                with open(self.store_file, 'r') as f:
-                    store = json.load(f)
-            else:
-                store = {}
-            
-            yield store
-            
-            # Write updated state
-            with open(self.store_file, 'w') as f:
-                json.dump(store, f, indent=2)
-            logging.debug("Store saved successfully")
-        except Exception as e:
-            logging.error("Error in store operation", exc_info=True)
-            raise
+        async with self.lock:
+            try:
+                async with self.db.transaction() as conn:
+                    async with conn.execute(
+                        "SELECT store_data FROM state_stores WHERE store_id = ?",
+                        (self.store_id,)
+                    ) as cursor:
+                        row = await cursor.fetchone()
+                        store = json.loads(row[0]) if row else {}
+                    
+                    yield store
+                    
+                    await conn.execute(
+                        """
+                        UPDATE state_stores 
+                        SET store_data = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE store_id = ?
+                        """, 
+                        (json.dumps(store), self.store_id)
+                    )
+            except Exception as e:
+                logging.error("Error in store operation", exc_info=True)
+                raise
 
-    async def set(self, key: str, data: Any):
+    async def set(self, key: str, data: Any) -> Any:
         """
-        Store any JSON-serializable data with a simple key.
+        Store any JSON-serializable data with a key.
         
         Args:
             key (str): Simple string key like "config" or "settings"
-            data (Any): Any JSON-serializable data (dict, list, str, int, bool, etc)
+            data (Any): Any JSON-serializable data
             
         Returns:
             Any: The stored data
@@ -78,17 +102,12 @@ class StateManager:
         Raises:
             Exception: If there are errors during storage operation
         """
-        async with self.lock:
-            async with self.store_scope() as store:
-                try:
-                    store[key] = data  # Will be JSON serialized when written to file
-                    logging.info(f'Updated store key: {key}')
-                    return data
-                except Exception as e:
-                    logging.error(f'Error in set: {str(e)}')
-                    raise
+        async with self.store_scope() as store:
+            store[key] = data
+            logging.info(f'Updated store key: {key}')
+            return data
 
-    async def get(self, key: str) -> Any:
+    async def get(self, key: str) -> Optional[Any]:
         """
         Get data for a key.
         
@@ -97,9 +116,6 @@ class StateManager:
             
         Returns:
             Any: The stored data for the key, or None if key not found
-            
-        Note:
-            This operation is read-only and doesn't require locking
         """
         async with self.store_scope() as store:
             if key in store:
@@ -115,17 +131,31 @@ class StateManager:
         
         Args:
             key (str): Simple string key like "config" or "settings"
-            
-        Note:
-            No error is raised if the key doesn't exist
         """
-        async with self.lock:
-            async with self.store_scope() as store:
-                if key in store:
-                    del store[key]
-                    logging.info(f"Deleted key: {key}")
-                else:
-                    logging.info(f"Key not found for deletion: {key}")
+        async with self.store_scope() as store:
+            if key in store:
+                del store[key]
+                logging.info(f"Deleted key: {key}")
+
+    async def update(self, key: str, data: Dict[str, Any]) -> Optional[Any]:
+        """Update existing data for a key by merging dictionaries."""
+        async with self.store_scope() as store:
+            if key in store and isinstance(store[key], dict):
+                store[key].update(data)
+                logging.info(f'Updated store key: {key}')
+                return store[key]
+            return None
+
+    async def append(self, key: str, item: Any) -> Optional[List[Any]]:
+        """Append an item to a list stored at key."""
+        async with self.store_scope() as store:
+            if key not in store:
+                store[key] = []
+            if isinstance(store[key], list):
+                store[key].append(item)
+                logging.info(f'Appended to key: {key}')
+                return store[key]
+            return None
 
     async def export_store(self) -> dict:
         """
@@ -133,9 +163,6 @@ class StateManager:
         
         Returns:
             dict: Complete contents of the state store
-            
-        Note:
-            This operation is read-only and returns a copy of the store
         """
         async with self.store_scope() as store:
             logging.info(f"Store content: {store}")
@@ -148,7 +175,29 @@ class StateManager:
         Removes all data from the store, resetting it to an empty state.
         This operation is atomic and thread-safe.
         """
-        async with self.lock:
-            async with self.store_scope() as store:
-                store.clear()
-                logging.info("Cleared store")
+        async with self.store_scope() as store:
+            store.clear()
+            logging.info("Cleared store")
+
+    @classmethod
+    async def list_stores(cls) -> List[Dict[str, Any]]:
+        """
+        List all available state stores.
+        
+        Returns:
+            List of store information including IDs and timestamps
+        """
+        db = DBConnection()
+        async with db.transaction() as conn:
+            async with conn.execute(
+                "SELECT store_id, created_at, updated_at FROM state_stores ORDER BY updated_at DESC"
+            ) as cursor:
+                stores = [
+                    {
+                        "store_id": row[0],
+                        "created_at": row[1],
+                        "updated_at": row[2]
+                    }
+                    for row in await cursor.fetchall()
+                ]
+            return stores

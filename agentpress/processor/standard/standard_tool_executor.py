@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 from typing import Dict, Any, List, Set, Callable, Optional
-from agentpress.base_processors import ToolExecutorBase
+from agentpress.processor.base_processors import ToolExecutorBase
 from agentpress.tool import ToolResult
 
 # --- Standard Tool Executor Implementation ---

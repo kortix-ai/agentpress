@@ -7,7 +7,7 @@ complete and streaming responses with robust XML parsing and validation capabili
 
 import logging
 from typing import Dict, Any, Optional, List, Tuple
-from agentpress.base_processors import ToolParserBase
+from agentpress.processor.base_processors import ToolParserBase
 import json
 import re
 from agentpress.tool_registry import ToolRegistry

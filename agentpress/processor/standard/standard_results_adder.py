@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from agentpress.base_processors import ResultsAdderBase
+from agentpress.processor.base_processors import ResultsAdderBase
 
 # --- Standard Results Adder Implementation ---
 
@@ -81,6 +81,6 @@ class StandardResultsAdder(ResultsAdderBase):
             - Checks for duplicate tool results before adding
             - Adds result only if tool_call_id is unique
         """
-        messages = await self.list_messages(thread_id)
+        messages = await self.get_messages(thread_id)
         if not any(msg.get('tool_call_id') == result['tool_call_id'] for msg in messages):
             await self.add_message(thread_id, result)

@@ -3,15 +3,16 @@ import asyncio
 import subprocess
 from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from agentpress.state_manager import StateManager
+from typing import Optional
 
 class TerminalTool(Tool):
     """Terminal command execution tool for workspace operations."""
     
-    def __init__(self):
+    def __init__(self, store_id: Optional[str] = None):
         super().__init__()
         self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
         os.makedirs(self.workspace, exist_ok=True)
-        self.state_manager = StateManager("state.json")
+        self.state_manager = StateManager(store_id)
         
     async def _update_command_history(self, command: str, output: str, success: bool):
         """Update command history in state"""
