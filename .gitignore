@@ -169,3 +169,6 @@ state.json
 /workspace/
 /workspace/*
 /workspace/**
+
+# SQLite
+*.db

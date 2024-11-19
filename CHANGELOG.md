@@ -1,10 +1,10 @@
 0.1.9
 - Enhanced storage capabilities for production readiness:
-  - Added SQLite as primary storage backend for ThreadManager and StateManager
-  - Implemented persistent storage with unique store IDs
-  - Added CRUD operations for state management
-  - Enabled multiple concurrent stores with referential integrity
-  - Improved state persistence and retrieval mechanisms
+- Added SQLite as primary storage backend for ThreadManager and StateManager
+- Implemented persistent storage with unique store IDs
+- Added CRUD operations for state management
+- Enabled multiple concurrent stores with referential integrity
+- Improved state persistence and retrieval mechanisms
 
 0.1.8
 - Added base processor classes for extensible tool handling:
