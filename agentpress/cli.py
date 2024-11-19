@@ -46,9 +46,14 @@ MODULES = {
         "description": "Conversation Management System - Handles message threading, conversation history, and provides a UI for viewing conversation threads. Manages the flow of messages between the user, LLM, and tools."
     },
     "state_management": {
-        "required": False,
+        "required": True,
         "files": ["state_manager.py"],
         "description": "State Persistence System - Provides thread-safe storage and retrieval of conversation state, tool data, and other persistent information. Enables maintaining context across sessions and managing shared state between components."
+    },
+    "db_connection": {
+        "required": True,
+        "files": ["db_connection.py"],
+        "description": "Database Connection - Provides a connection to a SQLite database for storing and retrieving conversation state, tool data, and other persistent information."
     }
 }
 
