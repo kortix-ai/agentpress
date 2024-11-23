@@ -8,6 +8,7 @@ This agent can:
 - Use either XML or Standard tool calling patterns
 """
 
+import os
 import asyncio
 import json
 from agentpress.thread_manager import ThreadManager
@@ -87,6 +88,17 @@ file contents here
 </delete-file>
 
 """
+
+def get_anthropic_api_key():
+    """Get Anthropic API key from environment or prompt user."""
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        api_key = input("\n🔑 Please enter your Anthropic API key: ").strip()
+        if not api_key:
+            print("❌ No API key provided. Please set ANTHROPIC_API_KEY environment variable or enter a key.")
+            sys.exit(1)
+        os.environ["ANTHROPIC_API_KEY"] = api_key
+    return api_key
 
 async def run_agent(thread_id: str, use_xml: bool = True, max_iterations: int = 5):
     """Run the development agent with specified configuration."""
@@ -180,6 +192,8 @@ Current development environment workspace state:
 def main():
     """Main entry point with synchronous setup."""
     print("\n🚀 Welcome to AgentPress Web Developer Example!")
+    
+    get_anthropic_api_key()
     
     project_description = input("What would you like to build? (default: Create a modern, responsive landing page)\n> ")
     if not project_description.strip():
