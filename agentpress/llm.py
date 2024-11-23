@@ -7,14 +7,17 @@ from openai import OpenAIError
 import asyncio
 import logging
 
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
-AGENTOPS_API_KEY = os.environ.get('AGENTOPS_API_KEY')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', None)
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', None) 
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', None)
+AGENTOPS_API_KEY = os.environ.get('AGENTOPS_API_KEY', None)
 
-os.environ['OPENAI_API_KEY'] = OPENAI_API_KEY
-os.environ['ANTHROPIC_API_KEY'] = ANTHROPIC_API_KEY
-os.environ['GROQ_API_KEY'] = GROQ_API_KEY
+if OPENAI_API_KEY:
+    os.environ['OPENAI_API_KEY'] = OPENAI_API_KEY
+if ANTHROPIC_API_KEY:
+    os.environ['ANTHROPIC_API_KEY'] = ANTHROPIC_API_KEY
+if GROQ_API_KEY:
+    os.environ['GROQ_API_KEY'] = GROQ_API_KEY
 
 async def make_llm_api_call(
     messages: list, 
