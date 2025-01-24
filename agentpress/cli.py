@@ -61,10 +61,10 @@ STARTER_EXAMPLES = {
     "simple_web_dev_example_agent": {
         "description": "Interactive web development agent with file and terminal manipulation capabilities. Demonstrates both standard and XML-based tool calling patterns.",
         "files": {
-            "agent.py": "agents/simple_web_dev/agent.py",
-            "tools/files_tool.py": "agents/simple_web_dev/tools/files_tool.py",
-            "tools/terminal_tool.py": "agents/simple_web_dev/tools/terminal_tool.py",
-            ".env.example": "agents/.env.example"
+            "agent.py": "examples/simple_web_dev/agent.py",
+            "tools/files_tool.py": "examples/simple_web_dev/tools/files_tool.py",
+            "tools/terminal_tool.py": "examples/simple_web_dev/tools/terminal_tool.py",
+            ".env.example": "examples/.env.example"
         }
     }
 }

@@ -54,13 +54,19 @@ class FilesTool(Tool):
         ".sql"
     }
 
-    def __init__(self, store_id: Optional[str] = None):
+    def __init__(self, thread_id: Optional[str] = None):
         super().__init__()
         self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
         os.makedirs(self.workspace, exist_ok=True)
-        self.state_manager = StateManager(store_id)
+        if thread_id:
+            self.state_manager = StateManager(thread_id)
+            asyncio.create_task(self._init_state())
         self.SNIPPET_LINES = 4  # Number of context lines to show around edits
-        asyncio.create_task(self._init_workspace_state())
+
+    async def _init_state(self):
+        """Initialize state manager and workspace state."""
+        await self.state_manager.initialize()
+        await self._init_workspace_state()
 
     def _should_exclude_file(self, rel_path: str) -> bool:
         """Check if a file should be excluded based on path, name, or extension"""
@@ -106,7 +112,8 @@ class FilesTool(Tool):
                 except UnicodeDecodeError:
                     print(f"Skipping binary file: {rel_path}")
 
-        await self.state_manager.set("files", files_state)
+        if hasattr(self, 'state_manager'):
+            await self.state_manager.set("files", files_state)
 
     async def _update_workspace_state(self):
         """Update the workspace state after any file operation"""
