@@ -15,8 +15,9 @@ from agentpress.thread_manager import ThreadManager
 from tools.files_tool import FilesTool
 from agentpress.state_manager import StateManager
 from tools.terminal_tool import TerminalTool
+from agentpress.api_factory import register_api_endpoint
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional, Dict, Any
 import sys
 
 BASE_SYSTEM_MESSAGE = """
@@ -100,39 +101,62 @@ def get_anthropic_api_key():
         os.environ["ANTHROPIC_API_KEY"] = api_key
     return api_key
 
-async def run_agent(thread_id: str, use_xml: bool = True, max_iterations: int = 5):
+@register_api_endpoint("/main_agent")
+async def run_agent(
+    thread_id: str,
+    use_xml: bool = True,
+    max_iterations: int = 5,
+    project_description: Optional[str] = None
+) -> Dict[str, Any]:
     """Run the development agent with specified configuration."""
+    # Initialize managers
     thread_manager = ThreadManager()
-
-    store_id = await StateManager.create_store()
-    state_manager = StateManager(store_id)
+    await thread_manager.initialize()
     
-    thread_manager.add_tool(FilesTool, store_id=store_id)
-    thread_manager.add_tool(TerminalTool, store_id=store_id)
+    state_manager = StateManager(thread_id)
+    await state_manager.initialize()
 
+    # Register tools
+    thread_manager.add_tool(FilesTool, thread_id=thread_id)
+    thread_manager.add_tool(TerminalTool, thread_id=thread_id)
+
+    # Add initial project description if provided
+    if project_description:
+        await thread_manager.add_message(
+            thread_id,
+            {
+                "role": "user",
+                "content": project_description
+            }
+        )
+
+    # Set up system message with appropriate format
     system_message = {
         "role": "system",
         "content": BASE_SYSTEM_MESSAGE + (XML_FORMAT if use_xml else "")
     }
 
-    async def pre_iteration():
-        files_tool = FilesTool()
-        await files_tool._init_workspace_state()
+    # Create initial event to track agent loop
+    await thread_manager.create_event(
+        thread_id=thread_id,
+        event_type="agent_loop_started",
+        content={
+            "max_iterations": max_iterations,
+            "use_xml": use_xml,
+            "project_description": project_description
+        },
+        include_in_llm_message_history=False
+    )
 
-    async def after_iteration():
-        custom_message = input("\nEnter a message (or press Enter to continue): ")
-        message_content = custom_message if custom_message else "Continue!!!"
-        await thread_manager.add_message(thread_id, {
-            "role": "user", 
-            "content": message_content
-        })
-
+    results = []
     iteration = 0
     while iteration < max_iterations:
         iteration += 1
-        await pre_iteration()
+        
+        files_tool = FilesTool(thread_id)
+        await files_tool._init_workspace_state()
 
-        state = await state_manager.export_store()
+        state = await state_manager.get_latest_state()
         
         state_message = {
             "role": "user",
@@ -157,40 +181,44 @@ Current development environment workspace state:
             native_tool_calling=not use_xml,
             xml_tool_calling=use_xml,
             stream=True,
-            execute_tools_on_stream=True,
+            execute_tools_on_stream=False,
             parallel_tool_execution=True
         )
-        
-        if isinstance(response, AsyncGenerator):
-            print("\n🤖 Assistant is responding:")
+
+        # Handle both streaming and regular responses
+        if hasattr(response, '__aiter__'):
+            chunks = []
             try:
                 async for chunk in response:
-                    if hasattr(chunk.choices[0], 'delta'):
-                        delta = chunk.choices[0].delta
-                        
-                        if hasattr(delta, 'content') and delta.content is not None:
-                            print(delta.content, end='', flush=True)
-                        
-                        if hasattr(delta, 'tool_calls') and delta.tool_calls:
-                            for tool_call in delta.tool_calls:
-                                if tool_call.function:
-                                    if tool_call.function.name:
-                                        print(f"\n🛠️  Tool Call: {tool_call.function.name}", flush=True)
-                                    if tool_call.function.arguments:
-                                        print(f"   {tool_call.function.arguments}", end='', flush=True)
-                
-                print("\n✨ Response completed\n")
-                
+                    chunks.append(chunk)
             except Exception as e:
-                print(f"\n❌ Error processing stream: {e}", file=sys.stderr)
                 logging.error(f"Error processing stream: {e}")
-        else:
-            print("\nNon-streaming response received:", response)
+                raise
+            response = chunks
 
-        await after_iteration()
+        results.append({
+            "iteration": iteration,
+            "response": response
+        })
 
-def main():
-    """Main entry point with synchronous setup."""
+        # Create iteration completion event
+        await thread_manager.create_event(
+            thread_id=thread_id,
+            event_type="iteration_complete",
+            content={
+                "iteration_number": iteration,
+                "max_iterations": max_iterations,
+                # "state": state
+            },
+            include_in_llm_message_history=False
+        )
+
+    return {
+        "thread_id": thread_id,
+        "iterations": results,
+    }
+
+if __name__ == "__main__":
     print("\n🚀 Welcome to AgentPress Web Developer Example!")
     
     get_anthropic_api_key()
@@ -215,18 +243,8 @@ def main():
     
     async def async_main():
         thread_manager = ThreadManager()
-        
         thread_id = await thread_manager.create_thread()
-        await thread_manager.add_message(
-            thread_id, 
-            {
-                "role": "user", 
-                "content": project_description
-            }
-        )
-        await run_agent(thread_id, use_xml)
+        logging.info(f"Created new thread: {thread_id}")
+        await run_agent(thread_id, use_xml, project_description=project_description)
 
     asyncio.run(async_main())
-
-if __name__ == "__main__":
-    main()

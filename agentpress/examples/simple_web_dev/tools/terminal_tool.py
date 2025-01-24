@@ -8,12 +8,18 @@ from typing import Optional
 class TerminalTool(Tool):
     """Terminal command execution tool for workspace operations."""
     
-    def __init__(self, store_id: Optional[str] = None):
+    def __init__(self, thread_id: Optional[str] = None):
         super().__init__()
         self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
         os.makedirs(self.workspace, exist_ok=True)
-        self.state_manager = StateManager(store_id)
+        if thread_id:
+            self.state_manager = StateManager(thread_id)
+            asyncio.create_task(self._init_state())
         
+    async def _init_state(self):
+        """Initialize state manager."""
+        await self.state_manager.initialize()
+
     async def _update_command_history(self, command: str, output: str, success: bool):
         """Update command history in state"""
         history = await self.state_manager.get("terminal_history") or []

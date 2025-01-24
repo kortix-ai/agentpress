@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "agentpress"
-version = "0.1.12"
+version = "0.1.13"
 description = "Building blocks for AI Agents"
 authors = ["marko-kraemer <mail@markokraemer.com>"]
 readme = "README.md"
@@ -33,6 +33,7 @@ pytest-asyncio = "^0.24.0"
 aiosqlite = "^0.20.0"
 asyncio = "^3.4.3"
 altair = "4.2.2"
+supabase = "^2.11.0"
 
 [tool.poetry.scripts]
 agentpress = "agentpress.cli:main"
