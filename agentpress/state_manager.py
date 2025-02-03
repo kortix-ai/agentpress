@@ -1,207 +1,118 @@
-"""
-Manages persistent state storage for AgentPress components using thread-based events.
-
-The StateManager provides thread-safe access to state data stored as events in threads,
-allowing components to save and retrieve data across sessions. Each state update
-creates a new event containing the complete state.
-"""
-
 import json
 import logging
 from typing import Any, Optional, List, Dict
-from asyncio import Lock
+import uuid
 from agentpress.thread_manager import ThreadManager
 
 class StateManager:
     """
-    Manages persistent state storage for AgentPress components using thread events.
-    
-    The StateManager provides thread-safe access to state data stored as events,
-    maintaining the complete state in each event for better consistency and tracking.
-    
-    Attributes:
-        lock (Lock): Asyncio lock for thread-safe state access
-        thread_id (str): Thread ID for state storage
-        thread_manager (ThreadManager): Thread manager instance for event handling
+    Manages state storage using thread messages.
+    Each state message contains a complete snapshot of the state at that point in time.
     """
 
     def __init__(self, thread_id: str):
-        """
-        Initialize StateManager with thread ID.
-        
-        Args:
-            thread_id (str): Thread ID for state storage
-        """
-        self.lock = Lock()
-        self.thread_id = thread_id
+        """Initialize StateManager with a thread ID."""
         self.thread_manager = ThreadManager()
-        logging.info(f"StateManager initialized with thread_id: {self.thread_id}")
+        self.thread_id = thread_id
+        self._state_cache = None
+        logging.info(f"StateManager initialized for thread: {thread_id}")
 
-    async def initialize(self):
-        """Initialize the thread manager."""
-        await self.thread_manager.initialize()
+    async def _get_state(self) -> Dict[str, Any]:
+        """Get the current complete state."""
+        if self._state_cache is not None:
+            return self._state_cache.copy()  # Return copy to prevent cache mutation
 
-    async def _ensure_initialized(self):
-        """Ensure thread manager is initialized."""
-        if not self.thread_manager.db._initialized:
-            await self.initialize()
-
-    async def _get_current_state(self) -> dict:
-        """Get the current state from the latest state event."""
-        await self._ensure_initialized()
-        events = await self.thread_manager.get_thread_events(
-            thread_id=self.thread_id,
-            event_types=["state"],
-            order_by="created_at",
-            order="DESC"
+        # Get the latest state message
+        rows = await self.thread_manager.db.fetch_all(
+            """
+            SELECT content 
+            FROM messages 
+            WHERE thread_id = ? AND type = 'state_message'
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (self.thread_id,)
         )
-        if events:
-            return events[0]["content"].get("state", {})
+        
+        if rows:
+            try:
+                self._state_cache = json.loads(rows[0][0])
+                return self._state_cache.copy()
+            except json.JSONDecodeError:
+                logging.error("Failed to parse state JSON")
+        
         return {}
 
-    async def _save_state(self, state: dict):
-        """Save the complete state as a new event."""
-        await self._ensure_initialized()
-        await self.thread_manager.create_event(
+    async def _save_state(self, state: Dict[str, Any]):
+        """Save a new complete state snapshot."""
+        # Format state as a string with proper indentation
+        formatted_state = json.dumps(state, indent=2)
+        
+        # Save new state message with complete snapshot
+        await self.thread_manager.add_message(
             thread_id=self.thread_id,
-            event_type="state",
-            content={"state": state}
+            message_data=formatted_state,
+            message_type='state_message',
+            include_in_llm_message_history=False
         )
+        
+        # Update cache with a copy
+        self._state_cache = state.copy()
 
     async def set(self, key: str, data: Any) -> Any:
-        """
-        Store data with a key in the state.
-        
-        Args:
-            key (str): Simple string key like "config" or "settings"
-            data (Any): Any JSON-serializable data
-            
-        Returns:
-            Any: The stored data
-        """
-        async with self.lock:
-            try:
-                current_state = await self._get_current_state()
-                current_state[key] = data
-                await self._save_state(current_state)
-                logging.info(f'Updated state key: {key}')
-                return data
-            except Exception as e:
-                logging.error(f"Error setting state: {e}")
-                raise
+        """Store any JSON-serializable data with a key."""
+        state = await self._get_state()
+        state[key] = data
+        await self._save_state(state)
+        logging.info(f'Updated state key: {key}')
+        return data
 
     async def get(self, key: str) -> Optional[Any]:
-        """
-        Get data for a key from the current state.
-        
-        Args:
-            key (str): Simple string key like "config" or "settings"
-            
-        Returns:
-            Any: The stored data for the key, or None if key not found
-        """
-        async with self.lock:
-            try:
-                current_state = await self._get_current_state()
-                if key in current_state:
-                    logging.info(f'Retrieved key: {key}')
-                    return current_state[key]
-                logging.info(f'Key not found: {key}')
-                return None
-            except Exception as e:
-                logging.error(f"Error getting state: {e}")
-                raise
+        """Get data for a key."""
+        state = await self._get_state()
+        if key in state:
+            data = state[key]
+            logging.info(f'Retrieved key: {key}')
+            return data
+        logging.info(f'Key not found: {key}')
+        return None
 
     async def delete(self, key: str):
-        """
-        Delete a key from the state.
-        
-        Args:
-            key (str): Simple string key like "config" or "settings"
-        """
-        async with self.lock:
-            try:
-                current_state = await self._get_current_state()
-                if key in current_state:
-                    del current_state[key]
-                    await self._save_state(current_state)
-                    logging.info(f"Deleted key: {key}")
-            except Exception as e:
-                logging.error(f"Error deleting state: {e}")
-                raise
+        """Delete data for a key."""
+        state = await self._get_state()
+        if key in state:
+            del state[key]
+            await self._save_state(state)
+            logging.info(f"Deleted key: {key}")
 
     async def update(self, key: str, data: Dict[str, Any]) -> Optional[Any]:
-        """
-        Update existing dictionary data for a key by merging.
-        
-        Args:
-            key (str): Simple string key like "config" or "settings"
-            data (Dict[str, Any]): Dictionary of updates to merge
-            
-        Returns:
-            Optional[Any]: Updated data if successful, None if key not found
-        """
-        async with self.lock:
-            try:
-                current_state = await self._get_current_state()
-                if key in current_state and isinstance(current_state[key], dict):
-                    current_state[key].update(data)
-                    await self._save_state(current_state)
-                    return current_state[key]
-                return None
-            except Exception as e:
-                logging.error(f"Error updating state: {e}")
-                raise
+        """Update existing data for a key by merging dictionaries."""
+        state = await self._get_state()
+        if key in state and isinstance(state[key], dict):
+            state[key].update(data)
+            await self._save_state(state)
+            logging.info(f'Updated state key: {key}')
+            return state[key]
+        return None
 
     async def append(self, key: str, item: Any) -> Optional[List[Any]]:
-        """
-        Append an item to a list stored at key.
-        
-        Args:
-            key (str): Simple string key like "config" or "settings"
-            item (Any): Item to append
-            
-        Returns:
-            Optional[List[Any]]: Updated list if successful, None if key not found
-        """
-        async with self.lock:
-            try:
-                current_state = await self._get_current_state()
-                if key not in current_state:
-                    current_state[key] = []
-                if isinstance(current_state[key], list):
-                    current_state[key].append(item)
-                    await self._save_state(current_state)
-                    return current_state[key]
-                return None
-            except Exception as e:
-                logging.error(f"Error appending to state: {e}")
-                raise
+        """Append an item to a list stored at key."""
+        state = await self._get_state()
+        if key not in state:
+            state[key] = []
+        if isinstance(state[key], list):
+            state[key].append(item)
+            await self._save_state(state)
+            logging.info(f'Appended to key: {key}')
+            return state[key]
+        return None
 
-    async def get_latest_state(self) -> dict:
-        """
-        Get the latest complete state.
-        
-        Returns:
-            dict: Complete contents of the latest state
-        """
-        async with self.lock:
-            try:
-                state = await self._get_current_state()
-                logging.info(f"Retrieved latest state with {len(state)} keys")
-                return state
-            except Exception as e:
-                logging.error(f"Error getting latest state: {e}")
-                raise
+    async def export_store(self) -> dict:
+        """Export entire state."""
+        state = await self._get_state()
+        return state
 
-    async def clear_state(self):
-        """
-        Clear the entire state.
-        """
-        async with self.lock:
-            try:
-                await self._save_state({})
-                logging.info("Cleared state")
-            except Exception as e:
-                logging.error(f"Error clearing state: {e}")
-                raise
+    async def clear_store(self):
+        """Clear entire state."""
+        await self._save_state({})
+        self._state_cache = {}
+        logging.info("Cleared state")

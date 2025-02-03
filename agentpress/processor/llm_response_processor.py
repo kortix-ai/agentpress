@@ -9,12 +9,9 @@ This module provides comprehensive processing of LLM responses, including:
 """
 
 import asyncio
-from typing import Callable, Dict, Any, AsyncGenerator, Optional
+from typing import Dict, Any, AsyncGenerator
 import logging
 from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
-from agentpress.processor.standard.standard_tool_parser import StandardToolParser
-from agentpress.processor.standard.standard_tool_executor import StandardToolExecutor
-from agentpress.processor.standard.standard_results_adder import StandardResultsAdder
 
 class LLMResponseProcessor:
     """Handles LLM response processing and tool execution management.
@@ -37,51 +34,30 @@ class LLMResponseProcessor:
     def __init__(
         self,
         thread_id: str,
-        available_functions: Dict = None,
-        add_message_callback: Callable = None,
-        update_message_callback: Callable = None,
-        get_messages_callback: Callable = None,
-        parallel_tool_execution: bool = True,
-        tool_parser: Optional[ToolParserBase] = None,
-        tool_executor: Optional[ToolExecutorBase] = None,
-        results_adder: Optional[ResultsAdderBase] = None,
-        thread_manager = None
+        tool_executor: ToolExecutorBase,
+        tool_parser: ToolParserBase,
+        available_functions: Dict,
+        results_adder: ResultsAdderBase
     ):
         """Initialize the response processor.
         
         Args:
             thread_id: ID of the conversation thread
-            available_functions: Dictionary of available tool functions
-            add_message_callback: Callback for adding messages
-            update_message_callback: Callback for updating messages
-            get_messages_callback: Callback for listing messages
-            parallel_tool_execution: Whether to execute tools in parallel
-            tool_parser: Custom tool parser implementation
             tool_executor: Custom tool executor implementation
+            tool_parser: Custom tool parser implementation
+            available_functions: Dictionary of available tool functions
             results_adder: Custom results adder implementation
-            thread_manager: Optional thread manager instance
         """
         self.thread_id = thread_id
-        self.tool_executor = tool_executor or StandardToolExecutor(parallel=parallel_tool_execution)
-        self.tool_parser = tool_parser or StandardToolParser()
-        self.available_functions = available_functions or {}
-        
-        # Create minimal thread manager if needed
-        if thread_manager is None and (add_message_callback and update_message_callback and get_messages_callback):
-            class MinimalThreadManager:
-                def __init__(self, add_msg, update_msg, list_msg):
-                    self.add_message = add_msg
-                    self._update_message = update_msg
-                    self.get_messages = list_msg
-            thread_manager = MinimalThreadManager(add_message_callback, update_message_callback, get_messages_callback)
-        
-        self.results_adder = results_adder or StandardResultsAdder(thread_manager)
-        
-        # State tracking for streaming
-        self.tool_calls_buffer = {}
-        self.processed_tool_calls = set()
+        self.tool_executor = tool_executor
+        self.tool_parser = tool_parser
+        self.available_functions = available_functions
+        self.results_adder = results_adder
         self.content_buffer = ""
+        self.tool_calls_buffer = {}
         self.tool_calls_accumulated = []
+        self.processed_tool_calls = set()
+        self._executing_tools = set()  # Track currently executing tools
 
     async def process_stream(
         self,
@@ -92,8 +68,9 @@ class LLMResponseProcessor:
         """Process streaming LLM response and handle tool execution."""
         pending_tool_calls = []
         background_tasks = set()
+        stream_completed = False  # New flag to track stream completion
 
-        async def handle_message_management(chunk):
+        async def handle_message_management(chunk, is_final=False):
             try:
                 # Accumulate content
                 if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content:
@@ -106,28 +83,37 @@ class LLMResponseProcessor:
                         self.tool_calls_buffer
                     )
                     if parsed_message and 'tool_calls' in parsed_message:
-                        self.tool_calls_accumulated = parsed_message['tool_calls']
+                        new_tool_calls = [
+                            tool_call for tool_call in parsed_message['tool_calls']
+                            if tool_call['id'] not in self.processed_tool_calls
+                        ]
+                        if new_tool_calls:
+                            self.tool_calls_accumulated.extend(new_tool_calls)
 
                 # Handle tool execution and results
                 if execute_tools and self.tool_calls_accumulated:
                     new_tool_calls = [
                         tool_call for tool_call in self.tool_calls_accumulated
-                        if tool_call['id'] not in self.processed_tool_calls
+                        if (tool_call['id'] not in self.processed_tool_calls and 
+                            tool_call['id'] not in self._executing_tools)
                     ]
 
                     if new_tool_calls:
                         if execute_tools_on_stream:
+                            for tool_call in new_tool_calls:
+                                self._executing_tools.add(tool_call['id'])
+
                             results = await self.tool_executor.execute_tool_calls(
                                 tool_calls=new_tool_calls,
                                 available_functions=self.available_functions,
                                 thread_id=self.thread_id,
                                 executed_tool_calls=self.processed_tool_calls
                             )
+
                             for result in results:
                                 await self.results_adder.add_tool_result(self.thread_id, result)
                                 self.processed_tool_calls.add(result['tool_call_id'])
-                        else:
-                            pending_tool_calls.extend(new_tool_calls)
+                                self._executing_tools.discard(result['tool_call_id'])
 
                 # Add/update assistant message
                 message = {
@@ -152,7 +138,10 @@ class LLMResponseProcessor:
                     )
 
                 # Handle stream completion
-                if chunk.choices[0].finish_reason:
+                if chunk.choices[0].finish_reason or is_final:
+                    nonlocal stream_completed
+                    stream_completed = True
+                    
                     if not execute_tools_on_stream and pending_tool_calls:
                         results = await self.tool_executor.execute_tool_calls(
                             tool_calls=pending_tool_calls,
@@ -165,8 +154,16 @@ class LLMResponseProcessor:
                             self.processed_tool_calls.add(result['tool_call_id'])
                         pending_tool_calls.clear()
 
+                    # Set final state on the chunk instead of returning it
+                    chunk._final_state = {
+                        "content": self.content_buffer,
+                        "tool_calls": self.tool_calls_accumulated,
+                        "processed_tool_calls": list(self.processed_tool_calls)
+                    }
+
             except Exception as e:
                 logging.error(f"Error in background task: {e}")
+                raise
 
         try:
             async for chunk in response_stream:
@@ -175,9 +172,22 @@ class LLMResponseProcessor:
                 task.add_done_callback(background_tasks.discard)
                 yield chunk
 
+            # Create a final dummy chunk to handle completion
+            final_chunk = type('DummyChunk', (), {
+                'choices': [type('DummyChoice', (), {
+                    'delta': type('DummyDelta', (), {'content': None}),
+                    'finish_reason': 'stop'
+                })]
+            })()
+            
+            # Process final state
+            await handle_message_management(final_chunk, is_final=True)
+            yield final_chunk
+
+            # Wait for all background tasks to complete
             if background_tasks:
                 await asyncio.gather(*background_tasks, return_exceptions=True)
-                
+
         except Exception as e:
             logging.error(f"Error in stream processing: {e}")
             for task in background_tasks:

@@ -60,13 +60,8 @@ class FilesTool(Tool):
         os.makedirs(self.workspace, exist_ok=True)
         if thread_id:
             self.state_manager = StateManager(thread_id)
-            asyncio.create_task(self._init_state())
-        self.SNIPPET_LINES = 4  # Number of context lines to show around edits
-
-    async def _init_state(self):
-        """Initialize state manager and workspace state."""
-        await self.state_manager.initialize()
-        await self._init_workspace_state()
+            asyncio.create_task(self._init_workspace_state())
+        self.SNIPPET_LINES = 4
 
     def _should_exclude_file(self, rel_path: str) -> bool:
         """Check if a file should be excluded based on path, name, or extension"""
@@ -263,6 +258,9 @@ class FilesTool(Tool):
             # Perform replacement
             new_content = content.replace(old_str, new_str)
             full_path.write_text(new_content)
+            
+            # Update state after file modification
+            await self._update_workspace_state()
             
             # Show snippet around the edit
             replacement_line = content.split(old_str)[0].count('\n')

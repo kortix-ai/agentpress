@@ -2,99 +2,44 @@ import os
 import shutil
 import click
 import questionary
-from typing import List, Dict, Optional, Tuple
+from typing import Dict
 import time
 import pkg_resources
 import requests
 from packaging import version
-import re
 
-MODULES = {
-    "llm": {
-        "required": True,
-        "files": ["llm.py"],
-        "description": "LLM Interface - Core module for interacting with large language models (OpenAI, Anthropic, 100+ LLMs using the OpenAI Input/Output Format powered by LiteLLM). Handles API calls, response streaming, and model-specific configurations."
-    },
-    "tool": {
-        "required": True,
-        "files": [
-            "tool.py",
-            "tool_registry.py"
-        ],
-        "description": "Tool System Foundation - Defines the base architecture for creating and managing tools. Includes the tool registry for registering, organizing, and accessing tool functions."
-    },
-    "processors": {
-        "required": True,
-        "files": [
-            "processor/base_processors.py",
-            "processor/llm_response_processor.py",
-            "processor/standard/standard_tool_parser.py",
-            "processor/standard/standard_tool_executor.py", 
-            "processor/standard/standard_results_adder.py",
-            "processor/xml/xml_tool_parser.py",
-            "processor/xml/xml_tool_executor.py",
-            "processor/xml/xml_results_adder.py"
-        ],
-        "description": "Response Processing System - Handles parsing and executing LLM responses, managing tool calls, and processing results. Supports both standard OpenAI-style function calling and XML-based tool execution patterns."
-    },
-    "thread_management": {
-        "required": True,
-        "files": [
-            "thread_manager.py",
-            "thread_viewer_ui.py"
-        ],
-        "description": "Conversation Management System - Handles message threading, conversation history, and provides a UI for viewing conversation threads. Manages the flow of messages between the user, LLM, and tools."
-    },
-    "state_management": {
-        "required": True,
-        "files": ["state_manager.py"],
-        "description": "State Persistence System - Provides thread-safe storage and retrieval of conversation state, tool data, and other persistent information. Enables maintaining context across sessions and managing shared state between components."
-    },
-    "db_connection": {
-        "required": True,
-        "files": ["db_connection.py"],
-        "description": "Database Connection - Provides a connection to a SQLite database for storing and retrieving conversation state, tool data, and other persistent information."
-    }
-}
+PACKAGE_NAME = "agentpress"
+PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
 
 STARTER_EXAMPLES = {
     "simple_web_dev_example_agent": {
         "description": "Interactive web development agent with file and terminal manipulation capabilities. Demonstrates both standard and XML-based tool calling patterns.",
         "files": {
-            "agent.py": "examples/simple_web_dev/agent.py",
-            "tools/files_tool.py": "examples/simple_web_dev/tools/files_tool.py",
-            "tools/terminal_tool.py": "examples/simple_web_dev/tools/terminal_tool.py",
-            ".env.example": "examples/.env.example"
+            "agent.py": "agents/simple_web_dev/agent.py",
+            "tools/files_tool.py": "agents/simple_web_dev/tools/files_tool.py",
+            "tools/terminal_tool.py": "agents/simple_web_dev/tools/terminal_tool.py",
+            ".env.example": "agents/.env.example"
         }
     }
 }
 
-PACKAGE_NAME = "agentpress"
-PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
-
-def check_for_updates() -> Tuple[Optional[str], Optional[str], bool]:
-    """
-    Check if there's a newer version available on PyPI
-    Returns: (current_version, latest_version, update_available)
-    """
+def check_for_updates():
+    """Check if there's a newer version available on PyPI"""
     try:
         current_version = pkg_resources.get_distribution(PACKAGE_NAME).version
         response = requests.get(PYPI_URL, timeout=2)
-        response.raise_for_status()  # Raise exception for bad status codes
+        response.raise_for_status()
         
         latest_version = response.json()["info"]["version"]
         
-        # Compare versions properly using packaging.version
         current_ver = version.parse(current_version)
         latest_ver = version.parse(latest_version)
         
         return current_version, latest_version, latest_ver > current_ver
         
     except requests.RequestException:
-        # Handle network-related errors silently
         return None, None, False
     except Exception as e:
-        # Log other unexpected errors but don't break the CLI
         click.echo(f"Warning: Failed to check for updates: {str(e)}", err=True)
         return None, None, False
 
@@ -102,7 +47,6 @@ def show_welcome():
     """Display welcome message with ASCII art"""
     click.clear()
     
-    # Check for updates
     current_version, latest_version, update_available = check_for_updates()
     
     click.echo("""
@@ -122,16 +66,17 @@ def show_welcome():
     
     time.sleep(1)
 
-def copy_module_files(src_dir: str, dest_dir: str, files: List[str]):
-    """Copy module files from package to destination"""
+def copy_package_files(src_dir: str, dest_dir: str):
+    """Copy all package files except agents folder to destination"""
     os.makedirs(dest_dir, exist_ok=True)
     
-    with click.progressbar(files, label='Copying files') as file_list:
-        for file in file_list:
-            src = os.path.join(src_dir, file)
-            dst = os.path.join(dest_dir, file)
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.copy2(src, dst)
+    def ignore_patterns(path, names):
+        # Ignore the agents directory and any __pycache__ directories
+        return [n for n in names if n == 'agents' or n == '__pycache__']
+    
+    with click.progressbar(length=1, label='Copying files') as bar:
+        shutil.copytree(src_dir, dest_dir, dirs_exist_ok=True, ignore=ignore_patterns)
+        bar.update(1)
 
 def copy_example_files(src_dir: str, dest_dir: str, files: Dict[str, str]):
     """Copy example files from package to destination"""
@@ -141,19 +86,6 @@ def copy_example_files(src_dir: str, dest_dir: str, files: Dict[str, str]):
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copy2(src, dst)
         click.echo(f"  ✓ Created {dest_path}")
-
-def update_file_paths(file_path: str, replacements: Dict[str, str]):
-    """Update file paths in the given file"""
-    with open(file_path, 'r') as f:
-        content = f.read()
-    
-    for old, new in replacements.items():
-        # Escape special characters in the old string
-        escaped_old = re.escape(old)
-        content = re.sub(escaped_old, new, content)
-    
-    with open(file_path, 'w') as f:
-        f.write(content)
 
 @click.group()
 def cli():
@@ -165,7 +97,6 @@ def init():
     """Initialize AgentPress modules in your project"""
     show_welcome()
     
-    # Set components directory name to 'agentpress'
     components_dir = "agentpress"
 
     if os.path.exists(components_dir):
@@ -195,41 +126,20 @@ def init():
     # Get package directory
     package_dir = os.path.dirname(os.path.abspath(__file__))
     
-    # Show all modules status
-    click.echo("\n🔧 AgentPress Modules Configuration\n")
-    
-    # Show required modules including state_manager
-    click.echo("📦 Required Modules (pre-selected):")
-    required_modules = {name: module for name, module in MODULES.items() 
-                       if module["required"] or name == "state_management"}
-    for name, module in required_modules.items():
-        click.echo(f"  ✓ {click.style(name, fg='green')} - {module['description']}")
-    
-    # Create selections dict with required modules pre-selected
-    selections = {name: True for name in required_modules.keys()}
-    
     click.echo("\n🚀 Setting up your AgentPress...")
     time.sleep(0.5)
     
     try:
-        # Copy selected modules
-        selected_modules = [name for name, selected in selections.items() if selected]
-        all_files = []
-        for module in selected_modules:
-            all_files.extend(MODULES[module]["files"])
-        
-        # Create components directory and copy module files
+        # Create components directory and copy all files except agents folder
         components_dir_path = os.path.abspath(components_dir)
-        copy_module_files(package_dir, components_dir_path, all_files)
-        
+        copy_package_files(package_dir, components_dir_path)
 
-
-        # Copy example only if a valid example (not None) was selected
+        # Copy example if selected
         if selected_example and selected_example in STARTER_EXAMPLES:
             click.echo(f"\n📝 Creating {selected_example}...")
             copy_example_files(
                 package_dir, 
-                os.getcwd(),  # Use current working directory
+                os.getcwd(),
                 STARTER_EXAMPLES[selected_example]["files"]
             )
             
@@ -245,7 +155,6 @@ def init():
         if selected_example:
             click.echo(f"\nRun the example agent:")
             click.echo("  python agent.py")
-
 
     except Exception as e:
         click.echo(f"\n❌ Error during setup: {str(e)}", err=True)

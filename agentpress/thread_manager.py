@@ -2,7 +2,7 @@
 Conversation thread management system for AgentPress.
 
 This module provides comprehensive conversation management, including:
-- Thread and Event CRUD operations
+- Thread creation and persistence
 - Message handling with support for text and images
 - Tool registration and execution
 - LLM interaction with streaming support
@@ -13,251 +13,104 @@ import json
 import logging
 import asyncio
 import uuid
-from datetime import datetime
 from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator
 from agentpress.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
 from agentpress.processor.llm_response_processor import LLMResponseProcessor
-from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
 from agentpress.db_connection import DBConnection
 
-from agentpress.processor.xml.xml_tool_parser import XMLToolParser
-from agentpress.processor.xml.xml_tool_executor import XMLToolExecutor
-from agentpress.processor.xml.xml_results_adder import XMLResultsAdder
 from agentpress.processor.standard.standard_tool_parser import StandardToolParser
 from agentpress.processor.standard.standard_tool_executor import StandardToolExecutor
 from agentpress.processor.standard.standard_results_adder import StandardResultsAdder
+from agentpress.processor.xml.xml_tool_parser import XMLToolParser
+from agentpress.processor.xml.xml_tool_executor import XMLToolExecutor
+from agentpress.processor.xml.xml_results_adder import XMLResultsAdder
 
 class ThreadManager:
-    """Manages conversation threads with LLM models and tool execution."""
+    """Manages conversation threads with LLM models and tool execution.
+    
+    Provides comprehensive conversation management, handling message threading,
+    tool registration, and LLM interactions with support for both standard and
+    XML-based tool execution patterns.
+    """
 
     def __init__(self):
         """Initialize ThreadManager."""
-        self.tool_registry = ToolRegistry()
         self.db = DBConnection()
-
-    async def initialize(self):
-        """Initialize async components."""
-        await self.db.initialize()
+        self.tool_registry = ToolRegistry()
 
     def add_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
         """Add a tool to the ThreadManager."""
         self.tool_registry.register_tool(tool_class, function_names, **kwargs)
 
-    async def thread_exists(self, thread_id: str) -> bool:
-        """Check if a thread exists."""
-        await self._ensure_initialized()
-        result = await self.db.fetch_one(
-            "SELECT 1 FROM threads WHERE id = ?",
-            (thread_id,)
-        )
-        return result is not None
-
-    async def _ensure_initialized(self):
-        """Ensure database is initialized."""
-        if not self.db._initialized:
-            await self.initialize()
-
-    async def event_belongs_to_thread(self, event_id: str, thread_id: str) -> bool:
-        """Check if an event exists and belongs to a thread."""
-        await self._ensure_initialized()
-        result = await self.db.fetch_one(
-            "SELECT 1 FROM events WHERE id = ? AND thread_id = ?",
-            (event_id, thread_id)
-        )
-        return result is not None
-
-    # Core Thread Operations
     async def create_thread(self) -> str:
         """Create a new conversation thread."""
-        await self._ensure_initialized()
         thread_id = str(uuid.uuid4())
+        await self.db.execute(
+            "INSERT INTO threads (id) VALUES (?)",
+            (thread_id,)
+        )
+        return thread_id
+
+    async def add_message(
+        self, 
+        thread_id: str, 
+        message_data: Union[str, Dict[str, Any]], 
+        images: Optional[List[Dict[str, Any]]] = None,
+        include_in_llm_message_history: bool = True,
+        message_type: Optional[str] = None
+    ):
+        """Add a message to an existing thread."""
+        logging.info(f"Adding message to thread {thread_id}")
+        
         try:
-            async with self.db.transaction() as conn:
-                await conn.execute(
-                    "INSERT INTO threads (id) VALUES (?)",
-                    (thread_id,)
-                )
-                logging.info(f"Created thread: {thread_id}")
-                return thread_id
-        except Exception as e:
-            logging.error(f"Failed to create thread: {e}")
-            raise
-
-    async def delete_thread(self, thread_id: str) -> bool:
-        """Delete a thread and all its events (cascade)."""
-        try:
-            result = await self.db.execute(
-                "DELETE FROM threads WHERE id = ?",
-                (thread_id,)
-            )
-            # Check if any rows were affected
-            return result.rowcount > 0
-        except Exception as e:
-            logging.error(f"Failed to delete thread {thread_id}: {e}")
-            return False
-
-    # Core Event Operations
-    async def create_event(
-        self,
-        thread_id: str,
-        event_type: str,
-        content: Dict[str, Any],
-        include_in_llm_message_history: bool = False,
-        llm_message: Optional[Dict[str, Any]] = None
-    ) -> str:
-        """Create a new event in a thread."""
-        await self._ensure_initialized()
-        event_id = str(uuid.uuid4())
-        try:
-            async with self.db.transaction() as conn:
-                # First verify thread exists
-                cursor = await conn.execute("SELECT 1 FROM threads WHERE id = ?", (thread_id,))
-                if not await cursor.fetchone():
-                    raise Exception(f"Thread {thread_id} does not exist")
-
-                # Then create the event
-                await conn.execute(
-                    """
-                    INSERT INTO events (
-                        id, thread_id, type, content, 
-                        include_in_llm_message_history, llm_message
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        event_id,
-                        thread_id,
-                        event_type,
-                        self.db._serialize_json(content),
-                        1 if include_in_llm_message_history else 0,
-                        self.db._serialize_json(llm_message) if llm_message else None
-                    )
-                )
-                logging.info(f"Created event {event_id} in thread {thread_id}")
-                return event_id
-        except Exception as e:
-            logging.error(f"Failed to create event in thread {thread_id}: {e}")
-            raise
-
-    async def delete_event(self, event_id: str) -> bool:
-        """Delete a specific event."""
-        try:
-            result = await self.db.execute(
-                "DELETE FROM events WHERE id = ?",
-                (event_id,)
-            )
-            # Check if any rows were affected
-            return result.rowcount > 0
-        except Exception as e:
-            logging.error(f"Failed to delete event {event_id}: {e}")
-            return False
-
-    async def update_event(
-        self,
-        event_id: str,
-        thread_id: str,
-        content: Optional[Dict[str, Any]] = None,
-        include_in_llm_message_history: Optional[bool] = None,
-        llm_message: Optional[Dict[str, Any]] = None
-    ) -> bool:
-        """Update an existing event."""
-        try:
-            # First verify the event exists and belongs to the thread
-            event = await self.db.fetch_one(
-                "SELECT 1 FROM events WHERE id = ? AND thread_id = ?",
-                (event_id, thread_id)
-            )
-            if not event:
-                return False
-
-            updates = []
-            params = []
-            if content is not None:
-                updates.append("content = ?")
-                params.append(self.db._serialize_json(content))
-            if include_in_llm_message_history is not None:
-                updates.append("include_in_llm_message_history = ?")
-                params.append(1 if include_in_llm_message_history else 0)
-            if llm_message is not None:
-                updates.append("llm_message = ?")
-                params.append(self.db._serialize_json(llm_message))
+            message_id = str(uuid.uuid4())
             
-            if not updates:
-                return False
+            # Handle string content
+            if isinstance(message_data, str):
+                content = message_data
+                role = 'unknown'
+                
+                # Determine message type only for LLM-related messages if not provided
+                if message_type is None:
+                    type_mapping = {
+                        'user': 'user_message',
+                        'assistant': 'assistant_message',
+                        'tool': 'tool_message',
+                        'system': 'system_message'
+                    }
+                    message_type = type_mapping.get(role, 'unknown_message')
+                    
+            else:
+                # For dict message_data, check if it's an LLM message format
+                if 'role' in message_data and 'content' in message_data:
+                    content = message_data.get('content', '')
+                    role = message_data.get('role', 'unknown')
+                    
+                    # Determine message type for LLM messages if not provided
+                    if message_type is None:
+                        type_mapping = {
+                            'user': 'user_message',
+                            'assistant': 'assistant_message',
+                            'tool': 'tool_message',
+                            'system': 'system_message'
+                        }
+                        message_type = type_mapping.get(role, 'unknown_message')
+                else:
+                    # For non-LLM messages, use the entire message_data as content
+                    content = message_data
 
-            query = f"""
-                UPDATE events 
-                SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP 
-                WHERE id = ? AND thread_id = ?
-            """
-            params.extend([event_id, thread_id])
+            # Handle content processing
+            if isinstance(content, ToolResult):
+                content = str(content)
             
-            result = await self.db.execute(query, tuple(params))
-            return result.rowcount > 0
-        except Exception as e:
-            logging.error(f"Failed to update event {event_id}: {e}")
-            return False
-
-    async def get_thread_events(
-        self,
-        thread_id: str,
-        only_llm_messages: bool = False,
-        event_types: Optional[List[str]] = None,
-        order_by: str = "created_at",
-        order: str = "ASC"
-    ) -> List[Dict[str, Any]]:
-        """Get events from a thread with filtering options."""
-        try:
-            query = ["SELECT * FROM events WHERE thread_id = ?"]
-            params = [thread_id]
-
-            if only_llm_messages:
-                query.append("AND include_in_llm_message_history = 1")
-            
-            if event_types:
-                placeholders = ','.join(['?' for _ in event_types])
-                query.append(f"AND type IN ({placeholders})")
-                params.extend(event_types)
-
-            query.append(f"ORDER BY {order_by} {order}")
-
-            rows = await self.db.fetch_all(' '.join(query), tuple(params))
-            
-            events = []
-            for row in rows:
-                event = {
-                    "id": row[0],
-                    "thread_id": row[1],
-                    "type": row[2],
-                    "content": self.db._deserialize_json(row[3]),
-                    "include_in_llm_message_history": bool(row[4]),
-                    "llm_message": self.db._deserialize_json(row[5]) if row[5] else None,
-                    "created_at": row[6],
-                    "updated_at": row[7]
-                }
-                events.append(event)
-            
-            return events
-        except Exception as e:
-            logging.error(f"Failed to get events for thread {thread_id}: {e}")
-            return []
-
-    async def get_thread_llm_messages(self, thread_id: str) -> List[Dict[str, Any]]:
-        """Get LLM-formatted messages from thread events."""
-        events = await self.get_thread_events(thread_id, only_llm_messages=True)
-        return [event["llm_message"] for event in events if event["llm_message"]]
-
-    # Message handling methods refactored for event-based system
-    async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
-        """Add a message as an event to the thread."""
-        try:
             # Handle image attachments
             if images:
-                if isinstance(message_data['content'], str):
-                    content = [{"type": "text", "text": message_data['content']}]
-                else:
-                    content = message_data['content'] if isinstance(message_data['content'], list) else []
+                if isinstance(content, str):
+                    content = [{"type": "text", "text": content}]
+                elif not isinstance(content, list):
+                    content = []
 
                 for image in images:
                     image_content = {
@@ -268,75 +121,139 @@ class ThreadManager:
                         }
                     }
                     content.append(image_content)
-            else:
-                content = message_data['content']
 
-            # Create event
-            event_type = f"message_{message_data['role']}"
-            await self.create_event(
-                thread_id=thread_id,
-                event_type=event_type,
-                content={"raw_content": content},
-                include_in_llm_message_history=True,
-                llm_message=message_data
+            # Convert content to JSON string if it's a dict or list
+            if isinstance(content, (dict, list)):
+                content = json.dumps(content)
+            
+            # Insert the message
+            await self.db.execute(
+                """
+                INSERT INTO messages (
+                    id, thread_id, type, content, include_in_llm_message_history
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (message_id, thread_id, message_type, content, include_in_llm_message_history)
             )
 
+            logging.info(f"Message added to thread {thread_id}")
+            
         except Exception as e:
             logging.error(f"Failed to add message to thread {thread_id}: {e}")
             raise
 
-    async def get_messages(
-        self,
+    async def get_llm_history_messages(
+        self, 
         thread_id: str,
         hide_tool_msgs: bool = False,
         only_latest_assistant: bool = False,
-        regular_list: bool = True
     ) -> List[Dict[str, Any]]:
-        """Get messages from thread events with filtering."""
-        messages = await self.get_thread_llm_messages(thread_id)
-
+        """
+        Retrieve messages from a thread that are marked for LLM history.
+        
+        Args:
+            thread_id: The thread to get messages from
+            hide_tool_msgs: Whether to hide tool messages
+            only_latest_assistant: Whether to only return the latest assistant message
+            
+        Returns:
+            List of messages formatted for LLM context
+        """
+        
+        # Get only messages marked for LLM history
+        rows = await self.db.fetch_all(
+            """
+            SELECT type, content 
+            FROM messages 
+            WHERE thread_id = ? 
+            AND include_in_llm_message_history = TRUE
+            ORDER BY created_at ASC
+            """,
+            (thread_id,)
+        )
+        
+        # Convert DB rows to message format
+        messages = []
+        type_to_role = {
+            'user_message': 'user',
+            'assistant_message': 'assistant',
+            'tool_message': 'tool',
+            'system_message': 'system'
+        }
+        
+        for row in rows:
+            msg_type, content = row
+            
+            # Try to parse JSON content
+            try:
+                content = json.loads(content)
+            except (json.JSONDecodeError, TypeError):
+                pass  # Keep content as is if it's not JSON
+                
+            message = {
+                'role': type_to_role.get(msg_type, 'unknown'),
+                'content': content
+            }
+            messages.append(message)
+        
+        # Apply filters
         if only_latest_assistant:
             for msg in reversed(messages):
                 if msg.get('role') == 'assistant':
                     return [msg]
             return []
-
+        
         if hide_tool_msgs:
             messages = [
                 {k: v for k, v in msg.items() if k != 'tool_calls'}
                 for msg in messages
                 if msg.get('role') != 'tool'
             ]
-
-        if regular_list:
-            messages = [
-                msg for msg in messages
-                if msg.get('role') in ['system', 'assistant', 'tool', 'user']
-            ]
-
+        
+        
         return messages
 
     async def _update_message(self, thread_id: str, message: Dict[str, Any]):
-        """Update the last assistant message event."""
-        events = await self.get_thread_events(
-            thread_id=thread_id,
-            event_types=["message_assistant"],
-            order_by="created_at",
-            order="DESC"
-        )
-        
-        if events:
-            last_assistant_event = events[0]
-            await self.update_event(
-                event_id=last_assistant_event["id"],
-                thread_id=thread_id,
-                content={"raw_content": message.get("content")},
-                llm_message=message
+        """Update an existing message in the thread."""
+        try:
+            # Find the latest assistant message for this thread
+            row = await self.db.fetch_one(
+                """
+                SELECT id FROM messages 
+                WHERE thread_id = ? AND type = 'assistant_message'
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (thread_id,)
             )
+            
+            if not row:
+                return
+            
+            message_id = row[0]
+            
+            # Convert content to JSON string if needed
+            content = message.get('content', '')
+            if isinstance(content, (dict, list)):
+                content = json.dumps(content)
+            
+            # Update the message
+            async with self.db.transaction() as conn:
+                await conn.execute(
+                    """
+                    UPDATE messages 
+                    SET content = ?, updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = ?
+                    """,
+                    (content, message_id)
+                )
+                
+        except Exception as e:
+            logging.error(f"Failed to update message: {e}")
+            raise
 
     async def cleanup_incomplete_tool_calls(self, thread_id: str):
         """Clean up incomplete tool calls in a thread."""
-        messages = await self.get_messages(thread_id)
+        messages = await self.get_llm_history_messages(thread_id)
         last_assistant_message = next((m for m in reversed(messages) 
             if m['role'] == 'assistant' and 'tool_calls' in m), None)
 
@@ -374,21 +291,19 @@ class ThreadManager:
     async def run_thread(
         self,
         thread_id: str,
-        system_message: Dict[str, Any],
+        system_message: Dict[str, str],
         model_name: str,
-        temperature: float = 0,
-        max_tokens: Optional[int] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
         tool_choice: str = "auto",
-        temporary_message: Optional[Dict[str, Any]] = None,
-        native_tool_calling: bool = False,
+        temporary_message: Optional[Dict[str, str]] = None,
+        native_tool_calling: bool = True,
         xml_tool_calling: bool = False,
-        execute_tools: bool = True,
         stream: bool = False,
-        execute_tools_on_stream: bool = False,
-        parallel_tool_execution: bool = False,
-        tool_parser: Optional[ToolParserBase] = None,
-        tool_executor: Optional[ToolExecutorBase] = None,
-        results_adder: Optional[ResultsAdderBase] = None
+        execute_tools: bool = True,
+        execute_tools_on_stream: bool = True,
+        parallel_tool_execution: bool = True,
+        stop: Optional[Union[str, List[str]]] = None
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Run a conversation thread with specified parameters.
         
@@ -406,9 +321,7 @@ class ThreadManager:
             stream: Whether to stream the response
             execute_tools_on_stream: Whether to execute tools during streaming
             parallel_tool_execution: Whether to execute tools in parallel
-            tool_parser: Custom tool parser implementation
-            tool_executor: Custom tool executor implementation
-            results_adder: Custom results adder implementation
+            stop (Union[str, List[str]], optional): Up to 4 sequences where the API will stop generating tokens
             
         Returns:
             Union[Dict[str, Any], AsyncGenerator]: Response or stream
@@ -421,71 +334,185 @@ class ThreadManager:
             - Cannot use both native and XML tool calling simultaneously
             - Streaming responses include both content and tool results
         """
-        # Validate tool calling configuration
-        if native_tool_calling and xml_tool_calling:
-            raise ValueError("Cannot use both native LLM tool calling and XML tool calling simultaneously")
-
-        # Initialize tool components if any tool calling is enabled
-        if native_tool_calling or xml_tool_calling:
-            if tool_parser is None:
-                tool_parser = XMLToolParser(tool_registry=self.tool_registry) if xml_tool_calling else StandardToolParser()
-            
-            if tool_executor is None:
-                tool_executor = XMLToolExecutor(parallel=parallel_tool_execution, tool_registry=self.tool_registry) if xml_tool_calling else StandardToolExecutor(parallel=parallel_tool_execution)
-            
-            if results_adder is None:
-                results_adder = XMLResultsAdder(self) if xml_tool_calling else StandardResultsAdder(self)
-
         try:
-            messages = await self.get_messages(thread_id)
-            prepared_messages = [system_message] + messages
-            if temporary_message:
-                prepared_messages.append(temporary_message)
-
-            openapi_tool_schemas = None
-            if native_tool_calling:
-                openapi_tool_schemas = self.tool_registry.get_openapi_schemas()
-                available_functions = self.tool_registry.get_available_functions()
-            elif xml_tool_calling:
-                available_functions = self.tool_registry.get_available_functions()
-            else:
-                available_functions = {}
-
-            response_processor = LLMResponseProcessor(
+            # Add thread run start message
+            await self.add_message(
                 thread_id=thread_id,
-                available_functions=available_functions,
-                add_message_callback=self.add_message,
-                update_message_callback=self._update_message,
-                get_messages_callback=self.get_messages,
-                parallel_tool_execution=parallel_tool_execution,
-                tool_parser=tool_parser,
-                tool_executor=tool_executor,
-                results_adder=results_adder
+                message_data={
+                    "name": "thread_run",                    
+                    "status": "started",
+                    "details": {
+                        "model": model_name,
+                        "temperature": temperature,
+                        "native_tool_calling": native_tool_calling,
+                        "xml_tool_calling": xml_tool_calling,
+                        "execute_tools": execute_tools,
+                        "stream": stream
+                    }
+                },
+                message_type="agentpress_system",
+                include_in_llm_message_history=False
             )
 
-            llm_response = await self._run_thread_completion(
-                messages=prepared_messages,
-                model_name=model_name,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                tools=openapi_tool_schemas,
-                tool_choice=tool_choice if native_tool_calling else None,
-                stream=stream
-            )
+            try:
+                messages = await self.get_llm_history_messages(thread_id)
+                prepared_messages = [system_message] + messages
+                if temporary_message:
+                    prepared_messages.append(temporary_message)
 
-            if stream:
-                return response_processor.process_stream(
-                    response_stream=llm_response,
-                    execute_tools=execute_tools,
-                    execute_tools_on_stream=execute_tools_on_stream
+                openapi_tool_schemas = None
+                if native_tool_calling:
+                    openapi_tool_schemas = self.tool_registry.get_openapi_schemas()
+                    available_functions = self.tool_registry.get_available_functions()
+                elif xml_tool_calling:
+                    available_functions = self.tool_registry.get_available_functions()
+                else:
+                    available_functions = {}
+
+                # Initialize appropriate tool parser and executor based on calling type
+                if xml_tool_calling:
+                    tool_parser = XMLToolParser(tool_registry=self.tool_registry)
+                    tool_executor = XMLToolExecutor(parallel=parallel_tool_execution, tool_registry=self.tool_registry)
+                    results_adder = XMLResultsAdder(self)
+                else:
+                    tool_parser = StandardToolParser()
+                    tool_executor = StandardToolExecutor(parallel=parallel_tool_execution)
+                    results_adder = StandardResultsAdder(self)
+
+                # Create a SINGLE response processor instance
+                response_processor = LLMResponseProcessor(
+                    thread_id=thread_id,
+                    tool_executor=tool_executor,
+                    tool_parser=tool_parser,
+                    available_functions=available_functions,
+                    results_adder=results_adder
                 )
 
-            await response_processor.process_response(
-                response=llm_response,
-                execute_tools=execute_tools
-            )
+                response = await self._run_thread_completion(
+                    messages=prepared_messages,
+                    model_name=model_name,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    tools=openapi_tool_schemas,
+                    tool_choice=tool_choice if native_tool_calling else None,
+                    stream=stream,
+                    stop=stop
+                )
 
-            return llm_response
+                if stream:
+                    async def stream_with_completion():
+                        processor = response_processor.process_stream(
+                            response_stream=response,
+                            execute_tools=execute_tools,
+                            execute_tools_on_stream=execute_tools_on_stream
+                        )
+                        
+                        final_state = None
+                        async for chunk in processor:
+                            yield chunk
+                            if hasattr(chunk, '_final_state'):
+                                final_state = chunk._final_state
+
+                        # Add completion message after stream ends
+                        completion_message = {
+                            "name": "thread_run",
+                            "status": "completed",
+                            "details": {
+                                "model": model_name,
+                                "temperature": temperature,
+                                "native_tool_calling": native_tool_calling,
+                                "xml_tool_calling": xml_tool_calling,
+                                "execute_tools": execute_tools,
+                                "stream": stream
+                            }
+                        }
+
+                        # TODO: Add usage, cost information – from final llm response
+
+                        # # Add usage information from final state
+                        # if final_state and 'usage' in final_state:
+                        #     completion_message["usage"] = final_state["usage"]
+                        # elif hasattr(response, 'cost_tracker'):
+                        #     completion_message["usage"] = {
+                        #         "prompt_tokens": response.cost_tracker['prompt_tokens'],
+                        #         "completion_tokens": response.cost_tracker['completion_tokens'],
+                        #         "total_tokens": response.cost_tracker['total_tokens'],
+                        #         "cost_usd": response.cost_tracker['cost']
+                        #     }
+
+                        await self.add_message(
+                            thread_id=thread_id,
+                            message_data=completion_message,
+                            message_type="agentpress_system",
+                            include_in_llm_message_history=False
+                        )
+
+                    return stream_with_completion()
+
+                # For non-streaming, process response once
+                await response_processor.process_response(
+                    response=response,
+                    execute_tools=execute_tools
+                )
+
+                # Add completion message on success with cost information
+                completion_message = {
+                    "name": "thread_run",
+                    "status": "completed",
+                    "details": {
+                        "model": model_name,
+                        "temperature": temperature,
+                        "native_tool_calling": native_tool_calling,
+                        "xml_tool_calling": xml_tool_calling,
+                        "execute_tools": execute_tools,
+                        "stream": stream
+                    }
+                }
+
+                # TODO: Add usage, cost information – from final llm response 
+                
+                # # Add cost information if available
+                # if hasattr(response, 'cost'):
+                #     completion_message["usage"] = {
+                #         "cost_usd": response.cost
+                #     }
+                # if hasattr(response, 'usage'):
+                #     if "usage" not in completion_message:
+                #         completion_message["usage"] = {}
+                #     completion_message["usage"].update({
+                #         "prompt_tokens": response.usage.prompt_tokens,
+                #         "completion_tokens": response.usage.completion_tokens,
+                #         "total_tokens": response.usage.total_tokens
+                #     })
+
+                await self.add_message(
+                    thread_id=thread_id,
+                    message_data=completion_message,
+                    message_type="agentpress_system",
+                    include_in_llm_message_history=False
+                )
+
+                return response
+
+            except Exception as e:
+                # Add error message if something goes wrong
+
+                # TODO: FIX THAT THREAD RUN CATCHES ERRORS FROM LLM.PY from RUN_THREAD_COMPLETION & CORRECTLY ADD ERROR MESSAGE TO THREAD
+
+                await self.add_message(
+                    thread_id=thread_id,
+                    message_data={
+                        "name": "thread_run",                                    
+                        "status": "error",
+                        "error": str(e),
+                        "details": {
+                            "error_type": type(e).__name__
+                        }
+                    },
+                    message_type="agentpress_system",
+                    include_in_llm_message_history=False
+                )
+                raise
 
         except Exception as e:
             logging.error(f"Error in run_thread: {str(e)}")
@@ -502,104 +529,191 @@ class ThreadManager:
         max_tokens: Optional[int],
         tools: Optional[List[Dict[str, Any]]],
         tool_choice: Optional[str],
-        stream: bool
-    ) -> Union[Any, AsyncGenerator]:
+        stream: bool,
+        stop: Optional[Union[str, List[str]]] = None
+    ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Get completion from LLM API."""
-        return await make_llm_api_call(
+        response = await make_llm_api_call(
             messages,
             model_name,
             temperature=temperature,
             max_tokens=max_tokens,
             tools=tools,
             tool_choice=tool_choice,
-            stream=stream
+            stream=stream,
+            stop=stop
         )
 
-if __name__ == "__main__":
-    import asyncio
-    from agentpress.examples.example_agent.tools.files_tool import FilesTool
+        # For streaming responses, wrap in a cost-tracking generator
+        if stream:
+            async def cost_tracking_stream():
+                try:
+                    async for chunk in response:
+                        # Update token counts if available
+                        if hasattr(chunk, 'usage'):
+                            response.cost_tracker['prompt_tokens'] = chunk.usage.prompt_tokens
+                            response.cost_tracker['completion_tokens'] = chunk.usage.completion_tokens
+                            response.cost_tracker['total_tokens'] = chunk.usage.total_tokens
+                            
+                            # Calculate running cost
+                            input_cost = response.model_info['input_cost_per_token']
+                            output_cost = response.model_info['output_cost_per_token']
+                            
+                            cost = (response.cost_tracker['prompt_tokens'] * input_cost +
+                                   response.cost_tracker['completion_tokens'] * output_cost)
+                            response.cost_tracker['cost'] = cost
 
-    async def main():
-        # Initialize managers
-        thread_manager = ThreadManager()
+                        # Attach cost tracker to the chunk for final state
+                        if hasattr(chunk, '_final_state'):
+                            chunk._final_state['usage'] = {
+                                "prompt_tokens": response.cost_tracker['prompt_tokens'],
+                                "completion_tokens": response.cost_tracker['completion_tokens'],
+                                "total_tokens": response.cost_tracker['total_tokens'],
+                                "cost_usd": response.cost_tracker['cost']
+                            }
+                        yield chunk
+                except Exception as e:
+                    logging.error(f"Error in cost tracking stream: {e}")
+                    raise
+
+            return cost_tracking_stream()
+
+        return response
+
+    async def get_messages(
+        self,
+        thread_id: str,
+        message_types: Optional[List[str]] = None,
+        limit: Optional[int] = 50,  # Default limit of 50 messages
+        offset: Optional[int] = 0,  # Starting offset for pagination
+        before_timestamp: Optional[str] = None,
+        after_timestamp: Optional[str] = None,
+        include_in_llm_message_history: Optional[bool] = None,
+        order: str = "asc"
+    ) -> Dict[str, Any]:
+        """
+        Retrieve messages from a thread with optional filtering and pagination.
         
-        # Register available tools
-        thread_manager.add_tool(FilesTool)
-        
-        # Create a new thread
-        thread_id = await thread_manager.create_thread()
-        
-        # Add a test message
-        await thread_manager.add_message(thread_id, {
-            "role": "user", 
-            "content": "Please create 10x files – Each should be a chapter of a book about an Introduction to Robotics.."
-        })
+        Args:
+            thread_id: The thread to get messages from
+            message_types: Optional list of message types to filter by
+            limit: Maximum number of messages to return (default: 50)
+            offset: Number of messages to skip (for pagination)
+            before_timestamp: Optional timestamp to filter messages before
+            after_timestamp: Optional timestamp to filter messages after
+            include_in_llm_message_history: Optional bool to filter messages by LLM history inclusion
+            order: Sort order - "asc" or "desc"
+            
+        Returns:
+            Dict containing messages list and pagination info
+        """
+        try:
+            # Build the base query for total count
+            count_query = """
+                SELECT COUNT(*) 
+                FROM messages 
+                WHERE thread_id = ?
+            """
+            count_params = [thread_id]
 
-        # Define system message
-        system_message = {
-            "role": "system", 
-            "content": "You are a helpful assistant that can create, read, update, and delete files."
-        }
+            # Build the base query for messages
+            query = """
+                SELECT id, type, content, created_at, updated_at, include_in_llm_message_history
+                FROM messages 
+                WHERE thread_id = ?
+            """
+            params = [thread_id]
 
-        # Test with streaming response and tool execution
-        print("\n🤖 Testing streaming response with tools:")
-        response = await thread_manager.run_thread(
-            thread_id=thread_id,
-            system_message=system_message,
-            model_name="anthropic/claude-3-5-haiku-latest", 
-            temperature=0.7,
-            max_tokens=4096,
-            stream=True,
-            native_tool_calling=True,
-            execute_tools=True,
-            execute_tools_on_stream=True,
-            parallel_tool_execution=True
-        )
-
-        # Handle streaming response
-        if isinstance(response, AsyncGenerator):
-            print("\nAssistant is responding:")
-            content_buffer = ""
-            try:
-                async for chunk in response:
-                    if hasattr(chunk.choices[0], 'delta'):
-                        delta = chunk.choices[0].delta
-                        
-                        # Handle content streaming
-                        if hasattr(delta, 'content') and delta.content is not None:
-                            content_buffer += delta.content
-                            if delta.content.endswith((' ', '\n')):
-                                print(content_buffer, end='', flush=True)
-                                content_buffer = ""
-                        
-                        # Handle tool calls
-                        if hasattr(delta, 'tool_calls') and delta.tool_calls:
-                            for tool_call in delta.tool_calls:
-                                # Print tool name when it first appears
-                                if tool_call.function and tool_call.function.name:
-                                    print(f"\n🛠️  Tool Call: {tool_call.function.name}", flush=True)
-                                
-                                # Print arguments as they stream in
-                                if tool_call.function and tool_call.function.arguments:
-                                    print(f"   {tool_call.function.arguments}", end='', flush=True)
+            # Add filters to both queries
+            if message_types:
+                placeholders = ','.join('?' * len(message_types))
+                filter_sql = f" AND type IN ({placeholders})"
+                query += filter_sql
+                count_query += filter_sql
+                params.extend(message_types)
+                count_params.extend(message_types)
                 
-                # Print any remaining content
-                if content_buffer:
-                    print(content_buffer, flush=True)
-                print("\n✨ Response completed\n")
+            if before_timestamp:
+                query += " AND created_at < ?"
+                count_query += " AND created_at < ?"
+                params.append(before_timestamp)
+                count_params.append(before_timestamp)
                 
-            except Exception as e:
-                print(f"\n❌ Error processing stream: {e}")
-        else:
-            print("\n✨ Response completed\n")
+            if after_timestamp:
+                query += " AND created_at > ?"
+                count_query += " AND created_at > ?"
+                params.append(after_timestamp)
+                count_params.append(after_timestamp)
 
-        # Display final thread state
-        messages = await thread_manager.get_messages(thread_id)
-        print("\n📝 Final Thread State:")
-        for msg in messages:
-            role = msg.get('role', 'unknown')
-            content = msg.get('content', '')
-            print(f"\n{role.upper()}: {content[:100]}...")
+            if include_in_llm_message_history is not None:
+                query += " AND include_in_llm_message_history = ?"
+                count_query += " AND include_in_llm_message_history = ?"
+                params.append(include_in_llm_message_history)
+                count_params.append(include_in_llm_message_history)
 
-    asyncio.run(main())
+            # Get total count for pagination
+            total_count = await self.db.fetch_one(count_query, tuple(count_params))
+            total_count = total_count[0] if total_count else 0
 
+            # Add ordering and pagination
+            query += f" ORDER BY created_at {'ASC' if order.lower() == 'asc' else 'DESC'}"
+            query += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+
+            # Execute query
+            rows = await self.db.fetch_all(query, tuple(params))
+
+            # Convert rows to dictionaries
+            messages = []
+            for row in rows:
+                message = {
+                    'id': row[0],
+                    'type': row[1],
+                    'content': row[2],
+                    'created_at': row[3],
+                    'updated_at': row[4],
+                    'include_in_llm_message_history': bool(row[5])
+                }
+
+                # Try to parse JSON content
+                try:
+                    message['content'] = json.loads(message['content'])
+                except (json.JSONDecodeError, TypeError):
+                    pass  # Keep content as is if it's not JSON
+
+                messages.append(message)
+
+            # Return messages with pagination info
+            return {
+                "messages": messages,
+                "pagination": {
+                    "total": total_count,
+                    "limit": limit,
+                    "offset": offset,
+                    "has_more": (offset + limit) < total_count
+                }
+            }
+
+        except Exception as e:
+            logging.error(f"Failed to get messages from thread {thread_id}: {e}")
+            raise
+
+    async def thread_exists(self, thread_id: str) -> bool:
+        """
+        Check if a thread exists.
+        
+        Args:
+            thread_id: The ID of the thread to check
+            
+        Returns:
+            bool: True if thread exists, False otherwise
+        """
+        try:
+            row = await self.db.fetch_one(
+                "SELECT 1 FROM threads WHERE id = ?",
+                (thread_id,)
+            )
+            return row is not None
+        except Exception as e:
+            logging.error(f"Error checking thread existence: {e}")
+            return False
