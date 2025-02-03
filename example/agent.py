@@ -243,7 +243,7 @@ if __name__ == "__main__":
         try:
             result = await run_agent(
                 thread_id=thread_id,
-                max_iterations=5,
+                max_iterations=1,
                 user_input=project_description,
             )
             print("\n✅ Test completed successfully!")
@@ -254,6 +254,7 @@ if __name__ == "__main__":
 
     try:
         asyncio.run(test_agent())
+
     except KeyboardInterrupt:
         print("\n⚠️ Test interrupted by user")
     except Exception as e:

@@ -27,7 +27,7 @@ class StateManager:
             """
             SELECT content 
             FROM messages 
-            WHERE thread_id = ? AND type = 'state_message'
+            WHERE thread_id = $1 AND type = 'state_message'
             ORDER BY created_at DESC LIMIT 1
             """,
             (self.thread_id,)
