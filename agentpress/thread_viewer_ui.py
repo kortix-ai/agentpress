@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import datetime
-from agentpress.db_connection import DBConnection
+from db_connection import DBConnection
 import asyncio
 import json
 
@@ -43,33 +43,41 @@ async def load_thread_content(thread_id: str, filters: dict):
     """Load messages from a thread with filters."""
     db = DBConnection()
     
-    query_parts = ["SELECT type, content, include_in_llm_message_history, created_at FROM messages WHERE thread_id = ?"]
+    query_parts = ["SELECT type, content, include_in_llm_message_history, created_at FROM messages WHERE thread_id = $1"]
     params = [thread_id]
+    param_count = 1  # Keep track of parameter count
     
     if filters.get('message_types'):
         # Convert comma-separated string to list and clean up whitespace
         types_list = [t.strip() for t in filters['message_types'].split(',') if t.strip()]
         if types_list:
-            query_parts.append("AND type IN (" + ",".join(["?" for _ in types_list]) + ")")
+            placeholders = ','.join(f'${param_count + i + 1}' for i in range(len(types_list)))
+            query_parts.append(f"AND type IN ({placeholders})")
             params.extend(types_list)
+            param_count += len(types_list)
     
     if filters.get('exclude_message_types'):
         # Convert comma-separated string to list and clean up whitespace
         exclude_types_list = [t.strip() for t in filters['exclude_message_types'].split(',') if t.strip()]
         if exclude_types_list:
-            query_parts.append("AND type NOT IN (" + ",".join(["?" for _ in exclude_types_list]) + ")")
+            placeholders = ','.join(f'${param_count + i + 1}' for i in range(len(exclude_types_list)))
+            query_parts.append(f"AND type NOT IN ({placeholders})")
             params.extend(exclude_types_list)
+            param_count += len(exclude_types_list)
     
     if filters.get('before_timestamp'):
-        query_parts.append("AND created_at < ?")
+        param_count += 1
+        query_parts.append(f"AND created_at < ${param_count}")
         params.append(filters['before_timestamp'])
     
     if filters.get('after_timestamp'):
-        query_parts.append("AND created_at > ?")
+        param_count += 1
+        query_parts.append(f"AND created_at > ${param_count}")
         params.append(filters['after_timestamp'])
     
     if filters.get('include_in_llm_message_history') is not None:
-        query_parts.append("AND include_in_llm_message_history = ?")
+        param_count += 1
+        query_parts.append(f"AND include_in_llm_message_history = ${param_count}")
         params.append(filters['include_in_llm_message_history'])
     
     # Add ordering
@@ -78,11 +86,13 @@ async def load_thread_content(thread_id: str, filters: dict):
     
     # Add limit and offset
     if filters.get('limit'):
-        query_parts.append("LIMIT ?")
+        param_count += 1
+        query_parts.append(f"LIMIT ${param_count}")
         params.append(filters['limit'])
     
     if filters.get('offset'):
-        query_parts.append("OFFSET ?")
+        param_count += 1
+        query_parts.append(f"OFFSET ${param_count}")
         params.append(filters['offset'])
     
     query = " ".join(query_parts)
@@ -98,8 +108,9 @@ def render_message(msg_type: str, content: str, include_in_llm: bool, timestamp:
     with col2:
         st.text("🟢 LLM" if include_in_llm else "⚫ Non-LLM")
     
-    # Timestamp
-    st.text(f"Time: {datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:%M:%S')}")
+    # Convert PostgreSQL timestamp to string before parsing
+    timestamp_str = str(timestamp)
+    st.text(f"Time: {datetime.fromisoformat(timestamp_str).strftime('%Y-%m-%d %H:%M:%S')}")
     
     # Message content
     st.code(content, language="json")
@@ -123,7 +134,8 @@ def main():
     
     # Format thread options with creation date
     thread_options = {
-        f"{row[0]} ({datetime.fromisoformat(row[1]).strftime('%Y-%m-%d %H:%M')})"
+        # Convert PostgreSQL timestamp to string before parsing
+        f"{row[0]} ({datetime.fromisoformat(str(row[1])).strftime('%Y-%m-%d %H:%M')})"
         : row[0] for row in st.session_state.threads
     }
     

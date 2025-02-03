@@ -48,7 +48,7 @@ class ThreadManager:
         """Create a new conversation thread."""
         thread_id = str(uuid.uuid4())
         await self.db.execute(
-            "INSERT INTO threads (id) VALUES (?)",
+            "INSERT INTO threads (id) VALUES ($1)",
             (thread_id,)
         )
         return thread_id
@@ -131,7 +131,7 @@ class ThreadManager:
                 """
                 INSERT INTO messages (
                     id, thread_id, type, content, include_in_llm_message_history
-                ) VALUES (?, ?, ?, ?, ?)
+                ) VALUES ($1, $2, $3, $4, $5)
                 """,
                 (message_id, thread_id, message_type, content, include_in_llm_message_history)
             )
@@ -165,7 +165,7 @@ class ThreadManager:
             """
             SELECT type, content 
             FROM messages 
-            WHERE thread_id = ? 
+            WHERE thread_id = $1 
             AND include_in_llm_message_history = TRUE
             ORDER BY created_at ASC
             """,
@@ -220,7 +220,7 @@ class ThreadManager:
             row = await self.db.fetch_one(
                 """
                 SELECT id FROM messages 
-                WHERE thread_id = ? AND type = 'assistant_message'
+                WHERE thread_id = $1 AND type = 'assistant_message'
                 ORDER BY created_at DESC LIMIT 1
                 """,
                 (thread_id,)
@@ -236,16 +236,15 @@ class ThreadManager:
             if isinstance(content, (dict, list)):
                 content = json.dumps(content)
             
-            # Update the message
-            async with self.db.transaction() as conn:
-                await conn.execute(
-                    """
-                    UPDATE messages 
-                    SET content = ?, updated_at = CURRENT_TIMESTAMP 
-                    WHERE id = ?
-                    """,
-                    (content, message_id)
-                )
+            # Update the message - Fixed parameter passing
+            await self.db.execute(
+                """
+                UPDATE messages 
+                SET content = $1, updated_at = CURRENT_TIMESTAMP 
+                WHERE id = $2
+                """,
+                (content, message_id)
+            )
                 
         except Exception as e:
             logging.error(f"Failed to update message: {e}")
@@ -273,17 +272,13 @@ class ThreadManager:
                     }
                     failed_tool_results.append(failed_tool_result)
 
-                assistant_index = messages.index(last_assistant_message)
-                messages[assistant_index+1:assistant_index+1] = failed_tool_results
-
-                async with self.db.transaction() as conn:
-                    await conn.execute(
-                        """
-                        UPDATE threads 
-                        SET messages = ?, updated_at = CURRENT_TIMESTAMP 
-                        WHERE thread_id = ?
-                        """,
-                        (json.dumps(messages), thread_id)
+                # Add failed tool results as new messages instead of updating threads table
+                for result in failed_tool_results:
+                    await self.add_message(
+                        thread_id=thread_id,
+                        message_data=result,
+                        message_type="tool_message",
+                        include_in_llm_message_history=True
                     )
                 return True
         return False
@@ -427,7 +422,7 @@ class ThreadManager:
                             }
                         }
 
-                        # TODO: Add usage, cost information – from final llm response
+                        # TODO: Add usage, cost information – from final llm response
 
                         # # Add usage information from final state
                         # if final_state and 'usage' in final_state:
@@ -469,7 +464,7 @@ class ThreadManager:
                     }
                 }
 
-                # TODO: Add usage, cost information – from final llm response 
+                # TODO: Add usage, cost information – from final llm response 
                 
                 # # Add cost information if available
                 # if hasattr(response, 'cost'):
@@ -612,7 +607,7 @@ class ThreadManager:
             count_query = """
                 SELECT COUNT(*) 
                 FROM messages 
-                WHERE thread_id = ?
+                WHERE thread_id = $1
             """
             count_params = [thread_id]
 
@@ -620,13 +615,13 @@ class ThreadManager:
             query = """
                 SELECT id, type, content, created_at, updated_at, include_in_llm_message_history
                 FROM messages 
-                WHERE thread_id = ?
+                WHERE thread_id = $1
             """
             params = [thread_id]
 
             # Add filters to both queries
             if message_types:
-                placeholders = ','.join('?' * len(message_types))
+                placeholders = ','.join('$' + str(i+2) for i in range(len(message_types)))
                 filter_sql = f" AND type IN ({placeholders})"
                 query += filter_sql
                 count_query += filter_sql
@@ -634,20 +629,20 @@ class ThreadManager:
                 count_params.extend(message_types)
                 
             if before_timestamp:
-                query += " AND created_at < ?"
-                count_query += " AND created_at < ?"
+                query += " AND created_at < $" + str(len(params)+1)
+                count_query += " AND created_at < $" + str(len(params)+1)
                 params.append(before_timestamp)
                 count_params.append(before_timestamp)
                 
             if after_timestamp:
-                query += " AND created_at > ?"
-                count_query += " AND created_at > ?"
+                query += " AND created_at > $" + str(len(params)+1)
+                count_query += " AND created_at > $" + str(len(params)+1)
                 params.append(after_timestamp)
                 count_params.append(after_timestamp)
 
             if include_in_llm_message_history is not None:
-                query += " AND include_in_llm_message_history = ?"
-                count_query += " AND include_in_llm_message_history = ?"
+                query += " AND include_in_llm_message_history = $" + str(len(params)+1)
+                count_query += " AND include_in_llm_message_history = $" + str(len(params)+1)
                 params.append(include_in_llm_message_history)
                 count_params.append(include_in_llm_message_history)
 
@@ -657,7 +652,7 @@ class ThreadManager:
 
             # Add ordering and pagination
             query += f" ORDER BY created_at {'ASC' if order.lower() == 'asc' else 'DESC'}"
-            query += " LIMIT ? OFFSET ?"
+            query += " LIMIT $" + str(len(params)+1) + " OFFSET $" + str(len(params)+2)
             params.extend([limit, offset])
 
             # Execute query
@@ -710,7 +705,7 @@ class ThreadManager:
         """
         try:
             row = await self.db.fetch_one(
-                "SELECT 1 FROM threads WHERE id = ?",
+                "SELECT 1 FROM threads WHERE id = $1",
                 (thread_id,)
             )
             return row is not None
