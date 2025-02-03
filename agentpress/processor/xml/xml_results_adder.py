@@ -79,7 +79,7 @@ class XMLResultsAdder(ResultsAdderBase):
         """
         try:
             # Get the original tool call to find the root tag
-            messages = await self.get_messages(thread_id)
+            messages = await self.get_llm_history_messages(thread_id)
             assistant_msg = next((msg for msg in reversed(messages) 
                                if msg['role'] == 'assistant'), None)
             
@@ -107,8 +107,7 @@ class XMLResultsAdder(ResultsAdderBase):
             await self.add_message(thread_id, result_message)
             
         except Exception as e:
-            logging.error(f"Error adding tool result: {e}")
-            # Ensure the result is still added even if there's an error
+            logging.error(f"Error adding tool result: {e}")            # Ensure the result is still added even if there's an error
             result_message = {
                 "role": "user",
                 "content": f"Result for {result['name']}:\n{result['content']}"

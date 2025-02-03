@@ -38,6 +38,8 @@ class XMLToolExecutor(ToolExecutorBase):
         """
         self.parallel = parallel
         self.tool_registry = tool_registry or ToolRegistry()
+        # Add internal tracking of executed tools
+        self._executed_tools = set()
     
     async def execute_tool_calls(
         self,
@@ -65,20 +67,28 @@ class XMLToolExecutor(ToolExecutorBase):
         if executed_tool_calls is None:
             executed_tool_calls = set()
             
+        # Filter out already executed tool calls
+        new_tool_calls = [
+            tool_call for tool_call in tool_calls 
+            if tool_call['id'] not in executed_tool_calls 
+            and tool_call['id'] not in self._executed_tools
+        ]
+
+        if not new_tool_calls:
+            return []
+
         if self.parallel:
-            return await self._execute_parallel(
-                tool_calls, 
-                available_functions, 
-                thread_id, 
-                executed_tool_calls
-            )
+            results = await self._execute_parallel(new_tool_calls, available_functions, thread_id, executed_tool_calls)
         else:
-            return await self._execute_sequential(
-                tool_calls, 
-                available_functions, 
-                thread_id, 
-                executed_tool_calls
-            )
+            results = await self._execute_sequential(new_tool_calls, available_functions, thread_id, executed_tool_calls)
+
+        # Track executed tools internally
+        for tool_call in new_tool_calls:
+            self._executed_tools.add(tool_call['id'])
+            if executed_tool_calls is not None:
+                executed_tool_calls.add(tool_call['id'])
+
+        return results
     
     async def _execute_parallel(
         self,
@@ -87,9 +97,10 @@ class XMLToolExecutor(ToolExecutorBase):
         thread_id: str,
         executed_tool_calls: Set[str]
     ) -> List[Dict[str, Any]]:
-        async def execute_single_tool(tool_call: Dict[str, Any]) -> Dict[str, Any]:
-            if tool_call['id'] in executed_tool_calls:
-                logging.info(f"Tool call {tool_call['id']} already executed")
+        async def execute_single_tool(tool_call: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+            # Double-check the tool hasn't been executed
+            if (tool_call['id'] in executed_tool_calls or 
+                tool_call['id'] in self._executed_tools):
                 return None
                 
             try:
