@@ -53,7 +53,7 @@ MODULES = {
     "db_connection": {
         "required": True,
         "files": ["db_connection.py"],
-        "description": "Database Connection - Provides a connection to a SQLite database for storing and retrieving conversation state, tool data, and other persistent information."
+        "description": "Database Connection - Provides a connection to a database for storing and retrieving conversation state, tool data, and other persistent information."
     }
 }
 

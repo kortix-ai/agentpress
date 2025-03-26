@@ -11,7 +11,7 @@ class StateManager:
     """
     Manages persistent state storage for AgentPress components.
     
-    The StateManager provides thread-safe access to a SQLite-based state store,
+    The StateManager provides thread-safe access to a database-stored state store,
     allowing components to save and retrieve data across sessions. Each store
     has a unique ID and contains multiple key-value pairs in a single JSON object.
     
@@ -44,11 +44,14 @@ class StateManager:
 
     async def _ensure_store_exists(self):
         """Ensure store exists in database."""
-        async with self.db.transaction() as conn:
-            await conn.execute("""
-                INSERT OR IGNORE INTO state_stores (store_id, store_data)
-                VALUES (?, ?)
-            """, (self.store_id, json.dumps({})))
+        prisma = await self.db.prisma
+        await prisma.statestore.upsert(
+            where={'id': self.store_id},
+            data={
+                'create': {'id': self.store_id, 'data': json.dumps({})},
+                'update': {}
+            }
+        )
 
     @asynccontextmanager
     async def store_scope(self):
@@ -66,24 +69,16 @@ class StateManager:
         """
         async with self.lock:
             try:
-                async with self.db.transaction() as conn:
-                    async with conn.execute(
-                        "SELECT store_data FROM state_stores WHERE store_id = ?",
-                        (self.store_id,)
-                    ) as cursor:
-                        row = await cursor.fetchone()
-                        store = json.loads(row[0]) if row else {}
-                    
-                    yield store
-                    
-                    await conn.execute(
-                        """
-                        UPDATE state_stores 
-                        SET store_data = ?, updated_at = CURRENT_TIMESTAMP
-                        WHERE store_id = ?
-                        """, 
-                        (json.dumps(store), self.store_id)
-                    )
+                prisma = await self.db.prisma
+                store = await prisma.statestore.find_unique(where={'id': self.store_id})
+                store_data = json.loads(store.data) if store else {}
+                
+                yield store_data
+                
+                await prisma.statestore.update(
+                    where={'id': self.store_id},
+                    data={'data': json.dumps(store_data)}
+                )
             except Exception as e:
                 logging.error("Error in store operation", exc_info=True)
                 raise
@@ -98,106 +93,105 @@ class StateManager:
             
         Returns:
             Any: The stored data
-            
-        Raises:
-            Exception: If there are errors during storage operation
         """
         async with self.store_scope() as store:
             store[key] = data
-            logging.info(f'Updated store key: {key}')
             return data
 
     async def get(self, key: str) -> Optional[Any]:
         """
-        Get data for a key.
+        Retrieve data stored with a key.
         
         Args:
-            key (str): Simple string key like "config" or "settings"
+            key (str): Key to retrieve
             
         Returns:
-            Any: The stored data for the key, or None if key not found
+            Any: The stored data or None if not found
         """
         async with self.store_scope() as store:
-            if key in store:
-                data = store[key]
-                logging.info(f'Retrieved key: {key}')
-                return data
-            logging.info(f'Key not found: {key}')
-            return None
+            return store.get(key)
 
     async def delete(self, key: str):
         """
-        Delete data for a key.
+        Delete data stored with a key.
         
         Args:
-            key (str): Simple string key like "config" or "settings"
+            key (str): Key to delete
         """
         async with self.store_scope() as store:
             if key in store:
                 del store[key]
-                logging.info(f"Deleted key: {key}")
 
     async def update(self, key: str, data: Dict[str, Any]) -> Optional[Any]:
-        """Update existing data for a key by merging dictionaries."""
+        """
+        Update data stored with a key.
+        
+        Args:
+            key (str): Key to update
+            data (Dict[str, Any]): Data to update with
+            
+        Returns:
+            Any: The updated data or None if key not found
+        """
         async with self.store_scope() as store:
-            if key in store and isinstance(store[key], dict):
-                store[key].update(data)
-                logging.info(f'Updated store key: {key}')
+            if key in store:
+                if isinstance(store[key], dict):
+                    store[key].update(data)
+                else:
+                    store[key] = data
                 return store[key]
             return None
 
     async def append(self, key: str, item: Any) -> Optional[List[Any]]:
-        """Append an item to a list stored at key."""
+        """
+        Append an item to a list stored with a key.
+        
+        Args:
+            key (str): Key of the list
+            item (Any): Item to append
+            
+        Returns:
+            List[Any]: The updated list or None if key not found
+        """
         async with self.store_scope() as store:
-            if key not in store:
-                store[key] = []
-            if isinstance(store[key], list):
+            if key in store:
+                if not isinstance(store[key], list):
+                    store[key] = []
                 store[key].append(item)
-                logging.info(f'Appended to key: {key}')
                 return store[key]
             return None
 
     async def export_store(self) -> dict:
         """
-        Export entire store.
+        Export the entire store contents.
         
         Returns:
-            dict: Complete contents of the state store
+            dict: The complete store contents
         """
         async with self.store_scope() as store:
-            logging.info(f"Store content: {store}")
-            return store
+            return store.copy()
 
     async def clear_store(self):
-        """
-        Clear entire store.
-        
-        Removes all data from the store, resetting it to an empty state.
-        This operation is atomic and thread-safe.
-        """
+        """Clear all data from the store."""
         async with self.store_scope() as store:
             store.clear()
-            logging.info("Cleared store")
 
     @classmethod
     async def list_stores(cls) -> List[Dict[str, Any]]:
         """
-        List all available state stores.
+        List all state stores.
         
         Returns:
-            List of store information including IDs and timestamps
+            List[Dict[str, Any]]: List of store metadata
         """
         db = DBConnection()
-        async with db.transaction() as conn:
-            async with conn.execute(
-                "SELECT store_id, created_at, updated_at FROM state_stores ORDER BY updated_at DESC"
-            ) as cursor:
-                stores = [
-                    {
-                        "store_id": row[0],
-                        "created_at": row[1],
-                        "updated_at": row[2]
-                    }
-                    for row in await cursor.fetchall()
-                ]
-            return stores
+        prisma = await db.prisma
+        stores = await prisma.statestore.find_many()
+        return [
+            {
+                'id': store.id,
+                'created_at': store.created_at,
+                'updated_at': store.updated_at
+            }
+            for store in stores
+        ]

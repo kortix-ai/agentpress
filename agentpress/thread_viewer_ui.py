@@ -21,8 +21,13 @@ def format_message_content(content):
 async def load_threads():
     """Load all thread IDs from the database."""
     db = DBConnection()
-    rows = await db.fetch_all("SELECT thread_id, created_at FROM threads ORDER BY created_at DESC")
-    return rows
+    prisma = await db.prisma
+    threads = await prisma.thread.find_many(
+        order={
+            'createdAt': 'desc'
+        }
+    )
+    return [(thread.id, thread.createdAt) for thread in threads]
 
 async def load_thread_content(thread_id: str):
     """Load the content of a specific thread from the database."""

@@ -48,10 +48,11 @@ class ThreadManager:
     async def create_thread(self) -> str:
         """Create a new conversation thread."""
         thread_id = str(uuid.uuid4())
-        await self.db.execute(
-            "INSERT INTO threads (thread_id, messages) VALUES (?, ?)",
-            (thread_id, json.dumps([]))
-        )
+        prisma = await self.db.prisma
+        await prisma.thread.create(data={
+            'id': thread_id,
+            'messages': json.dumps([])
+        })
         return thread_id
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
@@ -59,65 +60,58 @@ class ThreadManager:
         logging.info(f"Adding message to thread {thread_id} with images: {images}")
         
         try:
-            async with self.db.transaction() as conn:
-                # Handle cleanup of incomplete tool calls
-                if message_data['role'] == 'user':
-                    messages = await self.get_messages(thread_id)
-                    last_assistant_index = next((i for i in reversed(range(len(messages))) 
-                        if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
+            # Handle cleanup of incomplete tool calls
+            if message_data['role'] == 'user':
+                messages = await self.get_messages(thread_id)
+                last_assistant_index = next((i for i in reversed(range(len(messages))) 
+                    if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
+                
+                if last_assistant_index is not None:
+                    tool_call_count = len(messages[last_assistant_index]['tool_calls'])
+                    tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] 
+                                           if msg['role'] == 'tool')
                     
-                    if last_assistant_index is not None:
-                        tool_call_count = len(messages[last_assistant_index]['tool_calls'])
-                        tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] 
-                                               if msg['role'] == 'tool')
-                        
-                        if tool_call_count != tool_response_count:
-                            await self.cleanup_incomplete_tool_calls(thread_id)
+                    if tool_call_count != tool_response_count:
+                        await self.cleanup_incomplete_tool_calls(thread_id)
 
-                # Convert ToolResult instances to strings
-                for key, value in message_data.items():
-                    if isinstance(value, ToolResult):
-                        message_data[key] = str(value)
+            # Convert ToolResult instances to strings
+            for key, value in message_data.items():
+                if isinstance(value, ToolResult):
+                    message_data[key] = str(value)
 
-                # Handle image attachments
-                if images:
-                    if isinstance(message_data['content'], str):
-                        message_data['content'] = [{"type": "text", "text": message_data['content']}]
-                    elif not isinstance(message_data['content'], list):
-                        message_data['content'] = []
+            # Handle image attachments
+            if images:
+                if isinstance(message_data['content'], str):
+                    message_data['content'] = [{"type": "text", "text": message_data['content']}]
+                elif not isinstance(message_data['content'], list):
+                    message_data['content'] = []
 
-                    for image in images:
-                        image_content = {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{image['content_type']};base64,{image['base64']}",
-                                "detail": "high"
-                            }
+                for image in images:
+                    image_content = {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{image['content_type']};base64,{image['base64']}",
+                            "detail": "high"
                         }
-                        message_data['content'].append(image_content)
+                    }
+                    message_data['content'].append(image_content)
 
-                # Get current messages
-                row = await self.db.fetch_one(
-                    "SELECT messages FROM threads WHERE thread_id = ?",
-                    (thread_id,)
-                )
-                if not row:
-                    raise ValueError(f"Thread {thread_id} not found")
-                
-                messages = json.loads(row[0])
-                messages.append(message_data)
-                
-                # Update thread
-                await conn.execute(
-                    """
-                    UPDATE threads 
-                    SET messages = ?, updated_at = CURRENT_TIMESTAMP 
-                    WHERE thread_id = ?
-                    """,
-                    (json.dumps(messages), thread_id)
-                )
+            # Get current messages
+            prisma = await self.db.prisma
+            thread = await prisma.thread.find_unique(where={'id': thread_id})
+            if not thread:
+                raise ValueError(f"Thread {thread_id} not found")
+            
+            messages = json.loads(thread.messages)
+            messages.append(message_data)
+            
+            # Update thread
+            await prisma.thread.update(
+                where={'id': thread_id},
+                data={'messages': json.dumps(messages)}
+            )
 
-                logging.info(f"Message added to thread {thread_id}: {message_data}")
+            logging.info(f"Message added to thread {thread_id}: {message_data}")
             
         except Exception as e:
             logging.error(f"Failed to add message to thread {thread_id}: {e}")
@@ -131,14 +125,12 @@ class ThreadManager:
         regular_list: bool = True
     ) -> List[Dict[str, Any]]:
         """Retrieve messages from a thread with optional filtering."""
-        row = await self.db.fetch_one(
-            "SELECT messages FROM threads WHERE thread_id = ?",
-            (thread_id,)
-        )
-        if not row:
+        prisma = await self.db.prisma
+        thread = await prisma.thread.find_unique(where={'id': thread_id})
+        if not thread:
             return []
         
-        messages = json.loads(row[0])
+        messages = json.loads(thread.messages)
         
         if only_latest_assistant:
             for msg in reversed(messages):
@@ -163,30 +155,25 @@ class ThreadManager:
 
     async def _update_message(self, thread_id: str, message: Dict[str, Any]):
         """Update an existing message in the thread."""
-        async with self.db.transaction() as conn:
-            row = await self.db.fetch_one(
-                "SELECT messages FROM threads WHERE thread_id = ?",
-                (thread_id,)
-            )
-            if not row:
-                return
-            
-            messages = json.loads(row[0])
-            
-            # Find and update the last assistant message
-            for i in reversed(range(len(messages))):
-                if messages[i].get('role') == 'assistant':
-                    messages[i] = message
-                    break
-            
-            await conn.execute(
-                """
-                UPDATE threads 
-                SET messages = ?, updated_at = CURRENT_TIMESTAMP 
-                WHERE thread_id = ?
-                """,
-                (json.dumps(messages), thread_id)
-            )
+        prisma = await self.db.prisma
+        thread = await prisma.thread.find_unique(where={'id': thread_id})
+        if not thread:
+            return
+        
+        messages = json.loads(thread.messages)
+        
+        # Find and update the last assistant message
+        for i in reversed(range(len(messages))):
+            if messages[i].get('role') == 'assistant':
+                messages[i] = message
+                break
+        
+        await prisma.thread.update(
+            where={'id': thread_id},
+            data={
+                'messages': json.dumps(messages)
+            }
+        )
 
     async def cleanup_incomplete_tool_calls(self, thread_id: str):
         """Clean up incomplete tool calls in a thread."""
@@ -213,15 +200,13 @@ class ThreadManager:
                 assistant_index = messages.index(last_assistant_message)
                 messages[assistant_index+1:assistant_index+1] = failed_tool_results
 
-                async with self.db.transaction() as conn:
-                    await conn.execute(
-                        """
-                        UPDATE threads 
-                        SET messages = ?, updated_at = CURRENT_TIMESTAMP 
-                        WHERE thread_id = ?
-                        """,
-                        (json.dumps(messages), thread_id)
-                    )
+                prisma = await self.db.prisma
+                await prisma.thread.update(
+                    where={'id': thread_id},
+                    data={
+                        'messages': json.dumps(messages)
+                    }
+                )
                 return True
         return False
 
