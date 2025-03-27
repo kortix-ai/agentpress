@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Modern Landing Page</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -16,7 +18,7 @@
                 <li><a href="#pricing">Pricing</a></li>
                 <li><a href="#contact">Contact</a></li>
             </ul>
-            <button class="mobile-nav-toggle" aria-label="Menu">
+            <button class="mobile-menu" aria-label="Menu">
                 <span></span>
                 <span></span>
                 <span></span>
@@ -25,106 +27,189 @@
     </header>
 
     <main>
-        <section class="hero" id="home">
-            <div class="container">
+        <section class="hero">
+            <div class="hero-content">
                 <h1>Welcome to the Future</h1>
                 <p>Transform your digital presence with our innovative solutions</p>
                 <button class="cta-button">Get Started</button>
             </div>
         </section>
 
+        <section class="stats">
+    <div class="stats-container">
+        <div class="stat-item">
+            <span class="stat-number" data-target="5000">0</span>
+            <span class="stat-label">Happy Clients</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-number" data-target="95">0</span>
+            <span class="stat-label">Success Rate</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-number" data-target="24">0</span>
+            <span class="stat-label">Team Members</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-number" data-target="100">0</span>
+            <span class="stat-label">Projects Done</span>
+        </div>
+    </div>
+</section>
+
+<section class="features" id="features">
+            <h2>Our Features</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <span class="feature-icon"><i class="fas fa-rocket"></i></span>
+                    <h3>Fast Performance</h3>
+                    <p>Lightning-quick loading times</p>
+                </div>
+                <div class="feature-card">
+                    <span class="feature-icon"><i class="fas fa-shield-alt"></i></span>
+                    <h3>Secure</h3>
+                    <p>Enterprise-grade security</p>
+                </div>
+                <div class="feature-card">
+                    <span class="feature-icon"><i class="fas fa-mobile-alt"></i></span>
+                    <h3>Responsive</h3>
+                    <p>Works on all devices</p>
+                </div>
+            </div>
+        </section>
+
+        
+
         <section class="pricing" id="pricing">
-            <div class="container">
-                <h2>Pricing Plans</h2>
-                <div class="pricing-grid">
-                    <div class="pricing-card">
-                        <h3>Starter</h3>
-                        <div class="price">$29<span>/month</span></div>
-                        <ul class="features-list">
-                            <li>Basic Features</li>
-                            <li>2 Projects</li>
-                            <li>5GB Storage</li>
-                            <li>Basic Support</li>
-                        </ul>
-                        <button class="cta-button">Choose Plan</button>
-                    </div>
-                    <div class="pricing-card popular">
-                        <div class="popular-badge">Most Popular</div>
-                        <h3>Professional</h3>
-                        <div class="price">$79<span>/month</span></div>
-                        <ul class="features-list">
-                            <li>Advanced Features</li>
-                            <li>10 Projects</li>
-                            <li>25GB Storage</li>
-                            <li>Priority Support</li>
-                        </ul>
-                        <button class="cta-button">Choose Plan</button>
-                    </div>
-                    <div class="pricing-card">
-                        <h3>Enterprise</h3>
-                        <div class="price">$199<span>/month</span></div>
-                        <ul class="features-list">
-                            <li>All Features</li>
-                            <li>Unlimited Projects</li>
-                            <li>100GB Storage</li>
-                            <li>24/7 Support</li>
-                        </ul>
-                        <button class="cta-button">Choose Plan</button>
-                    </div>
+            <h2>Choose Your Plan</h2>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <h3>Starter</h3>
+                    <div class="price">$29<span>/month</span></div>
+                    <ul class="features-list">
+                        <li>Basic Features</li>
+                        <li>2 Projects</li>
+                        <li>5GB Storage</li>
+                        <li>Basic Support</li>
+                    </ul>
+                    <button class="pricing-button">Get Started</button>
+                </div>
+                <div class="pricing-card popular">
+                    <span class="popular-badge">Most Popular</span>
+                    <h3>Professional</h3>
+                    <div class="price">$79<span>/month</span></div>
+                    <ul class="features-list">
+                        <li>Advanced Features</li>
+                        <li>10 Projects</li>
+                        <li>25GB Storage</li>
+                        <li>Priority Support</li>
+                    </ul>
+                    <button class="pricing-button">Get Started</button>
+                </div>
+                <div class="pricing-card">
+                    <h3>Enterprise</h3>
+                    <div class="price">$199<span>/month</span></div>
+                    <ul class="features-list">
+                        <li>All Features</li>
+                        <li>Unlimited Projects</li>
+                        <li>100GB Storage</li>
+                        <li>24/7 Support</li>
+                    </ul>
+                    <button class="pricing-button">Get Started</button>
                 </div>
             </div>
         </section>
 
-        <section class="features" id="features">
-            <div class="container">
-                <h2>Key Features</h2>
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <h3>Innovation</h3>
-                        <p>Cutting-edge solutions for modern problems</p>
-                    </div>
-                    <div class="feature-card">
-                        <h3>Security</h3>
-                        <p>Enterprise-grade protection for your data</p>
-                    </div>
-                    <div class="feature-card">
-                        <h3>Scalability</h3>
-                        <p>Grow your business without limitations</p>
-                    </div>
+        <section class="testimonials">
+            <h2>What Our Clients Say</h2>
+            <div class="testimonials-grid">
+                <div class="testimonial-card">
+                    <img src="https://randomuser.me/api/portraits/women/32.jpg" alt="Sarah Johnson" class="testimonial-image">
+                    <p class="testimonial-text">"This platform has transformed how we do business. The features are exactly what we needed."</p>
+                    <p class="testimonial-author">Sarah Johnson</p>
+                    <p class="testimonial-position">CEO, TechStart</p>
+                </div>
+                <div class="testimonial-card">
+                    <img src="https://randomuser.me/api/portraits/men/45.jpg" alt="Michael Chen" class="testimonial-image">
+                    <p class="testimonial-text">"The best investment we've made. The ROI has been incredible and the support is outstanding."</p>
+                    <p class="testimonial-author">Michael Chen</p>
+                    <p class="testimonial-position">CTO, InnovateX</p>
+                </div>
+                <div class="testimonial-card">
+                    <img src="https://randomuser.me/api/portraits/women/68.jpg" alt="Emily Rodriguez" class="testimonial-image">
+                    <p class="testimonial-text">"Intuitive interface, powerful features, and excellent customer service. Highly recommended!"</p>
+                    <p class="testimonial-author">Emily Rodriguez</p>
+                    <p class="testimonial-position">Director, DesignPro</p>
                 </div>
             </div>
         </section>
 
-        <section class="cta" id="contact">
-            <div class="container">
-                <h2>Ready to Get Started?</h2>
-                <p>Join thousands of satisfied customers today</p>
-                <button class="cta-button">Contact Us</button>
+        <section class="contact" id="contact">
+            <h2>Get in Touch</h2>
+            <div class="contact-container">
+                <form class="contact-form">
+                    <div class="form-group">
+                        <input type="text" name="name" placeholder="Your Name" required minlength="2">
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="form-group">
+                        <input type="email" name="email" placeholder="Your Email" required>
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="form-group">
+                        <textarea name="message" placeholder="Your Message" required minlength="10"></textarea>
+                        <div class="error-message"></div>
+                    </div>
+                    <button type="submit" class="submit-button">Send Message</button>
+                </form>
             </div>
         </section>
+
+        
+
+        
+
+        
     </main>
 
     <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h4>About Us</h4>
-                    <p>Transforming businesses through technology</p>
-                </div>
-                <div class="footer-section">
-                    <h4>Contact</h4>
-                    <p>Email: info@example.com</p>
-                    <p>Phone: (555) 123-4567</p>
-                </div>
-                <div class="footer-section">
-                    <h4>Follow Us</h4>
-                    <div class="social-links">
-                        <a href="#" aria-label="Twitter">Twitter</a>
-                        <a href="#" aria-label="LinkedIn">LinkedIn</a>
-                        <a href="#" aria-label="Facebook">Facebook</a>
-                    </div>
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>Brand</h3>
+                <p class="footer-description">Transforming digital experiences with innovative solutions.</p>
+                <div class="social-links">
+                    <a href="#" aria-label="Facebook"><i class="fab fa-facebook"></i></a>
+                    <a href="#" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="#" aria-label="LinkedIn"><i class="fab fa-linkedin"></i></a>
+                    <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
                 </div>
             </div>
+            <div class="footer-section">
+                <h3>Quick Links</h3>
+                <ul class="footer-links">
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#pricing">Pricing</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                    <li><a href="#">Privacy Policy</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h3>Newsletter</h3>
+                <form class="newsletter-form">
+                    <input type="email" placeholder="Enter your email" required>
+                    <button type="submit">Subscribe</button>
+                </form>
+            </div>
+            <div class="footer-section">
+                <h3>Contact</h3>
+                <ul class="contact-info">
+                    <li><i class="fas fa-map-marker-alt"></i> 123 Tech Street, City</li>
+                    <li><i class="fas fa-phone"></i> +1 234 567 890</li>
+                    <li><i class="fas fa-envelope"></i> info@brand.com</li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2024 Brand. All rights reserved.</p>
         </div>
     </footer>
 

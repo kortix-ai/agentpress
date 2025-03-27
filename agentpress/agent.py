@@ -100,8 +100,9 @@ def get_anthropic_api_key():
         os.environ["ANTHROPIC_API_KEY"] = api_key
     return api_key
 
-async def run_agent(thread_id: str, stream: bool = True, use_xml: bool = True, state_message: Optional[Dict[str, Any]] = None, max_iterations: int = 5, thread_manager: Optional[ThreadManager] = None, state_manager: Optional[StateManager] = None, store_id: Optional[str] = None):
+async def run_agent(thread_id: str, stream: bool = True, use_xml: bool = True, state_message: Optional[Dict[str, Any]] = None, max_iterations: int = 1, thread_manager: Optional[ThreadManager] = None, state_manager: Optional[StateManager] = None, store_id: Optional[str] = None):
     """Run the development agent with specified configuration."""
+    
     if not thread_manager:
         thread_manager = ThreadManager()
     if not store_id:

@@ -28,4 +28,16 @@ model StateStore {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("state_stores")
+}
+
+model AgentRun {
+  id          String    @id @default(uuid())
+  threadId    String    @map("thread_id")
+  status      String    @default("running") // running, completed, failed
+  startedAt   DateTime  @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  responses   Json      @default("[]")
+  error       String?
+
+  @@map("agent_runs")
 } 

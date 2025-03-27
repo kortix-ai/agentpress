@@ -37,6 +37,69 @@
         .smooth-scroll {
             scroll-behavior: smooth;
         }
+        .agent-controls {
+            display: flex;
+            gap: 8px;
+        }
+        .hidden {
+            display: none;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-running {
+            background-color: #22c55e;
+            animation: pulse 1.5s infinite;
+        }
+        .status-stopped {
+            background-color: #ef4444;
+        }
+        .status-completed {
+            background-color: #3b82f6;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .stop-button {
+            transition: all 0.2s;
+            font-weight: bold;
+        }
+        .stop-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+        }
+        .streaming-indicator {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #4f46e5;
+            margin-left: 10px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .streaming-indicator.active {
+            opacity: 1;
+        }
+        .streaming-icon {
+            width: 16px;
+            height: 16px;
+            border: 2px solid transparent;
+            border-top-color: #4f46e5;
+            border-right-color: #4f46e5;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -75,18 +138,38 @@
                                 <option value="standard">Standard Function Calling</option>
                             </select>
                         </div>
-                        <button id="startProject" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                            Start Project
-                        </button>
+                        <div class="agent-controls">
+                            <button id="startProject" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                                Start Project
+                            </button>
+                            <button id="startAndStream" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                                Start & Stream
+                            </button>
+                            <button id="stopAgent" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 hidden stop-button">
+                                ⏹️ Stop Agent
+                            </button>
+                        </div>
+                        <div id="agentStatus" class="text-sm text-gray-500 hidden mt-2 p-2 border rounded-md">
+                            Agent Status: <span class="status-indicator"></span><span id="statusText">Not Running</span>
+                        </div>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-lg shadow-lg p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-semibold">Conversation</h2>
-                        <div class="flex items-center space-x-2">
-                            <label class="text-sm text-gray-600">Auto-scroll</label>
-                            <input type="checkbox" id="autoScroll" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked>
+                        <div class="flex items-center space-x-4">
+                            <button id="streamAgent" class="text-indigo-600 px-2 py-1 rounded-md border border-indigo-600 hover:bg-indigo-50 hidden">
+                                Stream Agent
+                            </button>
+                            <div id="streamingIndicator" class="streaming-indicator">
+                                <div class="streaming-icon"></div>
+                                <span>Streaming</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <label class="text-sm text-gray-600">Auto-scroll</label>
+                                <input type="checkbox" id="autoScroll" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked>
+                            </div>
                         </div>
                     </div>
                     <div id="conversation" class="space-y-4 mb-4 h-[500px] overflow-y-auto conversation-container">
@@ -105,11 +188,13 @@
 
     <script>
         let currentThreadId = null;
-        let eventSource = null;
+        let currentAgentRunId = null;
+        let responsesStream = null;
         let currentMessageDiv = null;
         let currentContent = '';
         let threads = new Map();
         let autoScrollEnabled = true;
+        let agentStatus = 'idle'; // idle, running, stopped
 
         // Thread Management
         async function loadThreads() {
@@ -118,6 +203,11 @@
                 const data = await response.json();
                 threads = new Map(data.threads.map(t => [t.id, t]));
                 updateThreadsList();
+                
+                // Auto-select first thread if none selected
+                if (threads.size > 0 && !currentThreadId) {
+                    selectThread(threads.keys().next().value);
+                }
             } catch (error) {
                 console.error('Failed to load threads:', error);
             }
@@ -142,15 +232,263 @@
         async function selectThread(threadId) {
             currentThreadId = threadId;
             updateThreadsList();
-            await loadThreadMessages(threadId);
-        }
-
-        async function loadThreadMessages(threadId) {
+            
+            // Clear current content
             const conversation = document.getElementById('conversation');
             conversation.innerHTML = '';
             currentMessageDiv = null;
             currentContent = '';
+            
+            // Reset agent run
+            if (responsesStream) {
+                responsesStream.close();
+                responsesStream = null;
+            }
+            currentAgentRunId = null;
+            updateAgentStatus('idle');
+            
+            // Load thread messages
+            await loadThreadMessages(threadId);
+            
+            // Check for active agent runs
+            await checkForActiveAgentRuns(threadId);
+        }
+        
+        function updateAgentStatus(status) {
+            agentStatus = status;
+            const statusText = document.getElementById('statusText');
+            const agentStatusDiv = document.getElementById('agentStatus');
+            const stopButton = document.getElementById('stopAgent');
+            const streamButton = document.getElementById('streamAgent');
+            const statusIndicator = document.querySelector('.status-indicator');
+            const streamingIndicator = document.getElementById('streamingIndicator');
+            
+            agentStatusDiv.classList.remove('hidden');
+            
+            // Reset all status classes
+            statusIndicator.classList.remove('status-running', 'status-stopped', 'status-completed');
+            
+            if (status === 'running') {
+                statusText.textContent = 'Running';
+                statusText.className = 'text-green-600 font-medium';
+                statusIndicator.classList.add('status-running');
+                stopButton.classList.remove('hidden');
+                streamButton.classList.remove('hidden');
+                
+                // Make the stop button more noticeable
+                document.getElementById('conversation').classList.add('border-green-200', 'border-2');
+            } else {
+                // If not running, hide streaming indicator
+                streamingIndicator.classList.remove('active');
+                
+                if (status === 'stopped') {
+                    statusText.textContent = 'Stopped';
+                    statusText.className = 'text-red-600 font-medium';
+                    statusIndicator.classList.add('status-stopped');
+                } else if (status === 'completed') {
+                    statusText.textContent = 'Completed';
+                    statusText.className = 'text-blue-600 font-medium';
+                    statusIndicator.classList.add('status-completed');
+                } else {
+                    statusText.textContent = 'Not Running';
+                    statusText.className = 'text-gray-600';
+                }
+                
+                stopButton.classList.add('hidden');
+                streamButton.classList.add('hidden');
+                document.getElementById('conversation').classList.remove('border-green-200', 'border-2');
+            }
+        }
+        
+        async function checkForActiveAgentRuns(threadId) {
+            try {
+                const response = await fetch(`/api/thread/${threadId}/agent-runs`);
+                const data = await response.json();
+                
+                // Look for the most recent running agent run
+                const activeRuns = data.agent_runs.filter(run => run.status === 'running');
+                if (activeRuns.length > 0) {
+                    // Sort by start time descending to get the most recent
+                    activeRuns.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+                    
+                    // Set the current agent run ID
+                    currentAgentRunId = activeRuns[0].id;
+                    updateAgentStatus('running');
+                }
+            } catch (error) {
+                console.error('Failed to check for active agent runs:', error);
+            }
+        }
+        
+        async function startAgent() {
+            if (!currentThreadId) {
+                await createNewThread();
+            }
 
+            const description = document.getElementById('projectDescription').value;
+            const useXml = document.getElementById('toolFormat').value === 'xml';
+
+            // Add initial message
+            await fetch(`/api/thread/${currentThreadId}/message`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    role: 'user',
+                    content: description
+                })
+            });
+
+            addMessage(description, 'user');
+
+            // Close existing stream if any
+            if (responsesStream) {
+                responsesStream.close();
+                responsesStream = null;
+            }
+
+            // Reset current message
+            currentMessageDiv = null;
+            currentContent = '';
+
+            try {
+                // Start the agent
+                const response = await fetch(`/api/thread/${currentThreadId}/agent/start?use_xml=${useXml}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                currentAgentRunId = data.agent_run_id;
+                
+                updateAgentStatus('running');
+                return currentAgentRunId;
+            } catch (error) {
+                console.error('Failed to start agent:', error);
+                addMessage(`Error starting agent: ${error.message}`, 'assistant');
+                return null;
+            }
+        }
+        
+        async function stopAgent() {
+            if (!currentAgentRunId) return;
+            
+            try {
+                // Show stopping state
+                const stopButton = document.getElementById('stopAgent');
+                stopButton.textContent = "Stopping...";
+                stopButton.disabled = true;
+                stopButton.classList.add('opacity-75');
+                
+                // Request to stop the agent
+                await fetch(`/api/agent-run/${currentAgentRunId}/stop`, {
+                    method: 'POST'
+                });
+                
+                // Close the stream if it's open
+                if (responsesStream) {
+                    responsesStream.close();
+                    responsesStream = null;
+                }
+                
+                // Update UI
+                updateAgentStatus('stopped');
+                addMessage("🛑 Agent has been stopped manually. Any pending tasks will not complete.", 'assistant');
+                
+                // Reset button
+                stopButton.textContent = "⏹️ Stop Agent";
+                stopButton.disabled = false;
+                stopButton.classList.remove('opacity-75');
+            } catch (error) {
+                console.error('Failed to stop agent:', error);
+                addMessage(`Error stopping agent: ${error.message}`, 'assistant');
+                
+                // Reset button
+                const stopButton = document.getElementById('stopAgent');
+                stopButton.textContent = "⏹️ Stop Agent";
+                stopButton.disabled = false;
+                stopButton.classList.remove('opacity-75');
+            }
+        }
+        
+        async function streamAgent(agentRunId) {
+            if (!agentRunId) return;
+            
+            // Close existing stream if any
+            if (responsesStream) {
+                responsesStream.close();
+            }
+            
+            try {
+                // Show streaming indicator
+                const streamingIndicator = document.getElementById('streamingIndicator');
+                streamingIndicator.classList.add('active');
+                
+                // Connect to the agent run stream
+                responsesStream = new EventSource(`/api/agent-run/${agentRunId}/stream`);
+                
+                responsesStream.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    
+                    // Handle ping messages to keep connection alive
+                    if (data.type === 'ping') {
+                        return; // Just ignore pings
+                    }
+                    
+                    if (data.type === 'content') {
+                        updateStreamingContent(data.content);
+                    } else if (data.type === 'tool_call') {
+                        addToolCall(data.name, data.arguments);
+                    } else if (data.type === 'error') {
+                        addMessage(`Error: ${data.message}`, 'assistant');
+                    }
+                };
+                
+                responsesStream.onerror = (error) => {
+                    console.error('Stream error:', error);
+                    
+                    // Close the current stream
+                    responsesStream.close();
+                    
+                    // Check if the agent is still running - if it is, try to reconnect after a delay
+                    checkAgentStatus(agentRunId).then(status => {
+                        if (status === 'running') {
+                            console.log('Reconnecting to agent run...');
+                            setTimeout(() => streamAgent(agentRunId), 1000); // Reconnect after 1 second
+                        } else {
+                            // If not running, hide the streaming indicator
+                            streamingIndicator.classList.remove('active');
+                        }
+                    });
+                };
+                
+                // When the stream opens, make sure the indicator is visible
+                responsesStream.onopen = () => {
+                    streamingIndicator.classList.add('active');
+                };
+            } catch (error) {
+                console.error('Failed to stream agent:', error);
+                // Hide streaming indicator on error
+                document.getElementById('streamingIndicator').classList.remove('active');
+            }
+        }
+        
+        async function checkAgentStatus(agentRunId) {
+            if (!agentRunId) return 'idle';
+            
+            try {
+                const response = await fetch(`/api/agent-run/${agentRunId}`);
+                const data = await response.json();
+                
+                updateAgentStatus(data.status);
+                return data.status;
+            } catch (error) {
+                console.error('Failed to check agent status:', error);
+                updateAgentStatus('idle');
+                return 'idle';
+            }
+        }
+
+        async function loadThreadMessages(threadId) {
             try {
                 const response = await fetch(`/api/thread/${threadId}/messages`);
                 const data = await response.json();
@@ -199,64 +537,6 @@
             }
         }
 
-        // Event Handlers
-        async function startProject() {
-            if (!currentThreadId) {
-                alert('Please select or create a thread first');
-                return;
-            }
-
-            const description = document.getElementById('projectDescription').value;
-            const useXml = document.getElementById('toolFormat').value === 'xml';
-
-            // Add initial message
-            await fetch(`/api/thread/${currentThreadId}/message`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    role: 'user',
-                    content: description
-                })
-            });
-
-            addMessage(description, 'user');
-
-            // Start streaming
-            if (eventSource) {
-                eventSource.close();
-            }
-
-            const response = await fetch(`/api/thread/${currentThreadId}/agent?use_xml=${useXml}&stream=true`, {
-                method: 'POST'
-            });
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-
-            while (true) {
-                const {value, done} = await reader.read();
-                if (done) break;
-
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n');
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = JSON.parse(line.slice(6));
-                        if (data.type === 'content') {
-                            updateStreamingContent(data.content);
-                        } else if (data.type === 'tool_call') {
-                            addToolCall(data.name, data.arguments);
-                        } else if (data.type === 'error') {
-                            addMessage(`Error: ${data.message}`, 'assistant');
-                        }
-                    }
-                }
-            }
-        }
-
         async function sendMessage() {
             if (!currentThreadId) {
                 alert('Please select or create a thread first');
@@ -282,35 +562,29 @@
             addMessage(message, 'user');
             input.value = '';
 
-            // Start streaming
+            // If there's an active agent run, stop it
+            if (currentAgentRunId && agentStatus === 'running') {
+                await stopAgent();
+            }
+
+            // Reset current message
+            currentMessageDiv = null;
+            currentContent = '';
+
+            // Start a new agent
             const useXml = document.getElementById('toolFormat').value === 'xml';
-
-            const response = await fetch(`/api/thread/${currentThreadId}/agent?use_xml=${useXml}&stream=true`, {
-                method: 'POST'
-            });
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-
-            while (true) {
-                const {value, done} = await reader.read();
-                if (done) break;
-
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n');
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = JSON.parse(line.slice(6));
-                        if (data.type === 'content') {
-                            updateStreamingContent(data.content);
-                        } else if (data.type === 'tool_call') {
-                            addToolCall(data.name, data.arguments);
-                        } else if (data.type === 'error') {
-                            addMessage(`Error: ${data.message}`, 'assistant');
-                        }
-                    }
+            
+            try {
+                // Start the agent and get its ID
+                const agentRunId = await startAgent();
+                
+                // Start streaming immediately
+                if (agentRunId) {
+                    await streamAgent(agentRunId);
                 }
+            } catch (error) {
+                console.error('Failed to process message:', error);
+                addMessage(`Error: ${error.message}`, 'assistant');
             }
         }
 
@@ -325,13 +599,35 @@
                     created_at: new Date().toISOString()
                 });
                 await selectThread(data.thread_id);
+                return data.thread_id;
             } catch (error) {
                 console.error('Failed to create thread:', error);
             }
         }
 
         // Event Listeners
-        document.getElementById('startProject').addEventListener('click', startProject);
+        document.getElementById('startProject').addEventListener('click', async () => {
+            const agentRunId = await startAgent();
+            if (agentRunId) {
+                addMessage("Agent started and running in the background. Click 'Stream Agent' to see progress.", 'assistant');
+            }
+        });
+        
+        document.getElementById('startAndStream').addEventListener('click', async () => {
+            const agentRunId = await startAgent();
+            if (agentRunId) {
+                await streamAgent(agentRunId);
+            }
+        });
+        
+        document.getElementById('stopAgent').addEventListener('click', stopAgent);
+        
+        document.getElementById('streamAgent').addEventListener('click', () => {
+            if (currentAgentRunId) {
+                streamAgent(currentAgentRunId);
+            }
+        });
+        
         document.getElementById('sendMessage').addEventListener('click', sendMessage);
         document.getElementById('newThread').addEventListener('click', createNewThread);
         document.getElementById('messageInput').addEventListener('keypress', (e) => {
@@ -343,6 +639,23 @@
             autoScrollEnabled = e.target.checked;
             const container = document.getElementById('conversation');
             container.className = `space-y-4 mb-4 h-[500px] overflow-y-auto conversation-container ${autoScrollEnabled ? 'smooth-scroll' : 'auto-scroll'}`;
+        });
+
+        // Page visibility change handling - reconnect to agent when page becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && currentThreadId) {
+                // If we have an agent run ID and it was running, check its status
+                if (currentAgentRunId) {
+                    checkAgentStatus(currentAgentRunId);
+                }
+            }
+        });
+
+        // Handle window unload to clean up resources
+        window.addEventListener('beforeunload', () => {
+            if (responsesStream) {
+                responsesStream.close();
+            }
         });
 
         // Initial load
