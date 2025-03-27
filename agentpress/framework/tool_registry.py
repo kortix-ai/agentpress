@@ -1,5 +1,5 @@
 from typing import Dict, Type, Any, List, Optional, Callable
-from agentpress.tool import Tool, SchemaType, ToolSchema
+from agentpress.framework.tool import Tool, SchemaType, ToolSchema
 import logging
 
 

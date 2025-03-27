@@ -1,8 +1,8 @@
 import os
 import asyncio
 import subprocess
-from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
-from agentpress.state_manager import StateManager
+from agentpress.framework.tool import Tool, ToolResult, openapi_schema, xml_schema
+from agentpress.framework.state_manager import StateManager
 from typing import Optional
 
 class TerminalTool(Tool):

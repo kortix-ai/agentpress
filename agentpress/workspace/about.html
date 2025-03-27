@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Us - Brand</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .about-hero {
+            background: linear-gradient(135deg, #e0f2fe 0%, #bfdbfe 100%);
+            padding: 120px 5% 60px;
+            text-align: center;
+        }
+
+        .about-content {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 60px 5%;
+        }
+
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin: 40px 0;
+        }
+
+        .team-member {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .team-member:hover {
+            transform: translateY(-5px);
+        }
+
+        .team-member img {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            margin-bottom: 15px;
+            object-fit: cover;
+        }
+
+        .timeline {
+            position: relative;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .timeline-item {
+            padding: 20px;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .values-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin: 40px 0;
+        }
+
+        .value-card {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .achievements {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin: 40px 0;
+            text-align: center;
+        }
+
+        .achievement-card {
+            padding: 20px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 8px;
+        }
+
+        .achievement-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        @media (max-width: 768px) {
+            .about-hero {
+                padding: 100px 5% 40px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">Brand</div>
+        <ul class="nav-links">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="index.html#features">Features</a></li>
+            <li><a href="index.html#pricing">Pricing</a></li>
+            <li><a href="index.html#contact">Contact</a></li>
+        </ul>
+        <div class="mobile-menu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    </nav>
+
+    <section class="about-hero">
+        <h1>Our Story</h1>
+        <p>Building the future of digital experiences since 2015</p>
+    </section>
+
+    <section class="about-content">
+        <h2>Who We Are</h2>
+        <p>We are a team of passionate innovators dedicated to transforming the digital landscape. Our mission is to create exceptional experiences that drive business growth and user satisfaction.</p>
+
+        <h2>Our Team</h2>
+        <div class="team-grid">
+            <div class="team-member">
+                <img src="https://via.placeholder.com/150" alt="CEO">
+                <h3>Sarah Johnson</h3>
+                <p>CEO & Founder</p>
+            </div>
+            <div class="team-member">
+                <img src="https://via.placeholder.com/150" alt="CTO">
+                <h3>Michael Chen</h3>
+                <p>Chief Technology Officer</p>
+            </div>
+            <div class="team-member">
+                <img src="https://via.placeholder.com/150" alt="Design Lead">
+                <h3>Emma Rodriguez</h3>
+                <p>Design Lead</p>
+            </div>
+        </div>
+
+        <h2>Our Journey</h2>
+        <div class="timeline">
+            <div class="timeline-item">
+                <h3>2015</h3>
+                <p>Founded with a vision to revolutionize digital experiences</p>
+            </div>
+            <div class="timeline-item">
+                <h3>2017</h3>
+                <p>Launched our flagship product and expanded to 10 countries</p>
+            </div>
+            <div class="timeline-item">
+                <h3>2020</h3>
+                <p>Achieved 1 million users milestone</p>
+            </div>
+            <div class="timeline-item">
+                <h3>2024</h3>
+                <p>Continuing to innovate and expand globally</p>
+            </div>
+        </div>
+
+        <h2>Our Values</h2>
+        <div class="values-grid">
+            <div class="value-card">
+                <h3>Innovation</h3>
+                <p>Pushing boundaries and embracing new technologies</p>
+            </div>
+            <div class="value-card">
+                <h3>Excellence</h3>
+                <p>Delivering outstanding quality in everything we do</p>
+            </div>
+            <div class="value-card">
+                <h3>Integrity</h3>
+                <p>Building trust through honest relationships</p>
+            </div>
+        </div>
+
+        <h2>Our Achievements</h2>
+        <div class="achievements">
+            <div class="achievement-card">
+                <div class="achievement-number">1M+</div>
+                <p>Active Users</p>
+            </div>
+            <div class="achievement-card">
+                <div class="achievement-number">50+</div>
+                <p>Countries</p>
+            </div>
+            <div class="achievement-card">
+                <div class="achievement-number">100+</div>
+                <p>Team Members</p>
+            </div>
+            <div class="achievement-card">
+                <div class="achievement-number">25+</div>
+                <p>Industry Awards</p>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4>About Us</h4>
+                <p>Transforming digital experiences with innovative solutions.</p>
+            </div>
+            <div class="footer-section">
+                <h4>Quick Links</h4>
+                <ul>
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="about.html">About</a></li>
+                    <li><a href="index.html#features">Features</a></li>
+                    <li><a href="index.html#pricing">Pricing</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h4>Connect</h4>
+                <div class="social-links">
+                    <a href="#">Twitter</a>
+                    <a href="#">LinkedIn</a>
+                    <a href="#">Facebook</a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2024 Brand. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

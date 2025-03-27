@@ -1,8 +1,8 @@
 import os
 import asyncio
 from pathlib import Path
-from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
-from agentpress.state_manager import StateManager
+from agentpress.framework.tool import Tool, ToolResult, openapi_schema, xml_schema
+from agentpress.framework.state_manager import StateManager
 from typing import Optional
 
 class FilesTool(Tool):
@@ -85,7 +85,6 @@ class FilesTool(Tool):
         """Initialize or update the workspace state in JSON"""
         files_state = {}
         
-        # Walk through workspace and record all files
         for root, _, files in os.walk(self.workspace):
             for file in files:
                 full_path = os.path.join(root, file)

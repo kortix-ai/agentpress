@@ -11,12 +11,12 @@ This agent can:
 import os
 import asyncio
 import json
-from agentpress.thread_manager import ThreadManager
-from tools.files_tool import FilesTool
-from agentpress.state_manager import StateManager
-from tools.terminal_tool import TerminalTool
+from agentpress.framework.thread_manager import ThreadManager
+from agentpress.tools.files_tool import FilesTool
+from agentpress.framework.state_manager import StateManager
+from agentpress.tools.terminal_tool import TerminalTool
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional, Dict, Any, Awaitable, Callable
 import sys
 
 BASE_SYSTEM_MESSAGE = """
@@ -100,12 +100,14 @@ def get_anthropic_api_key():
         os.environ["ANTHROPIC_API_KEY"] = api_key
     return api_key
 
-async def run_agent(thread_id: str, use_xml: bool = True, max_iterations: int = 5):
+async def run_agent(thread_id: str, stream: bool = True, use_xml: bool = True, state_message: Optional[Dict[str, Any]] = None, max_iterations: int = 5, thread_manager: Optional[ThreadManager] = None, state_manager: Optional[StateManager] = None, store_id: Optional[str] = None):
     """Run the development agent with specified configuration."""
-    thread_manager = ThreadManager()
-
-    store_id = await StateManager.create_store()
-    state_manager = StateManager(store_id)
+    if not thread_manager:
+        thread_manager = ThreadManager()
+    if not store_id:
+        store_id = await StateManager.create_store()
+    if not state_manager:
+        state_manager = StateManager(store_id)
     
     thread_manager.add_tool(FilesTool, store_id=store_id)
     thread_manager.add_tool(TerminalTool, store_id=store_id)
@@ -119,30 +121,22 @@ async def run_agent(thread_id: str, use_xml: bool = True, max_iterations: int = 
         files_tool = FilesTool()
         await files_tool._init_workspace_state()
 
-    async def after_iteration():
-        custom_message = input("\nEnter a message (or press Enter to continue): ")
-        message_content = custom_message if custom_message else "Continue!!!"
-        await thread_manager.add_message(thread_id, {
-            "role": "user", 
-            "content": message_content
-        })
-
     iteration = 0
     while iteration < max_iterations:
         iteration += 1
         await pre_iteration()
 
-        state = await state_manager.export_store()
-        
-        state_message = {
-            "role": "user",
-            "content": f"""
+        if not state_message:
+            state = await state_manager.export_store()
+            state_message = {
+                "role": "user",
+                "content": f"""
 Current development environment workspace state:
 <current_workspace_state>
 {json.dumps(state, indent=2)}
 </current_workspace_state>
-            """
-        }
+                """
+            }
 
         model_name = "anthropic/claude-3-5-sonnet-latest"
 
@@ -156,40 +150,46 @@ Current development environment workspace state:
             temporary_message=state_message,
             native_tool_calling=not use_xml,
             xml_tool_calling=use_xml,
-            stream=True,
+            stream=stream,
             execute_tools_on_stream=True,
             parallel_tool_execution=True
         )
         
-        if isinstance(response, AsyncGenerator):
-            print("\n🤖 Assistant is responding:")
-            try:
+        if stream:
+            if isinstance(response, AsyncGenerator):
                 async for chunk in response:
                     if hasattr(chunk.choices[0], 'delta'):
                         delta = chunk.choices[0].delta
                         
                         if hasattr(delta, 'content') and delta.content is not None:
-                            print(delta.content, end='', flush=True)
+                            yield f"data: {json.dumps({'type': 'content', 'content': delta.content})}\n\n"
                         
                         if hasattr(delta, 'tool_calls') and delta.tool_calls:
                             for tool_call in delta.tool_calls:
                                 if tool_call.function:
-                                    if tool_call.function.name:
-                                        print(f"\n🛠️  Tool Call: {tool_call.function.name}", flush=True)
-                                    if tool_call.function.arguments:
-                                        print(f"   {tool_call.function.arguments}", end='', flush=True)
-                
-                print("\n✨ Response completed\n")
-                
-            except Exception as e:
-                print(f"\n❌ Error processing stream: {e}", file=sys.stderr)
-                logging.error(f"Error processing stream: {e}")
+                                    tool_data = {
+                                        'type': 'tool_call',
+                                        'name': tool_call.function.name if tool_call.function.name else '',
+                                        'arguments': tool_call.function.arguments if tool_call.function.arguments else ''
+                                    }
+                                    yield f"data: {json.dumps(tool_data)}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Invalid response type'})}\n\n"
         else:
-            print("\nNon-streaming response received:", response)
+            if isinstance(response, AsyncGenerator):
+                # Collect all chunks for non-streaming response
+                full_response = []
+                async for chunk in response:
+                    if hasattr(chunk.choices[0], 'delta'):
+                        delta = chunk.choices[0].delta
+                        if hasattr(delta, 'content') and delta.content is not None:
+                            full_response.append(delta.content)
+                yield f"data: {json.dumps({'type': 'content', 'content': ''.join(full_response)})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'content', 'content': response})}\n\n"
 
-        await after_iteration()
 
-def main():
+def test():
     """Main entry point with synchronous setup."""
     print("\n🚀 Welcome to AgentPress Web Developer Example!")
     
@@ -224,9 +224,28 @@ def main():
                 "content": project_description
             }
         )
-        await run_agent(thread_id, use_xml)
+
+        async for response in run_agent(thread_id, use_xml=use_xml):
+            if response.startswith("data: "):
+                data = json.loads(response[6:])
+                if data["type"] == "content":
+                    print(data["content"], end="", flush=True)
+                elif data["type"] == "tool_call":
+                    print(f"\n🛠️  Tool Call: {data['name']}", flush=True)
+                    if data["arguments"]:
+                        print(f"   {data['arguments']}", end="", flush=True)
+                elif data["type"] == "error":
+                    print(f"\n❌ Error: {data['message']}", file=sys.stderr)
+            
+            # Handle interactive input after each response
+            custom_message = input("\nEnter a message (or press Enter to continue): ")
+            message_content = custom_message if custom_message else "Continue!!!"
+            await thread_manager.add_message(thread_id, {
+                "role": "user", 
+                "content": message_content
+            })
 
     asyncio.run(async_main())
 
 if __name__ == "__main__":
-    main()
+    test()

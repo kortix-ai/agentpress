@@ -1,7 +1,7 @@
 import streamlit as st
 from datetime import datetime
-from agentpress.thread_manager import ThreadManager
-from agentpress.db_connection import DBConnection
+from agentpress.framework.thread_manager import ThreadManager
+from agentpress.framework.db_connection import DBConnection
 import asyncio
 
 def format_message_content(content):

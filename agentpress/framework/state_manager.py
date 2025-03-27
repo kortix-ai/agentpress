@@ -4,7 +4,7 @@ from typing import Any, Optional, List, Dict, Union, AsyncGenerator
 from asyncio import Lock
 from contextlib import asynccontextmanager
 import uuid
-from agentpress.db_connection import DBConnection
+from agentpress.framework.db_connection import DBConnection
 import asyncio
 
 class StateManager:
@@ -44,14 +44,24 @@ class StateManager:
 
     async def _ensure_store_exists(self):
         """Ensure store exists in database."""
-        prisma = await self.db.prisma
-        await prisma.statestore.upsert(
-            where={'id': self.store_id},
-            data={
-                'create': {'id': self.store_id, 'data': json.dumps({})},
-                'update': {}
-            }
-        )
+        try:
+            prisma = await self.db.prisma
+            # First try to find the store
+            store = await prisma.statestore.find_unique(where={'id': self.store_id})
+            
+            if not store:
+                # If store doesn't exist, create it
+                await prisma.statestore.create({
+                    'id': self.store_id,
+                    'data': json.dumps({})
+                })
+        except Exception as e:
+            logging.error(f"Error ensuring store exists: {e}")
+            # If there's an error, try to find the store again
+            prisma = await self.db.prisma
+            store = await prisma.statestore.find_unique(where={'id': self.store_id})
+            if not store:
+                raise e
 
     @asynccontextmanager
     async def store_scope(self):

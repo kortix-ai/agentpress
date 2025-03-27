@@ -1,6 +1,6 @@
 import json
 from typing import Dict, Any, Optional
-from agentpress.processor.base_processors import ToolParserBase
+from agentpress.framework.processor.base_processors import ToolParserBase
 
 # --- Standard Tool Parser Implementation ---
 

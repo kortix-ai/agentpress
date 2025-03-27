@@ -14,19 +14,19 @@ import logging
 import asyncio
 import uuid
 from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator
-from agentpress.llm import make_llm_api_call
-from agentpress.tool import Tool, ToolResult
-from agentpress.tool_registry import ToolRegistry
-from agentpress.processor.llm_response_processor import LLMResponseProcessor
-from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
-from agentpress.db_connection import DBConnection
+from agentpress.framework.llm import make_llm_api_call
+from agentpress.framework.tool import Tool, ToolResult
+from agentpress.framework.tool_registry import ToolRegistry
+from agentpress.framework.processor.llm_response_processor import LLMResponseProcessor
+from agentpress.framework.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
+from agentpress.framework.db_connection import DBConnection
 
-from agentpress.processor.xml.xml_tool_parser import XMLToolParser
-from agentpress.processor.xml.xml_tool_executor import XMLToolExecutor
-from agentpress.processor.xml.xml_results_adder import XMLResultsAdder
-from agentpress.processor.standard.standard_tool_parser import StandardToolParser
-from agentpress.processor.standard.standard_tool_executor import StandardToolExecutor
-from agentpress.processor.standard.standard_results_adder import StandardResultsAdder
+from agentpress.framework.processor.xml.xml_tool_parser import XMLToolParser
+from agentpress.framework.processor.xml.xml_tool_executor import XMLToolExecutor
+from agentpress.framework.processor.xml.xml_results_adder import XMLResultsAdder
+from agentpress.framework.processor.standard.standard_tool_parser import StandardToolParser
+from agentpress.framework.processor.standard.standard_tool_executor import StandardToolExecutor
+from agentpress.framework.processor.standard.standard_results_adder import StandardResultsAdder
 
 class ThreadManager:
     """Manages conversation threads with LLM models and tool execution.
@@ -356,7 +356,7 @@ class ThreadManager:
 
 if __name__ == "__main__":
     import asyncio
-    from agentpress.examples.example_agent.tools.files_tool import FilesTool
+    from agentpress.framework.examples.example_agent.tools.files_tool import FilesTool
 
     async def main():
         # Initialize managers

@@ -11,10 +11,10 @@ This module provides comprehensive processing of LLM responses, including:
 import asyncio
 from typing import Callable, Dict, Any, AsyncGenerator, Optional
 import logging
-from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
-from agentpress.processor.standard.standard_tool_parser import StandardToolParser
-from agentpress.processor.standard.standard_tool_executor import StandardToolExecutor
-from agentpress.processor.standard.standard_results_adder import StandardResultsAdder
+from agentpress.framework.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
+from agentpress.framework.processor.standard.standard_tool_parser import StandardToolParser
+from agentpress.framework.processor.standard.standard_tool_executor import StandardToolExecutor
+from agentpress.framework.processor.standard.standard_results_adder import StandardResultsAdder
 
 class LLMResponseProcessor:
     """Handles LLM response processing and tool execution management.
