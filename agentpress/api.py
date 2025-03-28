@@ -7,12 +7,8 @@ from contextlib import asynccontextmanager
 from agentpress.framework.thread_manager import ThreadManager
 from agentpress.framework.state_manager import StateManager
 from agentpress.framework.db_connection import DBConnection
-import os
 import json
-import asyncio
-import traceback
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, AsyncGenerator
 from dotenv import load_dotenv
 
 # Import the agent API module
@@ -43,6 +39,10 @@ async def lifespan(app: FastAPI):
         store_id,
         db
     )
+    
+    # Initialize Redis before restoring agent runs
+    from agentpress.framework import redis_manager
+    await redis_manager.initialize_async()
     
     # Restore any still-running agent runs from database (recovery after restart)
     await agent_api.restore_running_agent_runs()
@@ -80,7 +80,14 @@ async def read_root():
 async def create_thread():
     """Create a new conversation thread."""
     thread_id = await thread_manager.create_thread()
-    return {"thread_id": thread_id}
+    
+    # Return full thread object with proper structure
+    return {
+        "thread_id": thread_id,
+        "id": thread_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "messages": []
+    }
 
 @app.post("/api/thread/{thread_id}/message")
 async def add_message(thread_id: str, message: dict):
@@ -97,9 +104,28 @@ async def get_messages(thread_id: str, hide_tool_msgs: bool = False):
 @app.get("/api/threads")
 async def get_threads():
     """Get all threads."""
-    prisma = await db.prisma
-    threads = await prisma.thread.find_many()
-    return {"threads": threads}
+    client = await db.client
+    threads_result = await client.table('threads').select('*').execute()
+    
+    # Format threads to match frontend expectations
+    formatted_threads = []
+    for thread in threads_result.data:
+        # Parse messages to get count if needed
+        messages = []
+        if thread.get('messages'):
+            try:
+                messages = json.loads(thread['messages'])
+            except:
+                pass
+                
+        formatted_threads.append({
+            "thread_id": thread.get('thread_id'),
+            "id": thread.get('thread_id'),  # Duplicate for compatibility
+            "created_at": thread.get('created_at') or datetime.now(timezone.utc).isoformat(),
+            "messages": messages
+        })
+    
+    return {"threads": formatted_threads}
 
 if __name__ == "__main__":
     import uvicorn

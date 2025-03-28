@@ -48,11 +48,11 @@ class ThreadManager:
     async def create_thread(self) -> str:
         """Create a new conversation thread."""
         thread_id = str(uuid.uuid4())
-        prisma = await self.db.prisma
-        await prisma.thread.create(data={
-            'id': thread_id,
+        client = await self.db.client
+        await client.table('threads').insert({
+            'thread_id': thread_id,
             'messages': json.dumps([])
-        })
+        }).execute()
         return thread_id
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
@@ -97,19 +97,19 @@ class ThreadManager:
                     message_data['content'].append(image_content)
 
             # Get current messages
-            prisma = await self.db.prisma
-            thread = await prisma.thread.find_unique(where={'id': thread_id})
-            if not thread:
+            client = await self.db.client
+            thread = await client.table('threads').select('*').eq('thread_id', thread_id).single().execute()
+            
+            if not thread.data:
                 raise ValueError(f"Thread {thread_id} not found")
             
-            messages = json.loads(thread.messages)
+            messages = json.loads(thread.data['messages'])
             messages.append(message_data)
             
             # Update thread
-            await prisma.thread.update(
-                where={'id': thread_id},
-                data={'messages': json.dumps(messages)}
-            )
+            await client.table('threads').update({
+                'messages': json.dumps(messages)
+            }).eq('thread_id', thread_id).execute()
 
             logging.info(f"Message added to thread {thread_id}: {message_data}")
             
@@ -125,12 +125,13 @@ class ThreadManager:
         regular_list: bool = True
     ) -> List[Dict[str, Any]]:
         """Retrieve messages from a thread with optional filtering."""
-        prisma = await self.db.prisma
-        thread = await prisma.thread.find_unique(where={'id': thread_id})
-        if not thread:
+        client = await self.db.client
+        thread = await client.table('threads').select('*').eq('thread_id', thread_id).single().execute()
+        
+        if not thread.data:
             return []
         
-        messages = json.loads(thread.messages)
+        messages = json.loads(thread.data['messages'])
         
         if only_latest_assistant:
             for msg in reversed(messages):
@@ -155,12 +156,13 @@ class ThreadManager:
 
     async def _update_message(self, thread_id: str, message: Dict[str, Any]):
         """Update an existing message in the thread."""
-        prisma = await self.db.prisma
-        thread = await prisma.thread.find_unique(where={'id': thread_id})
-        if not thread:
+        client = await self.db.client
+        thread = await client.table('threads').select('*').eq('thread_id', thread_id).single().execute()
+        
+        if not thread.data:
             return
         
-        messages = json.loads(thread.messages)
+        messages = json.loads(thread.data['messages'])
         
         # Find and update the last assistant message
         for i in reversed(range(len(messages))):
@@ -168,12 +170,9 @@ class ThreadManager:
                 messages[i] = message
                 break
         
-        await prisma.thread.update(
-            where={'id': thread_id},
-            data={
-                'messages': json.dumps(messages)
-            }
-        )
+        await client.table('threads').update({
+            'messages': json.dumps(messages)
+        }).eq('thread_id', thread_id).execute()
 
     async def cleanup_incomplete_tool_calls(self, thread_id: str):
         """Clean up incomplete tool calls in a thread."""
@@ -200,13 +199,10 @@ class ThreadManager:
                 assistant_index = messages.index(last_assistant_message)
                 messages[assistant_index+1:assistant_index+1] = failed_tool_results
 
-                prisma = await self.db.prisma
-                await prisma.thread.update(
-                    where={'id': thread_id},
-                    data={
-                        'messages': json.dumps(messages)
-                    }
-                )
+                client = await self.db.client
+                await client.table('threads').update({
+                    'messages': json.dumps(messages)
+                }).eq('thread_id', thread_id).execute()
                 return True
         return False
 

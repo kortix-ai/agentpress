@@ -131,13 +131,7 @@
                             <label class="block text-sm font-medium text-gray-700">Project Description</label>
                             <textarea id="projectDescription" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" rows="3">Create a modern, responsive landing page</textarea>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Tool Calling Format</label>
-                            <select id="toolFormat" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option value="xml">XML-based Tool Calling</option>
-                                <option value="standard">Standard Function Calling</option>
-                            </select>
-                        </div>
+
                         <div class="agent-controls">
                             <button id="startProject" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                                 Start Project
@@ -201,7 +195,23 @@
             try {
                 const response = await fetch('/api/threads');
                 const data = await response.json();
-                threads = new Map(data.threads.map(t => [t.id, t]));
+                
+                // Ensure we have valid thread data
+                if (!data.threads || !Array.isArray(data.threads)) {
+                    console.error('Invalid thread data received:', data);
+                    return;
+                }
+                
+                // Map the threads with proper data structure
+                threads = new Map(data.threads.map(t => [
+                    t.thread_id || t.id, // Handle both thread_id and id
+                    {
+                        id: t.thread_id || t.id,
+                        created_at: t.created_at || new Date().toISOString(),
+                        messages: t.messages || []
+                    }
+                ]));
+                
                 updateThreadsList();
                 
                 // Auto-select first thread if none selected
@@ -218,11 +228,21 @@
             threadsList.innerHTML = '';
             
             threads.forEach((thread, id) => {
+                if (!id) return; // Skip invalid thread IDs
+                
                 const threadElement = document.createElement('div');
                 threadElement.className = `thread-item p-3 rounded-md cursor-pointer ${id === currentThreadId ? 'active' : ''}`;
+                
+                // Format the thread ID for display
+                const displayId = id.slice(0, 8);
+                const messageCount = thread.messages ? thread.messages.length : 0;
+                
                 threadElement.innerHTML = `
-                    <div class="font-medium">Thread ${id.slice(0, 8)}</div>
-                    <div class="text-sm text-gray-500">${new Date(thread.created_at).toLocaleString()}</div>
+                    <div class="font-medium">Thread ${displayId}</div>
+                    <div class="text-sm text-gray-500">
+                        ${new Date(thread.created_at).toLocaleString()}
+                        ${messageCount > 0 ? ` • ${messageCount} messages` : ''}
+                    </div>
                 `;
                 threadElement.onclick = () => selectThread(id);
                 threadsList.appendChild(threadElement);
@@ -230,6 +250,11 @@
         }
 
         async function selectThread(threadId) {
+            if (!threadId) {
+                console.error('Invalid thread ID');
+                return;
+            }
+            
             currentThreadId = threadId;
             updateThreadsList();
             
@@ -326,7 +351,6 @@
             }
 
             const description = document.getElementById('projectDescription').value;
-            const useXml = document.getElementById('toolFormat').value === 'xml';
 
             // Add initial message
             await fetch(`/api/thread/${currentThreadId}/message`, {
@@ -354,7 +378,7 @@
 
             try {
                 // Start the agent
-                const response = await fetch(`/api/thread/${currentThreadId}/agent/start?use_xml=${useXml}`, {
+                const response = await fetch(`/api/thread/${currentThreadId}/agent/start`, {
                     method: 'POST'
                 });
                 const data = await response.json();
@@ -427,19 +451,55 @@
                 responsesStream = new EventSource(`/api/agent-run/${agentRunId}/stream`);
                 
                 responsesStream.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    
-                    // Handle ping messages to keep connection alive
-                    if (data.type === 'ping') {
-                        return; // Just ignore pings
-                    }
-                    
-                    if (data.type === 'content') {
-                        updateStreamingContent(data.content);
-                    } else if (data.type === 'tool_call') {
-                        addToolCall(data.name, data.arguments);
-                    } else if (data.type === 'error') {
-                        addMessage(`Error: ${data.message}`, 'assistant');
+                    // Process the SSE data format properly
+                    try {
+                        const rawData = event.data;
+                        
+                        // Handle ping messages
+                        if (rawData.includes('"type":"ping"')) {
+                            return; // Just ignore pings
+                        }
+                        
+                        // Parse the outer layer
+                        let data;
+                        try {
+                            data = JSON.parse(rawData);
+                        } catch (e) {
+                            console.error('Failed to parse outer SSE data:', rawData, e);
+                            return;
+                        }
+                        
+                        // Check if this is a "content" type message with data: prefix (double-wrapped)
+                        if (data.type === 'content' && data.content && typeof data.content === 'string') {
+                            // If content starts with "data: ", it's double-wrapped
+                            if (data.content.startsWith('data: {')) {
+                                try {
+                                    // Extract the inner JSON string
+                                    const innerJsonStr = data.content.substring(6); // Remove "data: " prefix
+                                    const innerData = JSON.parse(innerJsonStr);
+                                    
+                                    // Process the inner data
+                                    if (innerData.type === 'content' && innerData.content) {
+                                        updateStreamingContent(innerData.content);
+                                    } else if (innerData.type === 'tool_call') {
+                                        addToolCall(innerData.name, innerData.arguments);
+                                    }
+                                } catch (e) {
+                                    console.error('Failed to parse inner data:', data.content, e);
+                                    // If parsing fails, just use the original content
+                                    updateStreamingContent(data.content);
+                                }
+                            } else {
+                                // Regular content, not double-wrapped
+                                updateStreamingContent(data.content);
+                            }
+                        } else if (data.type === 'tool_call') {
+                            addToolCall(data.name, data.arguments);
+                        } else if (data.type === 'error') {
+                            addMessage(`Error: ${data.message}`, 'assistant');
+                        }
+                    } catch (error) {
+                        console.error('Error processing message:', error, event.data);
                     }
                 };
                 
@@ -492,15 +552,24 @@
             try {
                 const response = await fetch(`/api/thread/${threadId}/messages`);
                 const data = await response.json();
+                
+                if (!data.messages || !Array.isArray(data.messages)) {
+                    console.error('Invalid messages data received:', data);
+                    return;
+                }
+                
                 data.messages.forEach(msg => {
+                    if (!msg || !msg.role) return; // Skip invalid messages
+                    
                     if (msg.role === 'user') {
-                        addMessage(msg.content, 'user');
+                        addMessage(msg.content || '', 'user');
                     } else if (msg.role === 'assistant') {
-                        addMessage(msg.content, 'assistant');
+                        addMessage(msg.content || '', 'assistant');
                     }
                 });
             } catch (error) {
                 console.error('Failed to load messages:', error);
+                addMessage('Failed to load messages. Please try refreshing the page.', 'assistant');
             }
         }
 
@@ -572,7 +641,6 @@
             currentContent = '';
 
             // Start a new agent
-            const useXml = document.getElementById('toolFormat').value === 'xml';
             
             try {
                 // Start the agent and get its ID
@@ -594,14 +662,23 @@
                     method: 'POST'
                 });
                 const data = await response.json();
+                
+                if (!data.thread_id) {
+                    throw new Error('Invalid response: missing thread_id');
+                }
+                
+                // Add the new thread to our map with proper structure
                 threads.set(data.thread_id, {
                     id: data.thread_id,
-                    created_at: new Date().toISOString()
+                    created_at: new Date().toISOString(),
+                    messages: []
                 });
+                
                 await selectThread(data.thread_id);
                 return data.thread_id;
             } catch (error) {
                 console.error('Failed to create thread:', error);
+                alert('Failed to create new thread. Please try again.');
             }
         }
 

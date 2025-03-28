@@ -1,19 +1,18 @@
 """
-Centralized database connection management for AgentPress using Prisma ORM.
+Centralized database connection management for AgentPress using Supabase.
 """
 
 import logging
 import os
-import asyncio
-from typing import Optional, Union, List, Any
-from prisma import Prisma
+from typing import Optional
+from supabase import create_async_client, AsyncClient
 
 class DBConnection:
-    """Singleton database connection manager using Prisma ORM."""
+    """Singleton database connection manager using Supabase."""
     
     _instance: Optional['DBConnection'] = None
     _initialized = False
-    _prisma: Optional[Prisma] = None
+    _client: Optional[AsyncClient] = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -30,13 +29,15 @@ class DBConnection:
             return
                 
         try:
-            if not os.getenv('DATABASE_URL'):
-                raise RuntimeError("DATABASE_URL environment variable is not set. Please set it to connect to your database.")
+            supabase_url = os.getenv('SUPABASE_URL')
+            supabase_key = os.getenv('SUPABASE_ANON_KEY')
+            
+            if not supabase_url or not supabase_key:
+                raise RuntimeError("SUPABASE_URL and SUPABASE_ANON_KEY environment variables must be set.")
 
-            self._prisma = Prisma()
-            await self._prisma.connect()
+            self._client = await create_async_client(supabase_url, supabase_key)
             self._initialized = True
-            logging.info("Database connection initialized with Prisma")
+            logging.info("Database connection initialized with Supabase")
         except Exception as e:
             logging.error(f"Database initialization error: {e}")
             raise RuntimeError(f"Failed to initialize database connection: {str(e)}")
@@ -44,18 +45,18 @@ class DBConnection:
     @classmethod
     async def disconnect(cls):
         """Disconnect from the database."""
-        if cls._prisma:
-            await cls._prisma.disconnect()
+        if cls._client:
+            await cls._client.close()
             cls._initialized = False
             logging.info("Database disconnected")
 
     @property
-    async def prisma(self) -> Prisma:
-        """Get the Prisma client instance."""
+    async def client(self) -> AsyncClient:
+        """Get the Supabase client instance."""
         if not self._initialized:
             await self.initialize()
-        if not self._prisma:
+        if not self._client:
             raise RuntimeError("Database not initialized")
-        return self._prisma
+        return self._client
 
 
