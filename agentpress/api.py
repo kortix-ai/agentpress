@@ -16,12 +16,18 @@ from typing import Dict, List, Optional, AsyncGenerator
 from agentpress.agent import run_agent
 import redis.asyncio as redis
 import uuid
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Initialize managers
 store_id = None
 state_manager = None
 db = DBConnection()
 redis_client = None
+instance_id = str(uuid.uuid4())[:8]  # Generate a consistent instance ID for this server instance
+REDIS_KEY_TTL = 3600 * 24  # 24 hour TTL as safety mechanism
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,13 +38,13 @@ async def lifespan(app: FastAPI):
     state_manager = StateManager(store_id)
     thread_manager = ThreadManager()
     
-    # Initialize Redis connection
+    # Initialize Redis connection using environment variables
     redis_client = redis.Redis(
-        host='adapted-foal-18911.upstash.io',
-        port=6379,
-        password='AUnfAAIjcDEwZGE4NzlhNDRmY2M0MjY0ODBlNWYzY2Q4YmRjZmY3OHAxMA',
-        ssl=True,
-        decode_responses=True  # Automatically decode responses to strings
+        host=os.getenv('REDIS_HOST'),
+        port=int(os.getenv('REDIS_PORT', '6379')),
+        password=os.getenv('REDIS_PASSWORD'),
+        ssl=os.getenv('REDIS_SSL', 'True').lower() == 'true',
+        decode_responses=True
     )
     
     # Restore any still-running agent runs from database (recovery after restart)
@@ -46,17 +52,14 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Shutdown - clean up any running tasks
-    # Since tasks are now tracked in Redis, we need a different approach
-    # Just mark all tasks from this instance as stopped
-    instance_id = str(uuid.uuid4())[:8]  # Short unique ID for this instance
+    # Use the global instance_id to find and clean up this instance's keys
     running_keys = await redis_client.keys(f"active_run:{instance_id}:*")
     
     for key in running_keys:
         agent_run_id = key.split(":")[-1]
         await stop_agent_run(agent_run_id)
     
-    await redis_client.close()
+    await redis_client.aclose()
     await db.disconnect()
 
 async def stop_agent_run(agent_run_id: str):
@@ -102,7 +105,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # Mount static files
 app.mount("/Users/markokraemer/Projects/agentpress/agentpress/static", StaticFiles(directory="/Users/markokraemer/Projects/agentpress/agentpress/static"), name="static")
 
@@ -143,7 +145,6 @@ async def get_threads():
 async def start_agent(thread_id: str):
     """Start an agent for a specific thread in the background."""
     prisma = await db.prisma
-    instance_id = str(uuid.uuid4())[:8]  # Short unique ID for this instance
     
     # Create a new agent run
     agent_run = await prisma.agentrun.create(
@@ -155,8 +156,8 @@ async def start_agent(thread_id: str):
         }
     )
     
-    # Register this run in Redis
-    await redis_client.set(f"active_run:{instance_id}:{agent_run.id}", "running")
+    # Register this run in Redis with TTL
+    await redis_client.set(f"active_run:{instance_id}:{agent_run.id}", "running", ex=REDIS_KEY_TTL)
     
     # Run the agent in the background
     task = asyncio.create_task(
@@ -340,6 +341,9 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
                     json.dumps(data)
                 )
                 
+                # Refresh the TTL on the active_run key to prevent expiration during long runs
+                await redis_client.expire(f"active_run:{instance_id}:{agent_run_id}", REDIS_KEY_TTL)
+                
                 # Batch update to the database every 10 items or every 5 seconds
                 now = datetime.now(timezone.utc)
                 if len(batch) >= 10 or (now - last_db_update).total_seconds() >= 5:
@@ -409,7 +413,11 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
         await pubsub.unsubscribe(f"agent_run:{agent_run_id}:control")
         
         # Remove active run marker from Redis
-        await redis_client.delete(f"active_run:{instance_id}:{agent_run_id}")
+        try:
+            await redis_client.delete(f"active_run:{instance_id}:{agent_run_id}")
+        except Exception as e:
+            # Log the error but don't let it propagate
+            print(f"Error deleting Redis key: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

@@ -15,8 +15,7 @@ from agentpress.framework.thread_manager import ThreadManager
 from agentpress.tools.files_tool import FilesTool
 from agentpress.framework.state_manager import StateManager
 from agentpress.tools.terminal_tool import TerminalTool
-import logging
-from typing import AsyncGenerator, Optional, Dict, Any, Awaitable, Callable
+from typing import AsyncGenerator, Optional, Dict, Any
 import sys
 
 BASE_SYSTEM_MESSAGE = """

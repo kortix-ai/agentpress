@@ -35,6 +35,24 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.width = `${scrolled}%`;
         scrollIndicator.style.height = `${scrolled}%`;
     });
+    const progressBar = document.createElement('div');
+    progressBar.className = 'progress-bar';
+    document.body.appendChild(progressBar);
+
+    const scrollProgress = document.createElement('div');
+    scrollProgress.className = 'scroll-progress';
+    const scrollIndicator = document.createElement('div');
+    scrollIndicator.className = 'scroll-progress-indicator';
+    scrollProgress.appendChild(scrollIndicator);
+    document.body.appendChild(scrollProgress);
+
+    window.addEventListener('scroll', () => {
+        const winScroll = document.documentElement.scrollTop;
+        const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+        const scrolled = (winScroll / height) * 100;
+        progressBar.style.width = `${scrolled}%`;
+        scrollIndicator.style.height = `${scrolled}%`;
+    });
     const newsletterForm = document.querySelector('.newsletter-form');
     if (newsletterForm) {
         newsletterForm.addEventListener('submit', (e) => {

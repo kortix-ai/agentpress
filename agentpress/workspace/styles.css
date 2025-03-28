@@ -26,6 +26,37 @@ html {
     box-sizing: border-box;
 }
 
+.progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: var(--progress-height);
+    background: var(--progress-color);
+    z-index: 9999;
+    transition: width 0.2s ease;
+}
+
+.scroll-progress {
+    position: fixed;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 100px;
+    background: var(--progress-bg);
+    border-radius: 3px;
+    z-index: 1000;
+}
+
+.scroll-progress-indicator {
+    width: 100%;
+    background: var(--progress-color);
+    height: 0;
+    border-radius: 3px;
+    transition: height 0.2s ease;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     line-height: 1.6;
@@ -836,6 +867,21 @@ body.loaded {
 
     .nav-links.active {
     display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    padding: 5rem 2rem;
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    transform: translateX(0);
+    transition: transform 0.3s ease;
     flex-direction: column;
     position: fixed;
     top: 0;
