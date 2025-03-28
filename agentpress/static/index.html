@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentPress Web Developer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .typing {
+            border-right: 2px solid #000;
+            animation: blink 0.75s step-end infinite;
+        }
+        @keyframes blink {
+            from, to { border-color: transparent }
+            50% { border-color: #000; }
+        }
+        .message-content {
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .thread-item {
+            transition: all 0.2s;
+        }
+        .thread-item:hover {
+            background-color: #f3f4f6;
+        }
+        .thread-item.active {
+            background-color: #e5e7eb;
+            border-left: 4px solid #4f46e5;
+        }
+        .conversation-container {
+            scroll-behavior: smooth;
+        }
+        .auto-scroll {
+            scroll-behavior: auto;
+        }
+        .smooth-scroll {
+            scroll-behavior: smooth;
+        }
+        .agent-controls {
+            display: flex;
+            gap: 8px;
+        }
+        .hidden {
+            display: none;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-running {
+            background-color: #22c55e;
+            animation: pulse 1.5s infinite;
+        }
+        .status-stopped {
+            background-color: #ef4444;
+        }
+        .status-completed {
+            background-color: #3b82f6;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .stop-button {
+            transition: all 0.2s;
+            font-weight: bold;
+        }
+        .stop-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+        }
+        .streaming-indicator {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #4f46e5;
+            margin-left: 10px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .streaming-indicator.active {
+            opacity: 1;
+        }
+        .streaming-icon {
+            width: 16px;
+            height: 16px;
+            border: 2px solid transparent;
+            border-top-color: #4f46e5;
+            border-right-color: #4f46e5;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-8">AgentPress Web Developer</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <!-- Threads Sidebar -->
+            <div class="md:col-span-1">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">Threads</h2>
+                        <button id="newThread" class="bg-indigo-600 text-white px-3 py-1 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-sm">
+                            New Thread
+                        </button>
+                    </div>
+                    <div id="threadsList" class="space-y-2 max-h-[600px] overflow-y-auto">
+                        <!-- Threads will be listed here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="md:col-span-3">
+                <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                    <h2 class="text-xl font-semibold mb-4">New Project</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Project Description</label>
+                            <textarea id="projectDescription" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" rows="3">Create a modern, responsive landing page</textarea>
+                        </div>
+
+                        <div class="agent-controls">
+                            <button id="startProject" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                                Start Project
+                            </button>
+                            <button id="startAndStream" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                                Start & Stream
+                            </button>
+                            <button id="stopAgent" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 hidden stop-button">
+                                ⏹️ Stop Agent
+                            </button>
+                        </div>
+                        <div id="agentStatus" class="text-sm text-gray-500 hidden mt-2 p-2 border rounded-md">
+                            Agent Status: <span class="status-indicator"></span><span id="statusText">Not Running</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">Conversation</h2>
+                        <div class="flex items-center space-x-4">
+                            <button id="streamAgent" class="text-indigo-600 px-2 py-1 rounded-md border border-indigo-600 hover:bg-indigo-50 hidden">
+                                Stream Agent
+                            </button>
+                            <div id="streamingIndicator" class="streaming-indicator">
+                                <div class="streaming-icon"></div>
+                                <span>Streaming</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <label class="text-sm text-gray-600">Auto-scroll</label>
+                                <input type="checkbox" id="autoScroll" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="conversation" class="space-y-4 mb-4 h-[500px] overflow-y-auto conversation-container">
+                        <!-- Messages will be added here -->
+                    </div>
+                    <div class="flex space-x-4">
+                        <input type="text" id="messageInput" class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Type your message...">
+                        <button id="sendMessage" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                            Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentThreadId = null;
+        let currentAgentRunId = null;
+        let responsesStream = null;
+        let currentMessageDiv = null;
+        let currentContent = '';
+        let threads = new Map();
+        let autoScrollEnabled = true;
+        let agentStatus = 'idle'; // idle, running, stopped
+
+        // Thread Management
+        async function loadThreads() {
+            try {
+                const response = await fetch('/api/threads');
+                const data = await response.json();
+                
+                // Ensure we have valid thread data
+                if (!data.threads || !Array.isArray(data.threads)) {
+                    console.error('Invalid thread data received:', data);
+                    return;
+                }
+                
+                // Map the threads with proper data structure
+                threads = new Map(data.threads.map(t => [
+                    t.thread_id || t.id, // Handle both thread_id and id
+                    {
+                        id: t.thread_id || t.id,
+                        created_at: t.created_at || new Date().toISOString(),
+                        messages: t.messages || []
+                    }
+                ]));
+                
+                updateThreadsList();
+                
+                // Auto-select first thread if none selected
+                if (threads.size > 0 && !currentThreadId) {
+                    selectThread(threads.keys().next().value);
+                }
+            } catch (error) {
+                console.error('Failed to load threads:', error);
+            }
+        }
+
+        function updateThreadsList() {
+            const threadsList = document.getElementById('threadsList');
+            threadsList.innerHTML = '';
+            
+            threads.forEach((thread, id) => {
+                if (!id) return; // Skip invalid thread IDs
+                
+                const threadElement = document.createElement('div');
+                threadElement.className = `thread-item p-3 rounded-md cursor-pointer ${id === currentThreadId ? 'active' : ''}`;
+                
+                // Format the thread ID for display
+                const displayId = id.slice(0, 8);
+                const messageCount = thread.messages ? thread.messages.length : 0;
+                
+                threadElement.innerHTML = `
+                    <div class="font-medium">Thread ${displayId}</div>
+                    <div class="text-sm text-gray-500">
+                        ${new Date(thread.created_at).toLocaleString()}
+                        ${messageCount > 0 ? ` • ${messageCount} messages` : ''}
+                    </div>
+                `;
+                threadElement.onclick = () => selectThread(id);
+                threadsList.appendChild(threadElement);
+            });
+        }
+
+        async function selectThread(threadId) {
+            if (!threadId) {
+                console.error('Invalid thread ID');
+                return;
+            }
+            
+            currentThreadId = threadId;
+            updateThreadsList();
+            
+            // Clear current content
+            const conversation = document.getElementById('conversation');
+            conversation.innerHTML = '';
+            currentMessageDiv = null;
+            currentContent = '';
+            
+            // Reset agent run
+            if (responsesStream) {
+                responsesStream.close();
+                responsesStream = null;
+            }
+            currentAgentRunId = null;
+            updateAgentStatus('idle');
+            
+            // Load thread messages
+            await loadThreadMessages(threadId);
+            
+            // Check for active agent runs
+            await checkForActiveAgentRuns(threadId);
+        }
+        
+        function updateAgentStatus(status) {
+            agentStatus = status;
+            const statusText = document.getElementById('statusText');
+            const agentStatusDiv = document.getElementById('agentStatus');
+            const stopButton = document.getElementById('stopAgent');
+            const streamButton = document.getElementById('streamAgent');
+            const statusIndicator = document.querySelector('.status-indicator');
+            const streamingIndicator = document.getElementById('streamingIndicator');
+            
+            agentStatusDiv.classList.remove('hidden');
+            
+            // Reset all status classes
+            statusIndicator.classList.remove('status-running', 'status-stopped', 'status-completed');
+            
+            if (status === 'running') {
+                statusText.textContent = 'Running';
+                statusText.className = 'text-green-600 font-medium';
+                statusIndicator.classList.add('status-running');
+                stopButton.classList.remove('hidden');
+                streamButton.classList.remove('hidden');
+                
+                // Make the stop button more noticeable
+                document.getElementById('conversation').classList.add('border-green-200', 'border-2');
+            } else {
+                // If not running, hide streaming indicator
+                streamingIndicator.classList.remove('active');
+                
+                if (status === 'stopped') {
+                    statusText.textContent = 'Stopped';
+                    statusText.className = 'text-red-600 font-medium';
+                    statusIndicator.classList.add('status-stopped');
+                } else if (status === 'completed') {
+                    statusText.textContent = 'Completed';
+                    statusText.className = 'text-blue-600 font-medium';
+                    statusIndicator.classList.add('status-completed');
+                } else {
+                    statusText.textContent = 'Not Running';
+                    statusText.className = 'text-gray-600';
+                }
+                
+                stopButton.classList.add('hidden');
+                streamButton.classList.add('hidden');
+                document.getElementById('conversation').classList.remove('border-green-200', 'border-2');
+            }
+        }
+        
+        async function checkForActiveAgentRuns(threadId) {
+            try {
+                const response = await fetch(`/api/thread/${threadId}/agent-runs`);
+                const data = await response.json();
+                
+                // Look for the most recent running agent run
+                const activeRuns = data.agent_runs.filter(run => run.status === 'running');
+                if (activeRuns.length > 0) {
+                    // Sort by start time descending to get the most recent
+                    activeRuns.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+                    
+                    // Set the current agent run ID
+                    currentAgentRunId = activeRuns[0].id;
+                    updateAgentStatus('running');
+                }
+            } catch (error) {
+                console.error('Failed to check for active agent runs:', error);
+            }
+        }
+        
+        async function startAgent() {
+            if (!currentThreadId) {
+                await createNewThread();
+            }
+
+            const description = document.getElementById('projectDescription').value;
+
+            // Add initial message
+            await fetch(`/api/thread/${currentThreadId}/message`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    role: 'user',
+                    content: description
+                })
+            });
+
+            addMessage(description, 'user');
+
+            // Close existing stream if any
+            if (responsesStream) {
+                responsesStream.close();
+                responsesStream = null;
+            }
+
+            // Reset current message
+            currentMessageDiv = null;
+            currentContent = '';
+
+            try {
+                // Start the agent
+                const response = await fetch(`/api/thread/${currentThreadId}/agent/start`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                currentAgentRunId = data.agent_run_id;
+                
+                updateAgentStatus('running');
+                return currentAgentRunId;
+            } catch (error) {
+                console.error('Failed to start agent:', error);
+                addMessage(`Error starting agent: ${error.message}`, 'assistant');
+                return null;
+            }
+        }
+        
+        async function stopAgent() {
+            if (!currentAgentRunId) return;
+            
+            try {
+                // Show stopping state
+                const stopButton = document.getElementById('stopAgent');
+                stopButton.textContent = "Stopping...";
+                stopButton.disabled = true;
+                stopButton.classList.add('opacity-75');
+                
+                // Request to stop the agent
+                await fetch(`/api/agent-run/${currentAgentRunId}/stop`, {
+                    method: 'POST'
+                });
+                
+                // Close the stream if it's open
+                if (responsesStream) {
+                    responsesStream.close();
+                    responsesStream = null;
+                }
+                
+                // Update UI
+                updateAgentStatus('stopped');
+                addMessage("🛑 Agent has been stopped manually. Any pending tasks will not complete.", 'assistant');
+                
+                // Reset button
+                stopButton.textContent = "⏹️ Stop Agent";
+                stopButton.disabled = false;
+                stopButton.classList.remove('opacity-75');
+            } catch (error) {
+                console.error('Failed to stop agent:', error);
+                addMessage(`Error stopping agent: ${error.message}`, 'assistant');
+                
+                // Reset button
+                const stopButton = document.getElementById('stopAgent');
+                stopButton.textContent = "⏹️ Stop Agent";
+                stopButton.disabled = false;
+                stopButton.classList.remove('opacity-75');
+            }
+        }
+        
+        async function streamAgent(agentRunId) {
+            if (!agentRunId) return;
+            
+            // Close existing stream if any
+            if (responsesStream) {
+                responsesStream.close();
+            }
+            
+            try {
+                // Show streaming indicator
+                const streamingIndicator = document.getElementById('streamingIndicator');
+                streamingIndicator.classList.add('active');
+                
+                // Connect to the agent run stream
+                responsesStream = new EventSource(`/api/agent-run/${agentRunId}/stream`);
+                
+                responsesStream.onmessage = (event) => {
+                    // Process the SSE data format properly
+                    try {
+                        const rawData = event.data;
+                        
+                        // Handle ping messages
+                        if (rawData.includes('"type":"ping"')) {
+                            return; // Just ignore pings
+                        }
+                        
+                        // Parse the outer layer
+                        let data;
+                        try {
+                            data = JSON.parse(rawData);
+                        } catch (e) {
+                            console.error('Failed to parse outer SSE data:', rawData, e);
+                            return;
+                        }
+                        
+                        // Check if this is a "content" type message with data: prefix (double-wrapped)
+                        if (data.type === 'content' && data.content && typeof data.content === 'string') {
+                            // If content starts with "data: ", it's double-wrapped
+                            if (data.content.startsWith('data: {')) {
+                                try {
+                                    // Extract the inner JSON string
+                                    const innerJsonStr = data.content.substring(6); // Remove "data: " prefix
+                                    const innerData = JSON.parse(innerJsonStr);
+                                    
+                                    // Process the inner data
+                                    if (innerData.type === 'content' && innerData.content) {
+                                        updateStreamingContent(innerData.content);
+                                    } else if (innerData.type === 'tool_call') {
+                                        addToolCall(innerData.name, innerData.arguments);
+                                    }
+                                } catch (e) {
+                                    console.error('Failed to parse inner data:', data.content, e);
+                                    // If parsing fails, just use the original content
+                                    updateStreamingContent(data.content);
+                                }
+                            } else {
+                                // Regular content, not double-wrapped
+                                updateStreamingContent(data.content);
+                            }
+                        } else if (data.type === 'tool_call') {
+                            addToolCall(data.name, data.arguments);
+                        } else if (data.type === 'error') {
+                            addMessage(`Error: ${data.message}`, 'assistant');
+                        }
+                    } catch (error) {
+                        console.error('Error processing message:', error, event.data);
+                    }
+                };
+                
+                responsesStream.onerror = (error) => {
+                    console.error('Stream error:', error);
+                    
+                    // Close the current stream
+                    responsesStream.close();
+                    
+                    // Check if the agent is still running - if it is, try to reconnect after a delay
+                    checkAgentStatus(agentRunId).then(status => {
+                        if (status === 'running') {
+                            console.log('Reconnecting to agent run...');
+                            setTimeout(() => streamAgent(agentRunId), 1000); // Reconnect after 1 second
+                        } else {
+                            // If not running, hide the streaming indicator
+                            streamingIndicator.classList.remove('active');
+                        }
+                    });
+                };
+                
+                // When the stream opens, make sure the indicator is visible
+                responsesStream.onopen = () => {
+                    streamingIndicator.classList.add('active');
+                };
+            } catch (error) {
+                console.error('Failed to stream agent:', error);
+                // Hide streaming indicator on error
+                document.getElementById('streamingIndicator').classList.remove('active');
+            }
+        }
+        
+        async function checkAgentStatus(agentRunId) {
+            if (!agentRunId) return 'idle';
+            
+            try {
+                const response = await fetch(`/api/agent-run/${agentRunId}`);
+                const data = await response.json();
+                
+                updateAgentStatus(data.status);
+                return data.status;
+            } catch (error) {
+                console.error('Failed to check agent status:', error);
+                updateAgentStatus('idle');
+                return 'idle';
+            }
+        }
+
+        async function loadThreadMessages(threadId) {
+            try {
+                const response = await fetch(`/api/thread/${threadId}/messages`);
+                const data = await response.json();
+                
+                if (!data.messages || !Array.isArray(data.messages)) {
+                    console.error('Invalid messages data received:', data);
+                    return;
+                }
+                
+                data.messages.forEach(msg => {
+                    if (!msg || !msg.role) return; // Skip invalid messages
+                    
+                    if (msg.role === 'user') {
+                        addMessage(msg.content || '', 'user');
+                    } else if (msg.role === 'assistant') {
+                        addMessage(msg.content || '', 'assistant');
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to load messages:', error);
+                addMessage('Failed to load messages. Please try refreshing the page.', 'assistant');
+            }
+        }
+
+        // Message Handling
+        function addMessage(content, role) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `p-4 rounded-lg ${role === 'user' ? 'bg-blue-100 ml-12' : 'bg-gray-100 mr-12'}`;
+            messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+            document.getElementById('conversation').appendChild(messageDiv);
+            if (autoScrollEnabled) {
+                messageDiv.scrollIntoView({ behavior: 'smooth' });
+            }
+            return messageDiv.querySelector('.message-content');
+        }
+
+        function addToolCall(name, arguments) {
+            const toolDiv = document.createElement('div');
+            toolDiv.className = 'p-4 rounded-lg bg-yellow-100 mr-12';
+            toolDiv.innerHTML = `<strong>Tool Call:</strong> ${name}<br><code>${arguments}</code>`;
+            document.getElementById('conversation').appendChild(toolDiv);
+            if (autoScrollEnabled) {
+                toolDiv.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        function updateStreamingContent(content) {
+            if (!currentMessageDiv) {
+                currentMessageDiv = addMessage('', 'assistant');
+            }
+            currentContent += content;
+            currentMessageDiv.textContent = currentContent;
+            if (autoScrollEnabled) {
+                currentMessageDiv.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        async function sendMessage() {
+            if (!currentThreadId) {
+                alert('Please select or create a thread first');
+                return;
+            }
+
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Add message to thread
+            await fetch(`/api/thread/${currentThreadId}/message`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    role: 'user',
+                    content: message
+                })
+            });
+
+            addMessage(message, 'user');
+            input.value = '';
+
+            // If there's an active agent run, stop it
+            if (currentAgentRunId && agentStatus === 'running') {
+                await stopAgent();
+            }
+
+            // Reset current message
+            currentMessageDiv = null;
+            currentContent = '';
+
+            // Start a new agent
+            
+            try {
+                // Start the agent and get its ID
+                const agentRunId = await startAgent();
+                
+                // Start streaming immediately
+                if (agentRunId) {
+                    await streamAgent(agentRunId);
+                }
+            } catch (error) {
+                console.error('Failed to process message:', error);
+                addMessage(`Error: ${error.message}`, 'assistant');
+            }
+        }
+
+        async function createNewThread() {
+            try {
+                const response = await fetch('/api/thread', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (!data.thread_id) {
+                    throw new Error('Invalid response: missing thread_id');
+                }
+                
+                // Add the new thread to our map with proper structure
+                threads.set(data.thread_id, {
+                    id: data.thread_id,
+                    created_at: new Date().toISOString(),
+                    messages: []
+                });
+                
+                await selectThread(data.thread_id);
+                return data.thread_id;
+            } catch (error) {
+                console.error('Failed to create thread:', error);
+                alert('Failed to create new thread. Please try again.');
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('startProject').addEventListener('click', async () => {
+            const agentRunId = await startAgent();
+            if (agentRunId) {
+                addMessage("Agent started and running in the background. Click 'Stream Agent' to see progress.", 'assistant');
+            }
+        });
+        
+        document.getElementById('startAndStream').addEventListener('click', async () => {
+            const agentRunId = await startAgent();
+            if (agentRunId) {
+                await streamAgent(agentRunId);
+            }
+        });
+        
+        document.getElementById('stopAgent').addEventListener('click', stopAgent);
+        
+        document.getElementById('streamAgent').addEventListener('click', () => {
+            if (currentAgentRunId) {
+                streamAgent(currentAgentRunId);
+            }
+        });
+        
+        document.getElementById('sendMessage').addEventListener('click', sendMessage);
+        document.getElementById('newThread').addEventListener('click', createNewThread);
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        document.getElementById('autoScroll').addEventListener('change', (e) => {
+            autoScrollEnabled = e.target.checked;
+            const container = document.getElementById('conversation');
+            container.className = `space-y-4 mb-4 h-[500px] overflow-y-auto conversation-container ${autoScrollEnabled ? 'smooth-scroll' : 'auto-scroll'}`;
+        });
+
+        // Page visibility change handling - reconnect to agent when page becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && currentThreadId) {
+                // If we have an agent run ID and it was running, check its status
+                if (currentAgentRunId) {
+                    checkAgentStatus(currentAgentRunId);
+                }
+            }
+        });
+
+        // Handle window unload to clean up resources
+        window.addEventListener('beforeunload', () => {
+            if (responsesStream) {
+                responsesStream.close();
+            }
+        });
+
+        // Initial load
+        loadThreads();
+    </script>
+</body>
+</html> 
