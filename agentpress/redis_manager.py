@@ -27,7 +27,7 @@ def initialize():
     
     return client
 
-async def initialize_async():
+async def initialize_async(test_connection: bool = False):
     """Initialize Redis connection asynchronously."""
     global client, _initialized
     
@@ -36,14 +36,16 @@ async def initialize_async():
             # Initialize the client
             initialize()
             
-            # Test the connection
-            try:
-                await client.ping()
-                _initialized = True
-            except Exception as e:
-                print(f"Error connecting to Redis: {e}")
-                client = None
-                raise e
+            # Test the connection if requested
+            if test_connection:
+                try:
+                    await client.ping()
+                except Exception as e:
+                    print(f"Error connecting to Redis: {e}")
+                    client = None
+                    raise e
+            
+            _initialized = True
     
     return client
 

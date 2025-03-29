@@ -1,16 +1,19 @@
--- Create threads table
-CREATE TABLE threads (
-    thread_id UUID PRIMARY KEY,
+-- Create projects table
+CREATE TABLE projects (
+    project_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT,
     user_id UUID NOT NULL,
-    messages JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Create state_stores table
-CREATE TABLE state_stores (
-    store_id UUID PRIMARY KEY,
-    store_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+-- Create threads table
+CREATE TABLE threads (
+    thread_id UUID PRIMARY KEY,
+    user_id UUID,
+    project_id UUID REFERENCES projects(project_id) ON DELETE CASCADE,
+    messages JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -43,44 +46,96 @@ CREATE TRIGGER update_threads_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_state_stores_updated_at
-    BEFORE UPDATE ON state_stores
+CREATE TRIGGER update_agent_runs_updated_at
+    BEFORE UPDATE ON agent_runs
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_agent_runs_updated_at
-    BEFORE UPDATE ON agent_runs
+CREATE TRIGGER update_projects_updated_at
+    BEFORE UPDATE ON projects
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Create indexes for better query performance
 CREATE INDEX idx_threads_created_at ON threads(created_at);
 CREATE INDEX idx_threads_user_id ON threads(user_id);
-CREATE INDEX idx_state_stores_created_at ON state_stores(created_at);
+CREATE INDEX idx_threads_project_id ON threads(project_id);
 CREATE INDEX idx_agent_runs_thread_id ON agent_runs(thread_id);
 CREATE INDEX idx_agent_runs_status ON agent_runs(status);
 CREATE INDEX idx_agent_runs_created_at ON agent_runs(created_at);
+CREATE INDEX idx_projects_user_id ON projects(user_id);
+CREATE INDEX idx_projects_created_at ON projects(created_at);
 
 -- Enable Row Level Security
 ALTER TABLE threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 
--- Create policies
-CREATE POLICY thread_select_policy ON threads
+-- Project policies
+CREATE POLICY project_select_policy ON projects
     FOR SELECT
     USING (auth.uid() = user_id);
 
-CREATE POLICY thread_insert_policy ON threads
+CREATE POLICY project_insert_policy ON projects
     FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
+    WITH CHECK (auth.uid() IS NOT NULL);
 
-CREATE POLICY thread_update_policy ON threads
+CREATE POLICY project_update_policy ON projects
     FOR UPDATE
     USING (auth.uid() = user_id);
 
-CREATE POLICY thread_delete_policy ON threads
+CREATE POLICY project_delete_policy ON projects
     FOR DELETE
     USING (auth.uid() = user_id);
+
+-- Thread policies based on project ownership
+CREATE POLICY thread_select_policy ON threads
+    FOR SELECT
+    USING (
+        auth.uid() = user_id OR 
+        (project_id IS NOT NULL AND EXISTS (
+            SELECT 1 FROM projects
+            WHERE projects.project_id = threads.project_id
+            AND projects.user_id = auth.uid()
+        )) OR
+        user_id IS NULL
+    );
+
+CREATE POLICY thread_insert_policy ON threads
+    FOR INSERT
+    WITH CHECK (
+        auth.uid() = user_id OR 
+        (project_id IS NOT NULL AND EXISTS (
+            SELECT 1 FROM projects
+            WHERE projects.project_id = threads.project_id
+            AND projects.user_id = auth.uid()
+        )) OR
+        user_id IS NULL
+    );
+
+CREATE POLICY thread_update_policy ON threads
+    FOR UPDATE
+    USING (
+        auth.uid() = user_id OR 
+        (project_id IS NOT NULL AND EXISTS (
+            SELECT 1 FROM projects
+            WHERE projects.project_id = threads.project_id
+            AND projects.user_id = auth.uid()
+        )) OR
+        user_id IS NULL
+    );
+
+CREATE POLICY thread_delete_policy ON threads
+    FOR DELETE
+    USING (
+        auth.uid() = user_id OR 
+        (project_id IS NOT NULL AND EXISTS (
+            SELECT 1 FROM projects
+            WHERE projects.project_id = threads.project_id
+            AND projects.user_id = auth.uid()
+        )) OR
+        user_id IS NULL
+    );
 
 -- Create policies for agent_runs based on thread ownership
 CREATE POLICY agent_run_select_policy ON agent_runs
@@ -89,7 +144,15 @@ CREATE POLICY agent_run_select_policy ON agent_runs
         EXISTS (
             SELECT 1 FROM threads
             WHERE threads.thread_id = agent_runs.thread_id
-            AND threads.user_id = auth.uid()
+            AND (
+                threads.user_id = auth.uid() OR 
+                (threads.project_id IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM projects
+                    WHERE projects.project_id = threads.project_id
+                    AND projects.user_id = auth.uid()
+                )) OR
+                threads.user_id IS NULL
+            )
         )
     );
 
@@ -99,7 +162,15 @@ CREATE POLICY agent_run_insert_policy ON agent_runs
         EXISTS (
             SELECT 1 FROM threads
             WHERE threads.thread_id = agent_runs.thread_id
-            AND threads.user_id = auth.uid()
+            AND (
+                threads.user_id = auth.uid() OR 
+                (threads.project_id IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM projects
+                    WHERE projects.project_id = threads.project_id
+                    AND projects.user_id = auth.uid()
+                )) OR
+                threads.user_id IS NULL
+            )
         )
     );
 
@@ -109,7 +180,15 @@ CREATE POLICY agent_run_update_policy ON agent_runs
         EXISTS (
             SELECT 1 FROM threads
             WHERE threads.thread_id = agent_runs.thread_id
-            AND threads.user_id = auth.uid()
+            AND (
+                threads.user_id = auth.uid() OR 
+                (threads.project_id IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM projects
+                    WHERE projects.project_id = threads.project_id
+                    AND projects.user_id = auth.uid()
+                )) OR
+                threads.user_id IS NULL
+            )
         )
     );
 
@@ -119,26 +198,19 @@ CREATE POLICY agent_run_delete_policy ON agent_runs
         EXISTS (
             SELECT 1 FROM threads
             WHERE threads.thread_id = agent_runs.thread_id
-            AND threads.user_id = auth.uid()
+            AND (
+                threads.user_id = auth.uid() OR 
+                (threads.project_id IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM projects
+                    WHERE projects.project_id = threads.project_id
+                    AND projects.user_id = auth.uid()
+                )) OR
+                threads.user_id IS NULL
+            )
         )
     );
 
--- Enable Row Level Security for state_stores
-ALTER TABLE state_stores ENABLE ROW LEVEL SECURITY;
-
--- Create policies for state_stores
-CREATE POLICY state_store_select_policy ON state_stores
-    FOR SELECT
-    USING (true);
-
-CREATE POLICY state_store_insert_policy ON state_stores
-    FOR INSERT
-    WITH CHECK (true);
-
-CREATE POLICY state_store_update_policy ON state_stores
-    FOR UPDATE
-    USING (true);
-
-CREATE POLICY state_store_delete_policy ON state_stores
-    FOR DELETE
-    USING (true); 
+-- Grant permissions to roles
+GRANT ALL PRIVILEGES ON TABLE projects TO authenticated, service_role;
+GRANT ALL PRIVILEGES ON TABLE threads TO authenticated, service_role;
+GRANT ALL PRIVILEGES ON TABLE agent_runs TO authenticated, service_role;

@@ -1,9 +1,8 @@
 import os
 import asyncio
 from pathlib import Path
-from agentpress.framework.tool import Tool, ToolResult, openapi_schema, xml_schema
-from agentpress.framework.state_manager import StateManager
-from typing import Optional
+from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
+from typing import Dict
 
 class FilesTool(Tool):
     """File management tool for creating, updating, and deleting files.
@@ -54,13 +53,11 @@ class FilesTool(Tool):
         ".sql"
     }
 
-    def __init__(self, store_id: Optional[str] = None):
+    def __init__(self):
         super().__init__()
         self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
         os.makedirs(self.workspace, exist_ok=True)
-        self.state_manager = StateManager(store_id)
         self.SNIPPET_LINES = 4  # Number of context lines to show around edits
-        asyncio.create_task(self._init_workspace_state())
 
     def _should_exclude_file(self, rel_path: str) -> bool:
         """Check if a file should be excluded based on path, name, or extension"""
@@ -81,8 +78,8 @@ class FilesTool(Tool):
 
         return False
 
-    async def _init_workspace_state(self):
-        """Initialize or update the workspace state in JSON"""
+    async def get_workspace_state(self) -> Dict:
+        """Get the current workspace state by reading all files"""
         files_state = {}
         
         for root, _, files in os.walk(self.workspace):
@@ -105,11 +102,7 @@ class FilesTool(Tool):
                 except UnicodeDecodeError:
                     print(f"Skipping binary file: {rel_path}")
 
-        await self.state_manager.set("files", files_state)
-
-    async def _update_workspace_state(self):
-        """Update the workspace state after any file operation"""
-        await self._init_workspace_state()
+        return files_state
 
     @openapi_schema({
         "type": "function",
@@ -154,47 +147,9 @@ class FilesTool(Tool):
             with open(full_path, 'w') as f:
                 f.write(file_contents)
             
-            await self._update_workspace_state()
             return self.success_response(f"File '{file_path}' created successfully.")
         except Exception as e:
             return self.fail_response(f"Error creating file: {str(e)}")
-
-    @openapi_schema({
-        "type": "function",
-        "function": {
-            "name": "delete_file",
-            "description": "Delete a file at the given path",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "Path to the file to be deleted"
-                    }
-                },
-                "required": ["file_path"]
-            }
-        }
-    })
-    @xml_schema(
-        tag_name="delete-file",
-        mappings=[
-            {"param_name": "file_path", "node_type": "attribute", "path": "."}
-        ],
-        example='''
-        <delete-file file_path="path/to/file">
-        </delete-file>
-        '''
-    )
-    async def delete_file(self, file_path: str) -> ToolResult:
-        try:
-            full_path = os.path.join(self.workspace, file_path)
-            os.remove(full_path)
-            
-            await self._update_workspace_state()
-            return self.success_response(f"File '{file_path}' deleted successfully.")
-        except Exception as e:
-            return self.fail_response(f"Error deleting file: {str(e)}")
 
     @openapi_schema({
         "type": "function",
@@ -266,6 +221,88 @@ class FilesTool(Tool):
             
         except Exception as e:
             return self.fail_response(f"Error replacing string: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "full_file_rewrite",
+            "description": "Completely rewrite an existing file with new content",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to be rewritten"
+                    },
+                    "file_contents": {
+                        "type": "string",
+                        "description": "The new content to write to the file, replacing all existing content"
+                    }
+                },
+                "required": ["file_path", "file_contents"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="full-file-rewrite",
+        mappings=[
+            {"param_name": "file_path", "node_type": "attribute", "path": "."},
+            {"param_name": "file_contents", "node_type": "content", "path": "."}
+        ],
+        example='''
+        <full-file-rewrite file_path="path/to/file">
+        New file contents go here, replacing all existing content
+        </full-file-rewrite>
+        '''
+    )
+    async def full_file_rewrite(self, file_path: str, file_contents: str) -> ToolResult:
+        try:
+            full_path = os.path.join(self.workspace, file_path)
+            if not os.path.exists(full_path):
+                return self.fail_response(f"File '{file_path}' does not exist. Use create_file to create a new file.")
+            
+            with open(full_path, 'w') as f:
+                f.write(file_contents)
+            
+            return self.success_response(f"File '{file_path}' completely rewritten successfully.")
+        except Exception as e:
+            return self.fail_response(f"Error rewriting file: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "delete_file",
+            "description": "Delete a file at the given path",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to be deleted"
+                    }
+                },
+                "required": ["file_path"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="delete-file",
+        mappings=[
+            {"param_name": "file_path", "node_type": "attribute", "path": "."}
+        ],
+        example='''
+        <delete-file file_path="path/to/file">
+        </delete-file>
+        '''
+    )
+    async def delete_file(self, file_path: str) -> ToolResult:
+        try:
+            full_path = os.path.join(self.workspace, file_path)
+            os.remove(full_path)
+            
+            return self.success_response(f"File '{file_path}' deleted successfully.")
+        except Exception as e:
+            return self.fail_response(f"Error deleting file: {str(e)}")
 
 if __name__ == "__main__":
     async def test_files_tool():

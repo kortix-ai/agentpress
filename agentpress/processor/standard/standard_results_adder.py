@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from agentpress.framework.processor.base_processors import ResultsAdderBase
+from agentpress.processor.base_processors import ResultsAdderBase
 
 # --- Standard Results Adder Implementation ---
 

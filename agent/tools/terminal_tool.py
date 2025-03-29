@@ -1,8 +1,7 @@
 import os
 import asyncio
 import subprocess
-from agentpress.framework.tool import Tool, ToolResult, openapi_schema, xml_schema
-from agentpress.framework.state_manager import StateManager
+from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 from typing import Optional
 
 class TerminalTool(Tool):
@@ -12,18 +11,6 @@ class TerminalTool(Tool):
         super().__init__()
         self.workspace = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'workspace')
         os.makedirs(self.workspace, exist_ok=True)
-        self.state_manager = StateManager(store_id)
-        
-    async def _update_command_history(self, command: str, output: str, success: bool):
-        """Update command history in state"""
-        history = await self.state_manager.get("terminal_history") or []
-        history.append({
-            "command": command,
-            "output": output,
-            "success": success,
-            "cwd": os.path.relpath(os.getcwd(), self.workspace)
-        })
-        await self.state_manager.set("terminal_history", history)
 
     @openapi_schema({
         "type": "function",
@@ -70,12 +57,6 @@ class TerminalTool(Tool):
             error = stderr.decode() if stderr else ""
             success = process.returncode == 0
             
-            await self._update_command_history(
-                command=command,
-                output=output + error,
-                success=success
-            )
-            
             if success:
                 return self.success_response({
                     "output": output,
@@ -87,11 +68,7 @@ class TerminalTool(Tool):
                 return self.fail_response(f"Command failed with exit code {process.returncode}: {error}")
                 
         except Exception as e:
-            await self._update_command_history(
-                command=command,
-                output=str(e),
-                success=False
-            )
             return self.fail_response(f"Error executing command: {str(e)}")
         finally:
             os.chdir(original_dir)
+            

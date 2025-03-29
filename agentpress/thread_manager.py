@@ -14,19 +14,19 @@ import logging
 import asyncio
 import uuid
 from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator
-from agentpress.framework.llm import make_llm_api_call
-from agentpress.framework.tool import Tool, ToolResult
-from agentpress.framework.tool_registry import ToolRegistry
-from agentpress.framework.processor.llm_response_processor import LLMResponseProcessor
-from agentpress.framework.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
-from agentpress.framework.db_connection import DBConnection
+from agentpress.llm import make_llm_api_call
+from agentpress.tool import Tool, ToolResult
+from agentpress.tool_registry import ToolRegistry
+from agentpress.processor.llm_response_processor import LLMResponseProcessor
+from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
+from agentpress.db_connection import DBConnection
 
-from agentpress.framework.processor.xml.xml_tool_parser import XMLToolParser
-from agentpress.framework.processor.xml.xml_tool_executor import XMLToolExecutor
-from agentpress.framework.processor.xml.xml_results_adder import XMLResultsAdder
-from agentpress.framework.processor.standard.standard_tool_parser import StandardToolParser
-from agentpress.framework.processor.standard.standard_tool_executor import StandardToolExecutor
-from agentpress.framework.processor.standard.standard_results_adder import StandardResultsAdder
+from agentpress.processor.xml.xml_tool_parser import XMLToolParser
+from agentpress.processor.xml.xml_tool_executor import XMLToolExecutor
+from agentpress.processor.xml.xml_results_adder import XMLResultsAdder
+from agentpress.processor.standard.standard_tool_parser import StandardToolParser
+from agentpress.processor.standard.standard_tool_executor import StandardToolExecutor
+from agentpress.processor.standard.standard_results_adder import StandardResultsAdder
 
 class ThreadManager:
     """Manages conversation threads with LLM models and tool execution.
@@ -46,13 +46,18 @@ class ThreadManager:
         self.tool_registry.register_tool(tool_class, function_names, **kwargs)
 
     async def create_thread(self) -> str:
-        """Create a new conversation thread."""
+        """Create a new conversation thread.
+        
+        Returns:
+            str: The ID of the newly created thread
+        """
         thread_id = str(uuid.uuid4())
         client = await self.db.client
-        await client.table('threads').insert({
+        thread_data = {
             'thread_id': thread_id,
             'messages': json.dumps([])
-        }).execute()
+        }
+        await client.table('threads').insert(thread_data).execute()
         return thread_id
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):

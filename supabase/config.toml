@@ -94,12 +94,11 @@ file_size_limit = "50MiB"
 # [storage.image_transformation]
 # enabled = true
 
-# Uncomment to configure local storage buckets
-# [storage.buckets.images]
-# public = false
-# file_size_limit = "50MiB"
-# allowed_mime_types = ["image/png", "image/jpeg"]
-# objects_path = "./images"
+# Configure storage buckets
+[storage.buckets.agentpress]
+public = false
+file_size_limit = "50MiB"
+allowed_mime_types = ["text/plain", "application/json", "text/markdown", "text/css", "text/javascript", "application/javascript", "text/html", "text/xml", "application/xml"]
 
 [auth]
 enabled = true

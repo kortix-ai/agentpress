@@ -1,37 +1,32 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse
 import asyncio
 import json
 import traceback
 from datetime import datetime, timezone
 import uuid
+from typing import Optional
+import jwt
 
-from agentpress.framework.thread_manager import ThreadManager
-from agentpress.framework.state_manager import StateManager
-from agentpress.framework.db_connection import DBConnection
-from agentpress.framework import redis_manager
-from agentpress.agent.run import run_agent
-from agentpress.auth.auth_utils import get_current_user_id
+from agentpress.thread_manager import ThreadManager
+from agentpress.db_connection import DBConnection
+from agentpress import redis_manager
+from agent.run import run_agent
+from gamefarm.backend.utils.auth_utils import get_current_user_id
 
 # Initialize shared resources
 router = APIRouter()
 thread_manager = None
-state_manager = None
-store_id = None
 db = None 
 instance_id = None
 
 def initialize(
-    _thread_manager: ThreadManager, 
-    _state_manager: StateManager, 
-    _store_id: str,
+    _thread_manager: ThreadManager,
     _db: DBConnection
 ):
     """Initialize the agent API with resources from the main API."""
-    global thread_manager, state_manager, store_id, db, instance_id
+    global thread_manager, db, instance_id
     thread_manager = _thread_manager
-    state_manager = _state_manager
-    store_id = _store_id
     db = _db
     
     # Generate instance ID
@@ -153,11 +148,49 @@ async def stop_agent(agent_run_id: str, user_id: str = Depends(get_current_user_
     return {"status": "stopped"}
 
 @router.get("/agent-run/{agent_run_id}/stream")
-async def stream_agent_run(agent_run_id: str, user_id: str = Depends(get_current_user_id)):
+async def stream_agent_run(
+    agent_run_id: str, 
+    token: Optional[str] = None,
+    request: Request = None,
+    user_id: Optional[str] = None
+):
     """Stream the responses of an agent run from where they left off."""
     client = await db.client
     redis_client = await redis_manager.get_client()
     
+    # Try to get user_id from token in query param (for EventSource which can't set headers)
+    if not user_id and token:
+        try:
+            # For Supabase JWT, we just need to decode and extract the user ID
+            payload = jwt.decode(token, options={"verify_signature": False})
+            user_id = payload.get('sub')
+        except Exception as e:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token in query parameter",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+    
+    # If still no user_id, try to get it from the Authorization header
+    if not user_id and request:
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            try:
+                # Extract token from header
+                header_token = auth_header.split(' ')[1]
+                payload = jwt.decode(header_token, options={"verify_signature": False})
+                user_id = payload.get('sub')
+            except Exception:
+                pass
+    
+    # If we still don't have a user_id, return authentication error
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="No valid authentication credentials found",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+        
     # Get agent run data
     agent_run = await client.table('agent_runs').select('*').eq('id', agent_run_id).execute()
     
@@ -186,12 +219,9 @@ async def stream_agent_run(agent_run_id: str, user_id: str = Depends(get_current
             for response in responses:
                 yield f"data: {json.dumps(response)}\n\n"
             
-            # Keep connection alive with ping
-            ping_count = 0
-            
             # Then stream new responses
             while True:
-                message = await pubsub.get_message(timeout=1.0)
+                message = await pubsub.get_message(timeout=0.1)  # Reduced timeout for faster response
                 if message and message["type"] == "message":
                     data = message["data"]
                     
@@ -208,33 +238,31 @@ async def stream_agent_run(agent_run_id: str, user_id: str = Depends(get_current
                         
                     # Don't add extra formatting to already JSON-formatted data
                     yield f"data: {data_str}\n\n"
-                
-                # Send ping every 5 seconds to keep connection alive
-                ping_count += 1
-                if ping_count >= 5:
-                    yield f"data: {json.dumps({'type': 'ping'})}\n\n"
-                    ping_count = 0
                     
                 # Check if agent is still running
                 current_run = await client.table('agent_runs').select('status').eq('id', agent_run_id).execute()
                 if not current_run.data or current_run.data[0]['status'] != 'running':
+                    # Send final status update
+                    yield f"data: {json.dumps({'type': 'status', 'status': current_run.data[0]['status'] if current_run.data else 'unknown'})}\n\n"
                     break
                 
-                await asyncio.sleep(0.1)  # Prevent tight loop
+                await asyncio.sleep(0.01)  # Minimal sleep to prevent CPU spinning
                     
         except asyncio.CancelledError:
             pass
         finally:
             await pubsub.unsubscribe()
     
-    # Return a StreamingResponse with the correct headers
+    # Return a StreamingResponse with the correct headers for SSE
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
+            "X-Accel-Buffering": "no",
+            "Content-Type": "text/event-stream",
+            "Access-Control-Allow-Origin": "*"  # Add CORS header for EventSource
         }
     )
 
@@ -302,14 +330,14 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
     async def check_for_stop_signal():
         nonlocal stop_signal_received
         while True:
-            message = await pubsub.get_message(timeout=1.0)
+            message = await pubsub.get_message(timeout=0.1)  # Reduced timeout
             if message and message["type"] == "message":
                 stop_signal = "STOP"
                 if message["data"] == stop_signal or message["data"] == stop_signal.encode('utf-8'):
                     stop_signal_received = True
                     break
-            await asyncio.sleep(0.1)  # Small delay to prevent CPU spinning
-            if stop_signal_received:  # Check if we should exit
+            await asyncio.sleep(0.01)  # Minimal sleep
+            if stop_signal_received:
                 break
     
     # Start the stop signal checker
@@ -318,7 +346,7 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
     try:
         # Run the agent and collect responses
         agent_gen = run_agent(thread_id, stream=True, 
-                      thread_manager=thread_manager, state_manager=state_manager, store_id=store_id)
+                      thread_manager=thread_manager)
         
         async for response in agent_gen:
             # Check if stop signal received
@@ -330,43 +358,36 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
             
             # Handle different types of responses
             if isinstance(response, str):
-                # Simple string content
                 formatted_response = {"type": "content", "content": response}
             elif isinstance(response, dict):
                 if "type" in response:
-                    # Already has a type field, use as is
                     formatted_response = response
                 else:
-                    # Missing type field, add as content type
                     formatted_response = {"type": "content", **response}
             else:
-                # Default fallback, convert to string
                 formatted_response = {"type": "content", "content": str(response)}
                 
             # Add response to batch and responses list
             responses.append(formatted_response)
             batch.append(formatted_response)
             
-            # Publish the response to Redis - ensure it's a properly formatted JSON string
+            # Immediately publish the response to Redis
             await redis_client.publish(
                 f"agent_run:{agent_run_id}:responses", 
                 json.dumps(formatted_response)
             )
             
-            # Update database periodically to avoid too many updates
+            # Update database less frequently to reduce overhead
             now = datetime.now(timezone.utc)
-            if (now - last_db_update).total_seconds() >= 1.0 and batch:
-                # Update the agent run responses
+            if (now - last_db_update).total_seconds() >= 2.0 and batch:  # Increased interval
                 await client.table('agent_runs').update({
                     "responses": json.dumps(responses)
                 }).eq("id", agent_run_id).execute()
                 
-                # Clear the batch and update the last_db_update time
                 batch = []
                 last_db_update = now
-                
-            # Add a small delay to prevent CPU spinning
-            await asyncio.sleep(0.01)
+            
+            # No sleep needed here - let it run as fast as possible
             
         # Final update to database with all responses
         if batch:
