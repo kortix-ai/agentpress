@@ -12,7 +12,7 @@ from agentpress.thread_manager import ThreadManager
 from agentpress.db_connection import DBConnection
 from agentpress import redis_manager
 from agent.run import run_agent
-from gamefarm.backend.utils.auth_utils import get_current_user_id
+from utils.auth_utils import get_current_user_id
 
 # Initialize shared resources
 router = APIRouter()

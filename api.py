@@ -63,6 +63,11 @@ app.add_middleware(
 # Include the agent router with a prefix
 app.include_router(agent_api.router, prefix="/api")
 
+@app.get("/api")
+async def api_root():
+    """Root API endpoint that returns a simple status message."""
+    return {"status": "ok", "message": "API is running"}
+
 @app.get("/api/health-check")
 async def health_check():
     """Health check endpoint to verify API is working."""
