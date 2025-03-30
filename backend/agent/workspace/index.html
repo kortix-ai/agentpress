@@ -3,90 +3,255 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pokemon Battle Game</title>
+    <title>Modern Web Application</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="game-container">
-        <h1>Pokemon Battle Game</h1>
-        
-        <div id="start-screen" class="screen active">
-            <h2>Choose Your Pokemon</h2>
-            <div class="pokemon-selection">
-                <div class="pokemon" data-pokemon="pikachu">
-                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png" alt="Pikachu">
-                    <h3>Pikachu</h3>
-                    <p>Type: Electric</p>
-                    <p>HP: 100</p>
-                    <p>Attack: 55</p>
+    <header>
+        <nav class="navbar">
+            <div class="container">
+                <a href="#" class="logo">WebApp</a>
+                <div class="nav-links">
+                    <a href="#features">Features</a>
+                    <a href="#about">About</a>
+                    <a href="#pricing">Pricing</a>
+                    <a href="#contact">Contact</a>
                 </div>
-                <div class="pokemon" data-pokemon="charmander">
-                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/4.png" alt="Charmander">
-                    <h3>Charmander</h3>
-                    <p>Type: Fire</p>
-                    <p>HP: 90</p>
-                    <p>Attack: 60</p>
-                </div>
-                <div class="pokemon" data-pokemon="squirtle">
-                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/7.png" alt="Squirtle">
-                    <h3>Squirtle</h3>
-                    <p>Type: Water</p>
-                    <p>HP: 110</p>
-                    <p>Attack: 50</p>
-                </div>
-                <div class="pokemon" data-pokemon="bulbasaur">
-                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png" alt="Bulbasaur">
-                    <h3>Bulbasaur</h3>
-                    <p>Type: Grass</p>
-                    <p>HP: 105</p>
-                    <p>Attack: 52</p>
-                </div>
+                <button class="mobile-menu-btn">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
             </div>
-        </div>
-        
-        <div id="battle-screen" class="screen">
-            <div class="battle-arena">
-                <div class="opponent">
-                    <div class="pokemon-info">
-                        <h3 id="opponent-name">Opponent</h3>
-                        <div class="health-bar">
-                            <div id="opponent-health" class="health-fill"></div>
-                        </div>
-                        <p id="opponent-hp">HP: 100/100</p>
-                    </div>
-                    <img id="opponent-img" src="" alt="Opponent Pokemon">
-                </div>
-                
-                <div class="player">
-                    <img id="player-img" src="" alt="Player Pokemon">
-                    <div class="pokemon-info">
-                        <h3 id="player-name">Player</h3>
-                        <div class="health-bar">
-                            <div id="player-health" class="health-fill"></div>
-                        </div>
-                        <p id="player-hp">HP: 100/100</p>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="container">
+                <div class="hero-content">
+                    <h1>Build Amazing Web Applications</h1>
+                    <p>A modern, responsive web application template to kickstart your next project.</p>
+                    <div class="hero-buttons">
+                        <a href="#features" class="btn btn-primary">Get Started</a>
+                        <a href="#" class="btn btn-secondary">Learn More</a>
                     </div>
                 </div>
+                <div class="hero-image">
+                    <img src="https://via.placeholder.com/600x400" alt="Web Application Dashboard">
+                </div>
             </div>
-            
-            <div class="battle-controls">
-                <div id="battle-message">What will you do?</div>
-                <div class="attack-buttons">
-                    <button id="attack-btn" class="battle-btn">Attack</button>
-                    <button id="special-attack-btn" class="battle-btn">Special Attack</button>
-                    <button id="heal-btn" class="battle-btn">Heal</button>
+        </section>
+
+        <!-- Features Section -->
+        <section id="features" class="features">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Key Features</h2>
+                    <p>Everything you need to build modern web applications</p>
+                </div>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-mobile-alt"></i>
+                        </div>
+                        <h3>Responsive Design</h3>
+                        <p>Looks great on all devices, from mobile phones to desktop computers.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <h3>Fast Performance</h3>
+                        <p>Optimized for speed and efficiency to provide the best user experience.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-code"></i>
+                        </div>
+                        <h3>Clean Code</h3>
+                        <p>Well-structured, maintainable code following best practices.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-paint-brush"></i>
+                        </div>
+                        <h3>Modern UI</h3>
+                        <p>Beautiful, intuitive user interface with smooth animations.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- About Section -->
+        <section id="about" class="about">
+            <div class="container">
+                <div class="about-content">
+                    <div class="about-text">
+                        <h2>About Our Platform</h2>
+                        <p>Our web application platform is designed to help developers build amazing applications quickly and efficiently. With a focus on user experience and performance, we provide all the tools you need to succeed.</p>
+                        <p>Whether you're building a simple landing page or a complex web application, our platform has you covered with modern features and best practices built in.</p>
+                        <a href="#" class="btn btn-primary">Learn More</a>
+                    </div>
+                    <div class="about-image">
+                        <img src="https://via.placeholder.com/500x400" alt="About Our Platform">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pricing Section -->
+        <section id="pricing" class="pricing">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Pricing Plans</h2>
+                    <p>Choose the perfect plan for your needs</p>
+                </div>
+                <div class="pricing-grid">
+                    <div class="pricing-card">
+                        <div class="pricing-header">
+                            <h3>Basic</h3>
+                            <div class="price">$9<span>/month</span></div>
+                        </div>
+                        <ul class="pricing-features">
+                            <li><i class="fas fa-check"></i> 5 Projects</li>
+                            <li><i class="fas fa-check"></i> 20GB Storage</li>
+                            <li><i class="fas fa-check"></i> Basic Support</li>
+                            <li><i class="fas fa-times"></i> Advanced Features</li>
+                            <li><i class="fas fa-times"></i> Custom Domain</li>
+                        </ul>
+                        <a href="#" class="btn btn-outline">Get Started</a>
+                    </div>
+                    <div class="pricing-card featured">
+                        <div class="pricing-header">
+                            <h3>Pro</h3>
+                            <div class="price">$29<span>/month</span></div>
+                        </div>
+                        <ul class="pricing-features">
+                            <li><i class="fas fa-check"></i> 15 Projects</li>
+                            <li><i class="fas fa-check"></i> 50GB Storage</li>
+                            <li><i class="fas fa-check"></i> Priority Support</li>
+                            <li><i class="fas fa-check"></i> Advanced Features</li>
+                            <li><i class="fas fa-times"></i> Custom Domain</li>
+                        </ul>
+                        <a href="#" class="btn btn-primary">Get Started</a>
+                    </div>
+                    <div class="pricing-card">
+                        <div class="pricing-header">
+                            <h3>Enterprise</h3>
+                            <div class="price">$99<span>/month</span></div>
+                        </div>
+                        <ul class="pricing-features">
+                            <li><i class="fas fa-check"></i> Unlimited Projects</li>
+                            <li><i class="fas fa-check"></i> 200GB Storage</li>
+                            <li><i class="fas fa-check"></i> 24/7 Support</li>
+                            <li><i class="fas fa-check"></i> Advanced Features</li>
+                            <li><i class="fas fa-check"></i> Custom Domain</li>
+                        </ul>
+                        <a href="#" class="btn btn-outline">Get Started</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contact Section -->
+        <section id="contact" class="contact">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Contact Us</h2>
+                    <p>Get in touch with our team</p>
+                </div>
+                <div class="contact-content">
+                    <div class="contact-form">
+                        <form id="contactForm">
+                            <div class="form-group">
+                                <label for="name">Name</label>
+                                <input type="text" id="name" name="name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="email">Email</label>
+                                <input type="email" id="email" name="email" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="message">Message</label>
+                                <textarea id="message" name="message" rows="5" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Send Message</button>
+                        </form>
+                    </div>
+                    <div class="contact-info">
+                        <div class="info-item">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <div>
+                                <h4>Address</h4>
+                                <p>123 Web App Street, San Francisco, CA 94107</p>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <i class="fas fa-phone"></i>
+                            <div>
+                                <h4>Phone</h4>
+                                <p>+1 (555) 123-4567</p>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <i class="fas fa-envelope"></i>
+                            <div>
+                                <h4>Email</h4>
+                                <p>info@webapp.com</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <a href="#">WebApp</a>
+                    <p>Building the future of web applications.</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Product</h4>
+                        <a href="#">Features</a>
+                        <a href="#">Pricing</a>
+                        <a href="#">Documentation</a>
+                        <a href="#">Updates</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Company</h4>
+                        <a href="#">About</a>
+                        <a href="#">Team</a>
+                        <a href="#">Careers</a>
+                        <a href="#">Contact</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Resources</h4>
+                        <a href="#">Blog</a>
+                        <a href="#">Newsletter</a>
+                        <a href="#">Events</a>
+                        <a href="#">Help Center</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2023 WebApp. All rights reserved.</p>
+                <div class="social-links">
+                    <a href="#"><i class="fab fa-twitter"></i></a>
+                    <a href="#"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#"><i class="fab fa-instagram"></i></a>
+                    <a href="#"><i class="fab fa-github"></i></a>
                 </div>
             </div>
         </div>
-        
-        <div id="result-screen" class="screen">
-            <h2 id="result-message">Battle Result</h2>
-            <div id="result-details"></div>
-            <button id="play-again-btn" class="battle-btn">Play Again</button>
-        </div>
-    </div>
-    
+    </footer>
+
     <script src="script.js"></script>
 </body>
 </html>

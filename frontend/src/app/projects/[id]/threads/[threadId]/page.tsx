@@ -36,6 +36,7 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const initialLoadCompleted = useRef<boolean>(false);
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -45,7 +46,11 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
 
   useEffect(() => {
     async function loadData() {
-      setIsLoading(true);
+      // Only show loading state on the first load, not when switching tabs
+      if (!initialLoadCompleted.current) {
+        setIsLoading(true);
+      }
+      
       setError(null);
       
       try {
@@ -67,6 +72,9 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
 
         // Check for active agent runs
         await checkForActiveAgentRuns();
+        
+        // Mark that we've completed the initial load
+        initialLoadCompleted.current = true;
       } catch (err: any) {
         console.error('Error loading thread data:', err);
         setError(err.message || 'Failed to load thread');
@@ -168,33 +176,6 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
       toast.error('Failed to send message');
     } finally {
       setIsSending(false);
-    }
-  };
-
-  const handleStartAgent = async () => {
-    try {
-      console.log('[PAGE] Starting new agent run');
-      
-      // Reset the streaming content
-      setStreamContent('');
-      
-      // Start the agent
-      const result = await startAgent(threadId);
-      console.log(`[PAGE] Agent started with run ID: ${result.agent_run_id}`);
-      
-      setAgentRunId(result.agent_run_id);
-      setAgentStatus('running');
-      toast.success('Agent started');
-      
-      // Create visual space for agent response
-      handleUserMessageSent();
-      
-      // Start streaming the agent's responses
-      handleStreamAgent(result.agent_run_id);
-    } catch (err: any) {
-      console.error('[PAGE] Error starting agent:', err);
-      toast.error('Failed to start agent');
-      setAgentStatus('idle');
     }
   };
 
@@ -398,7 +379,8 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
     }
   };
 
-  if (isAuthLoading || isLoading) {
+  // Only show a full-screen loader on the very first load
+  if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {
     return (
       <div className="container mx-auto p-6 flex justify-center items-center min-h-[80vh]">
         <div className="text-center">
@@ -423,37 +405,27 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
     );
   }
 
-  if (!project || !thread) {
-    return null;
-  }
+  // Preserve UI structure during subsequent loads
+  // This keeps the layout stable even when refreshing data
+  const isReady = project && thread;
+  const projectName = project?.name || 'Loading...';
+  const threadInfo = thread?.thread_id ? `Thread ${thread.thread_id.slice(0, 8)}` : 'Loading...';
 
   return (
     <div className="container mx-auto p-6 flex flex-col h-[calc(100vh-64px)]">
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h1 className="text-2xl font-bold">{project.name}</h1>
-          <p className="text-gray-500">Thread {thread.thread_id.slice(0, 8)}</p>
-        </div>
-        <div className="flex gap-2 items-center">
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-baseline">
+            <h1 className="text-2xl font-bold">{projectName}</h1>
+            <div className="mx-2 text-zinc-300">•</div>
+            <div className="text-zinc-500 text-sm">Thread {thread?.thread_id ? thread.thread_id.slice(0, 8) : '...'}</div>
+          </div>
+          
           {isStreaming && (
-            <div className="flex items-center text-green-600 text-sm mr-2">
-              <Wifi className="h-4 w-4 mr-1 animate-pulse" />
-              <span>Streaming</span>
+            <div className="flex items-center text-zinc-700 border border-zinc-200 py-1 px-2.5 rounded-full shadow-sm bg-white">
+              <div className="w-1.5 h-1.5 bg-zinc-700 rounded-full animate-pulse mr-2"></div>
+              <span className="text-xs font-medium">Live</span>
             </div>
-          )}
-          <Button variant="outline" onClick={() => router.push(`/projects/${projectId}`)}>
-            Back to Project
-          </Button>
-          {agentStatus === 'idle' ? (
-            <Button onClick={handleStartAgent}>
-              <Play className="h-4 w-4 mr-2" />
-              Run Agent
-            </Button>
-          ) : (
-            <Button variant="destructive" onClick={handleStopAgent}>
-              <Square className="h-4 w-4 mr-2" />
-              Stop Agent
-            </Button>
           )}
         </div>
       </div>
@@ -476,7 +448,7 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
                 <div 
                   className={`max-w-[80%] px-4 py-2 rounded-lg ${
                     message.role === 'user' 
-                      ? 'bg-blue-500 text-white rounded-br-none' 
+                      ? 'bg-zinc-900 text-white rounded-br-none' 
                       : 'bg-white border border-gray-200 rounded-bl-none'
                   }`}
                 >
@@ -491,7 +463,7 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
                 <div className="max-w-[80%] px-4 py-2 rounded-lg bg-white border border-gray-200 rounded-bl-none">
                   <div className="whitespace-pre-wrap">
                     {streamContent}
-                    {isStreaming && <span className="animate-pulse">▌</span>}
+                    {isStreaming && <span className="inline-block h-4 w-0.5 bg-zinc-800 ml-0.5 animate-pulse">​</span>}
                   </div>
                 </div>
               </div>
@@ -518,40 +490,34 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
               ? "Agent is thinking..." 
               : "Type your message... (Enter to send, Shift+Enter for new line)"
           }
-          className="flex-1 min-h-[50px] max-h-[200px] pr-12 resize-none py-3 shadow-sm focus-visible:ring-blue-500"
+          className="flex-1 min-h-[50px] max-h-[200px] pr-12 resize-none py-3 shadow-sm focus-visible:ring-zinc-500"
           disabled={isSending || agentStatus === 'running'}
           rows={1}
         />
         
-        {agentStatus === 'running' ? (
-          <Button 
-            type="button"
-            onClick={handleStopAgent}
-            className="absolute right-2 bottom-2 h-8 w-8 p-0 rounded-full bg-red-500 hover:bg-red-600"
-            aria-label="Stop agent"
-          >
+        <Button 
+          type={agentStatus === 'running' ? 'button' : 'submit'}
+          onClick={agentStatus === 'running' ? handleStopAgent : undefined}
+          className="absolute right-2 bottom-2 h-8 w-8 p-0 rounded-full bg-zinc-900 hover:bg-black"
+          disabled={(!newMessage.trim() && agentStatus !== 'running') || isSending}
+          aria-label={agentStatus === 'running' ? 'Stop agent' : 'Send message'}
+        >
+          {isSending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : agentStatus === 'running' ? (
             <Square className="h-4 w-4" />
-          </Button>
-        ) : (
-          <Button 
-            type="submit"
-            className="absolute right-2 bottom-2 h-8 w-8 p-0 rounded-full"
-            disabled={!newMessage.trim() || isSending}
-          >
-            {isSending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
-        )}
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+        </Button>
       </form>
 
       {/* Fixed height container to prevent layout shifts */}
       <div className="h-5 mt-1">
         {agentStatus === 'running' && (
           <div className="text-xs text-gray-500 text-center">
-            Agent is responding... Click the stop button to interrupt.
+            {isStreaming ? 'Agent is responding...' : 'Agent is thinking...'}
+            {isStreaming && ' Click the stop button to interrupt.'}
           </div>
         )}
       </div>
