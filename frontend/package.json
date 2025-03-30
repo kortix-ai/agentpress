@@ -1,5 +1,5 @@
 {
-  "name": "gamefarm",
+  "name": "agentpress",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,9 +10,6 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.4",
-    "@assistant-ui/react": "^0.8.6",
-    "@assistant-ui/react-ai-sdk": "^0.8.0",
-    "@assistant-ui/react-markdown": "^0.8.0",
     "@hookform/resolvers": "^4.1.3",
     "@radix-ui/react-avatar": "^1.1.3",
     "@radix-ui/react-dialog": "^1.1.6",
@@ -24,9 +21,6 @@
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.3",
-    "@workos-inc/authkit-nextjs": "^2.2.0",
-    "@workos-inc/node": "^7.45.0",
-    "ai": "^4.2.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.485.0",

@@ -3,55 +3,59 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { createClient } from '@/utils/supabase/client';
+import { toast } from 'sonner';
 
 export default function SignupPage() {
-  const { signUp } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    
+    setIsLoading(true);
+
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      toast.error('Passwords do not match');
+      setIsLoading(false);
       return;
     }
-    
-    setIsLoading(true);
-    
+
     try {
-      const { error: signUpError } = await signUp(email, password);
-      
-      if (signUpError) {
-        throw new Error(signUpError.message);
-      }
-      
-      router.push('/projects');
+      const supabase = createClient();
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/confirm`,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success('Check your email to confirm your account!');
+      router.push('/auth/confirm');
     } catch (err: any) {
       console.error('Signup error:', err);
-      setError(err.message || 'Failed to create account');
+      toast.error(err.message || 'Failed to sign up');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[80vh]">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Create an account</CardTitle>
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <Card className="w-full max-w-md border-border">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
           <CardDescription>
-            Sign up to start building your web applications
+            Enter your email below to create your account
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -65,6 +69,7 @@ export default function SignupPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="example@email.com"
                 required
+                disabled={isLoading}
               />
             </div>
             <div className="space-y-2">
@@ -75,9 +80,8 @@ export default function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={6}
+                disabled={isLoading}
               />
-              <p className="text-xs text-gray-500">Must be at least 6 characters</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
@@ -87,13 +91,9 @@ export default function SignupPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
+                disabled={isLoading}
               />
             </div>
-            {error && (
-              <div className="text-sm text-red-500">
-                {error}
-              </div>
-            )}
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
             <Button
@@ -101,12 +101,12 @@ export default function SignupPage() {
               className="w-full"
               disabled={isLoading}
             >
-              {isLoading ? 'Creating account...' : 'Sign up'}
+              {isLoading ? 'Creating account...' : 'Create account'}
             </Button>
-            <div className="text-center text-sm">
+            <div className="text-center text-sm text-muted-foreground">
               Already have an account?{' '}
-              <Link href="/auth/login" className="text-blue-600 hover:underline">
-                Log in
+              <Link href="/auth/login" className="text-primary hover:underline">
+                Sign in
               </Link>
             </div>
           </CardFooter>

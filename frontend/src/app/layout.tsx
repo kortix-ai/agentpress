@@ -7,7 +7,7 @@ import { MainNav } from '@/components/layout/main-nav';
 import { AuthProvider } from '@/context/auth-context';
 import { Toaster } from 'sonner';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -21,9 +21,9 @@ export default function RootLayout({
   useEffect(() => {
     async function checkApiConnection() {
       try {
-        // Get auth token from Supabase
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
         
         const headers: HeadersInit = {
           'Content-Type': 'application/json',
