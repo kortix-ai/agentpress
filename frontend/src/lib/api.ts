@@ -1,4 +1,4 @@
-import { supabase, getAuthToken } from './supabase';
+import { createClient } from '@/utils/supabase/client';
 
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 
@@ -13,18 +13,14 @@ export type Project = {
 export type Thread = {
   thread_id: string;
   user_id: string | null;
-  project_id: string | null;
-  messages: Message[];
+  project_id?: string | null;
+  messages: any[];
   created_at: string;
-  updated_at: string;
 }
 
 export type Message = {
-  role: 'user' | 'assistant' | 'system' | 'tool';
+  role: string;
   content: string;
-  tool_calls?: any[];
-  tool_call_id?: string;
-  name?: string;
 }
 
 export type AgentRun = {
@@ -39,6 +35,7 @@ export type AgentRun = {
 
 // Project APIs
 export const getProjects = async (): Promise<Project[]> => {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from('projects')
     .select('*');
@@ -48,6 +45,7 @@ export const getProjects = async (): Promise<Project[]> => {
 };
 
 export const getProject = async (projectId: string): Promise<Project> => {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from('projects')
     .select('*')
@@ -59,6 +57,7 @@ export const getProject = async (projectId: string): Promise<Project> => {
 };
 
 export const createProject = async (projectData: { name: string; description: string }): Promise<Project> => {
+  const supabase = createClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
   
   if (userError) throw userError;
@@ -87,6 +86,7 @@ export const createProject = async (projectData: { name: string; description: st
 };
 
 export const updateProject = async (projectId: string, data: Partial<Project>): Promise<Project> => {
+  const supabase = createClient();
   const { data: updatedData, error } = await supabase
     .from('projects')
     .update(data)
@@ -99,6 +99,7 @@ export const updateProject = async (projectId: string, data: Partial<Project>): 
 };
 
 export const deleteProject = async (projectId: string): Promise<void> => {
+  const supabase = createClient();
   const { error } = await supabase
     .from('projects')
     .delete()
@@ -109,6 +110,7 @@ export const deleteProject = async (projectId: string): Promise<void> => {
 
 // Thread APIs
 export const getThreads = async (projectId?: string): Promise<Thread[]> => {
+  const supabase = createClient();
   let query = supabase.from('threads').select('*');
   
   if (projectId) {
@@ -127,6 +129,7 @@ export const getThreads = async (projectId?: string): Promise<Thread[]> => {
 };
 
 export const getThread = async (threadId: string): Promise<Thread> => {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from('threads')
     .select('*')
@@ -142,6 +145,7 @@ export const getThread = async (threadId: string): Promise<Thread> => {
 };
 
 export const createThread = async (projectId?: string): Promise<Thread> => {
+  const supabase = createClient();
   // Generate a random UUID for the thread
   const threadId = crypto.randomUUID();
   
@@ -172,6 +176,7 @@ export const createThread = async (projectId?: string): Promise<Thread> => {
 };
 
 export const addMessage = async (threadId: string, message: { role: string, content: string }): Promise<void> => {
+  const supabase = createClient();
   // First, get the current thread messages
   const { data: threadData, error: threadError } = await supabase
     .from('threads')
@@ -205,6 +210,7 @@ export const addMessage = async (threadId: string, message: { role: string, cont
 };
 
 export const getMessages = async (threadId: string, hideToolMsgs: boolean = false): Promise<Message[]> => {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from('threads')
     .select('messages')
@@ -227,22 +233,21 @@ export const getMessages = async (threadId: string, hideToolMsgs: boolean = fals
   return messages;
 };
 
-const getAuthHeaders = async (): Promise<HeadersInit> => {
-  const token = await getAuthToken();
-  
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': token ? `Bearer ${token}` : '',
-  };
-};
-
 // Agent APIs
 export const startAgent = async (threadId: string): Promise<{ agent_run_id: string }> => {
-  const headers = await getAuthHeaders();
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
   
+  if (!session?.access_token) {
+    throw new Error('No access token available');
+  }
+
   const response = await fetch(`${API_URL}/thread/${threadId}/agent/start`, {
     method: 'POST',
-    headers
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
   });
   
   if (!response.ok) {
@@ -253,11 +258,19 @@ export const startAgent = async (threadId: string): Promise<{ agent_run_id: stri
 };
 
 export const stopAgent = async (agentRunId: string): Promise<void> => {
-  const headers = await getAuthHeaders();
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
   
+  if (!session?.access_token) {
+    throw new Error('No access token available');
+  }
+
   const response = await fetch(`${API_URL}/agent-run/${agentRunId}/stop`, {
     method: 'POST',
-    headers
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
   });
   
   if (!response.ok) {
@@ -266,10 +279,17 @@ export const stopAgent = async (agentRunId: string): Promise<void> => {
 };
 
 export const getAgentStatus = async (agentRunId: string): Promise<AgentRun> => {
-  const headers = await getAuthHeaders();
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
   
+  if (!session?.access_token) {
+    throw new Error('No access token available');
+  }
+
   const response = await fetch(`${API_URL}/agent-run/${agentRunId}`, {
-    headers
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+    },
   });
   
   if (!response.ok) {
@@ -280,10 +300,17 @@ export const getAgentStatus = async (agentRunId: string): Promise<AgentRun> => {
 };
 
 export const getAgentRuns = async (threadId: string): Promise<AgentRun[]> => {
-  const headers = await getAuthHeaders();
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
   
+  if (!session?.access_token) {
+    throw new Error('No access token available');
+  }
+
   const response = await fetch(`${API_URL}/thread/${threadId}/agent-runs`, {
-    headers
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+    },
   });
   
   if (!response.ok) {
@@ -300,12 +327,6 @@ export const streamAgent = (agentRunId: string, callbacks: {
   onError: (error: any) => void;
   onClose: () => void;
 }): () => void => {
-  // The EventSource API has a known behavior where:
-  // 1. When you manually close a connection, it triggers the onerror event
-  // 2. When the server closes a connection, it also triggers the onerror event
-  // 3. In both cases, the error object is mostly empty
-  // This is normal behavior and not an actual error when closing is intentional
-  
   let eventSourceInstance: EventSource | null = null;
   let isClosing = false;
   
@@ -318,8 +339,10 @@ export const streamAgent = (agentRunId: string, callbacks: {
         return;
       }
       
-      const token = await getAuthToken();
-      if (!token) {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
         console.error('[STREAM] No auth token available');
         callbacks.onError(new Error('Authentication required'));
         callbacks.onClose();
@@ -327,7 +350,7 @@ export const streamAgent = (agentRunId: string, callbacks: {
       }
       
       const url = new URL(`${API_URL}/agent-run/${agentRunId}/stream`);
-      url.searchParams.append('token', token);
+      url.searchParams.append('token', session.access_token);
       
       console.log(`[STREAM] Creating EventSource for ${agentRunId}`);
       eventSourceInstance = new EventSource(url.toString());
