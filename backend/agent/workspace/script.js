@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 mobileNav.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
                 mobileNav.style.display = 'none';
                 mobileNav.style.flexDirection = 'column';
+                mobileNav.style.zIndex = '1000';
                 
                 // Style the navigation links in mobile menu
                 navLinksClone.style.display = 'flex';
@@ -105,6 +106,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get form values
             const name = document.getElementById('name').value.trim();
             const email = document.getElementById('email').value.trim();
+            const interest = document.getElementById('interest').value;
             const message = document.getElementById('message').value.trim();
             
             // Simple validation
@@ -133,7 +135,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div style="text-align: center; padding: 40px 0;">
                     <i class="fas fa-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 20px;"></i>
                     <h3>Thank You!</h3>
-                    <p>Your message has been sent successfully. We'll get back to you soon.</p>
+                    <p>Your message has been sent successfully. Our AGI team will get back to you soon.</p>
                 </div>
             `;
         });
@@ -182,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Add animation on scroll
-    const animateElements = document.querySelectorAll('.feature-card, .pricing-card, .about-image, .about-text');
+    const animateElements = document.querySelectorAll('.feature-card, .pricing-card, .about-image, .about-text, .ethics-image, .ethics-text');
     
     // Check if IntersectionObserver is supported
     if ('IntersectionObserver' in window) {
@@ -202,5 +204,123 @@ document.addEventListener('DOMContentLoaded', function() {
             element.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
             observer.observe(element);
         });
+    }
+    
+    // Typing effect for hero heading
+    const heroHeading = document.querySelector('.hero-content h1');
+    if (heroHeading) {
+        const text = heroHeading.textContent;
+        heroHeading.textContent = '';
+        
+        let i = 0;
+        const typeWriter = () => {
+            if (i < text.length) {
+                heroHeading.textContent += text.charAt(i);
+                i++;
+                setTimeout(typeWriter, 50);
+            }
+        };
+        
+        // Start the typing effect after a short delay
+        setTimeout(typeWriter, 500);
+    }
+    
+    // Particle background effect for hero section
+    const hero = document.querySelector('.hero');
+    if (hero) {
+        // Create canvas element
+        const canvas = document.createElement('canvas');
+        canvas.style.position = 'absolute';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.pointerEvents = 'none';
+        canvas.style.zIndex = '0';
+        
+        // Insert canvas as first child of hero
+        hero.insertBefore(canvas, hero.firstChild);
+        
+        // Set canvas size
+        const setCanvasSize = () => {
+            canvas.width = hero.offsetWidth;
+            canvas.height = hero.offsetHeight;
+        };
+        
+        setCanvasSize();
+        window.addEventListener('resize', setCanvasSize);
+        
+        // Get canvas context
+        const ctx = canvas.getContext('2d');
+        
+        // Particle class
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 1;
+                this.speedX = Math.random() * 0.5 - 0.25;
+                this.speedY = Math.random() * 0.5 - 0.25;
+                this.color = `rgba(99, 102, 241, ${Math.random() * 0.3})`;
+            }
+            
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                
+                if (this.x < 0 || this.x > canvas.width) {
+                    this.speedX = -this.speedX;
+                }
+                
+                if (this.y < 0 || this.y > canvas.height) {
+                    this.speedY = -this.speedY;
+                }
+            }
+            
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        
+        // Create particles
+        const particles = [];
+        const particleCount = Math.floor(canvas.width * canvas.height / 10000);
+        
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+        
+        // Animation loop
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+                
+                // Connect particles with lines
+                for (let j = i; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < 100) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = `rgba(99, 102, 241, ${0.1 * (1 - distance / 100)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            
+            requestAnimationFrame(animate);
+        }
+        
+        animate();
     }
 });
