@@ -48,7 +48,7 @@ GROQ_API_KEY=your_key_here
 
 2. Create a calculator tool with OpenAPI schema:
 ```python
-from agentpress.framework.tool import Tool, ToolResult, openapi_schema
+from agentpress.tool import Tool, ToolResult, openapi_schema
 
 class CalculatorTool(Tool):
     @openapi_schema({
@@ -76,7 +76,7 @@ class CalculatorTool(Tool):
 
 3. Or create a tool with XML schema:
 ```python
-from agentpress.framework.tool import Tool, ToolResult, xml_schema
+from agentpress.tool import Tool, ToolResult, xml_schema
 
 class FilesTool(Tool):
     @xml_schema(
@@ -99,7 +99,7 @@ class FilesTool(Tool):
 4. Use the Thread Manager with tool execution:
 ```python
 import asyncio
-from agentpress.framework.thread_manager import ThreadManager
+from agentpress.thread_manager import ThreadManager
 from calculator_tool import CalculatorTool
 
 async def main():

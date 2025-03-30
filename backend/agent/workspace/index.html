@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokemon Battle Game</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="game-container">
+        <h1>Pokemon Battle Game</h1>
+        
+        <div id="start-screen" class="screen active">
+            <h2>Choose Your Pokemon</h2>
+            <div class="pokemon-selection">
+                <div class="pokemon" data-pokemon="pikachu">
+                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png" alt="Pikachu">
+                    <h3>Pikachu</h3>
+                    <p>Type: Electric</p>
+                    <p>HP: 100</p>
+                    <p>Attack: 55</p>
+                </div>
+                <div class="pokemon" data-pokemon="charmander">
+                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/4.png" alt="Charmander">
+                    <h3>Charmander</h3>
+                    <p>Type: Fire</p>
+                    <p>HP: 90</p>
+                    <p>Attack: 60</p>
+                </div>
+                <div class="pokemon" data-pokemon="squirtle">
+                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/7.png" alt="Squirtle">
+                    <h3>Squirtle</h3>
+                    <p>Type: Water</p>
+                    <p>HP: 110</p>
+                    <p>Attack: 50</p>
+                </div>
+                <div class="pokemon" data-pokemon="bulbasaur">
+                    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png" alt="Bulbasaur">
+                    <h3>Bulbasaur</h3>
+                    <p>Type: Grass</p>
+                    <p>HP: 105</p>
+                    <p>Attack: 52</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="battle-screen" class="screen">
+            <div class="battle-arena">
+                <div class="opponent">
+                    <div class="pokemon-info">
+                        <h3 id="opponent-name">Opponent</h3>
+                        <div class="health-bar">
+                            <div id="opponent-health" class="health-fill"></div>
+                        </div>
+                        <p id="opponent-hp">HP: 100/100</p>
+                    </div>
+                    <img id="opponent-img" src="" alt="Opponent Pokemon">
+                </div>
+                
+                <div class="player">
+                    <img id="player-img" src="" alt="Player Pokemon">
+                    <div class="pokemon-info">
+                        <h3 id="player-name">Player</h3>
+                        <div class="health-bar">
+                            <div id="player-health" class="health-fill"></div>
+                        </div>
+                        <p id="player-hp">HP: 100/100</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="battle-controls">
+                <div id="battle-message">What will you do?</div>
+                <div class="attack-buttons">
+                    <button id="attack-btn" class="battle-btn">Attack</button>
+                    <button id="special-attack-btn" class="battle-btn">Special Attack</button>
+                    <button id="heal-btn" class="battle-btn">Heal</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="result-screen" class="screen">
+            <h2 id="result-message">Battle Result</h2>
+            <div id="result-details"></div>
+            <button id="play-again-btn" class="battle-btn">Play Again</button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
