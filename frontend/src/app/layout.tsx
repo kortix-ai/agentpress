@@ -57,17 +57,17 @@ export default function RootLayout({
   }, []);
 
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" className="h-full">
+      <body className={`${inter.className} h-full flex flex-col`}>
         <AuthProvider>
           <MainNav />
           {apiConnected === false && (
-            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 mx-4 mt-2" role="alert">
+            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-2 text-sm" role="alert">
               <p className="font-bold">Warning</p>
               <p>Could not connect to backend API. Agent and thread features may not work properly.</p>
             </div>
           )}
-          <main className="min-h-screen">{children}</main>
+          <main className="flex-1 overflow-hidden">{children}</main>
           <Toaster position="top-right" />
         </AuthProvider>
       </body>
