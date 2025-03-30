@@ -32,8 +32,6 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState('');
   
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const initialLoadCompleted = useRef<boolean>(false);
@@ -96,17 +94,6 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
     };
   }, [projectId, threadId, user]);
 
-
-  // Handle user sending a message
-  const handleUserMessageSent = () => {
-    // Create space for agent response
-    setTimeout(() => {
-      if (messagesContainerRef.current) {
-        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-      }
-    }, 100);
-  };
-
   const checkForActiveAgentRuns = async () => {
     try {
       // Get agent runs for this thread using the proper API function
@@ -149,9 +136,6 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
       };
       
       setMessages(prev => [...prev, userMessage]);
-      
-      // Scroll to bottom after sending message (ChatGPT style)
-      handleUserMessageSent();
       
       // Clear the input
       setNewMessage('');
@@ -257,9 +241,6 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
         
         // Immediately append content as it arrives without forcing scroll
         setStreamContent(prev => prev + content);
-        
-        // Never auto-scroll during streaming - let user control scrolling
-        // This ensures user can freely scroll up and down during streaming
       },
       onToolCall: (name: string, args: any) => {
         console.log('[PAGE] Tool call received:', name, args);
@@ -421,62 +402,69 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
             <div className="text-zinc-500 text-sm">Thread {thread?.thread_id ? thread.thread_id.slice(0, 8) : '...'}</div>
           </div>
           
-          {isStreaming && (
-            <div className="flex items-center text-zinc-700 border border-zinc-200 py-1 px-2.5 rounded-full shadow-sm bg-white">
-              <div className="w-1.5 h-1.5 bg-zinc-700 rounded-full animate-pulse mr-2"></div>
-              <span className="text-xs font-medium">Live</span>
-            </div>
-          )}
+          <div className="flex items-center text-zinc-700 border border-zinc-200 py-1 px-2.5 rounded-full shadow-sm bg-white">
+            <div className={`w-1.5 h-1.5 rounded-full mr-2 ${isStreaming ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+            <span className="text-xs font-medium">{isStreaming ? 'Live' : 'Offline'}</span>
+          </div>
         </div>
       </div>
 
-      <div 
-        ref={messagesContainerRef}
-        className="flex-1 bg-gray-50 rounded-lg p-4 overflow-y-auto mb-4 border relative"
-      >
-        {messages.length === 0 && !streamContent ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500">Send a message to start the conversation.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {messages.map((message, index) => (
-              <div 
-                key={index} 
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div 
-                  className={`max-w-[80%] px-4 py-2 rounded-lg ${
-                    message.role === 'user' 
-                      ? 'bg-zinc-900 text-white rounded-br-none' 
-                      : 'bg-white border border-gray-200 rounded-bl-none'
-                  }`}
-                >
-                  <div className="whitespace-pre-wrap">{message.content}</div>
-                </div>
+      <div className="flex-1 bg-gray-50 rounded-lg overflow-y-auto mb-4 border relative">
+        <div className="p-4 min-h-full flex flex-col">
+          {messages.length === 0 && !streamContent ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center py-8 px-4 max-w-md mx-auto">
+                <p className="text-zinc-500 mb-1">Send a message to start the conversation.</p>
+                <p className="text-zinc-400 text-xs">The AI agent will respond automatically.</p>
               </div>
-            ))}
-            
-            {/* Streaming content */}
-            {streamContent && (
-              <div className="flex justify-start">
-                <div className="max-w-[80%] px-4 py-2 rounded-lg bg-white border border-gray-200 rounded-bl-none">
-                  <div className="whitespace-pre-wrap">
-                    {streamContent}
-                    {isStreaming && <span className="inline-block h-4 w-0.5 bg-zinc-800 ml-0.5 animate-pulse">​</span>}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {messages.map((message, index) => (
+                <div 
+                  key={index} 
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div 
+                    className={`max-w-[80%] px-4 py-3 rounded-2xl shadow-sm ${
+                      message.role === 'user' 
+                        ? 'bg-zinc-900 text-white rounded-br-none' 
+                        : 'bg-white border border-zinc-100 rounded-bl-none'
+                    }`}
+                  >
+                    <div className="whitespace-pre-wrap text-sm">{message.content}</div>
                   </div>
                 </div>
-              </div>
-            )}
-            
-            {/* Create space for agent response when running */}
-            {agentStatus === 'running' && !streamContent && (
-              <div className="min-h-[calc(100vh-400px)]" />
-            )}
-            
-            <div ref={messagesEndRef} />
-          </div>
-        )}
+              ))}
+              
+              {/* Streaming content */}
+              {streamContent && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] px-4 py-3 rounded-2xl shadow-sm bg-white border border-zinc-100 rounded-bl-none">
+                    <div className="whitespace-pre-wrap text-sm">
+                      {streamContent}
+                      {isStreaming && <span className="inline-block h-4 w-0.5 bg-zinc-800 ml-0.5 animate-pulse">​</span>}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Create space for agent response when running */}
+              {agentStatus === 'running' && !streamContent && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] pl-6 rounded-2xl shadow-sm bg-white border border-zinc-100 rounded-bl-none min-h-[2.5rem] min-w-[5rem]">
+                    <div className="flex items-center justify-start h-full w-full space-x-1">
+                      <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-pulse"></div>
+                      <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-pulse delay-150"></div>
+                      <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-pulse delay-300"></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+            </div>
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSubmitMessage} className="flex gap-2 items-end relative">
@@ -490,7 +478,7 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
               ? "Agent is thinking..." 
               : "Type your message... (Enter to send, Shift+Enter for new line)"
           }
-          className="flex-1 min-h-[50px] max-h-[200px] pr-12 resize-none py-3 shadow-sm focus-visible:ring-zinc-500"
+          className="flex-1 min-h-[50px] max-h-[200px] pr-12 resize-none py-3 shadow-sm focus-visible:ring-zinc-500 rounded-xl"
           disabled={isSending || agentStatus === 'running'}
           rows={1}
         />
