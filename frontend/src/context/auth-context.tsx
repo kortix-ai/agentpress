@@ -1,14 +1,14 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User } from '@supabase/supabase-js';
+import { User, AuthError, AuthResponse } from '@supabase/supabase-js';
 import { createClient } from '@/utils/supabase/client';
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string) => Promise<{ error: any, data: any }>;
+  login: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: AuthError | null; data: AuthResponse['data'] | null }>;
   logout: () => Promise<void>;
 }
 
@@ -48,7 +48,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       data.subscription.unsubscribe();
     };
-  }, []);
+  }, [supabase.auth]);
 
   const login = async (email: string, password: string) => {
     try {
@@ -58,7 +58,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
       return { error };
     } catch (error) {
-      return { error };
+      return { error: error as AuthError };
     }
   };
 
@@ -70,7 +70,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
       return { error, data };
     } catch (error) {
-      return { error, data: null };
+      return { error: error as AuthError, data: null };
     }
   };
 

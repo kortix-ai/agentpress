@@ -4,15 +4,22 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { usePathname, useParams } from "next/navigation"
 import { useState, useEffect } from "react"
-import { getProject, getThread } from "@/lib/api"
+import { getProject } from "@/lib/api"
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Copy } from "lucide-react"
+import { toast } from "sonner"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import {
   Breadcrumb,
   BreadcrumbList,
   BreadcrumbItem,
-  BreadcrumbLink,
   BreadcrumbSeparator,
-  BreadcrumbPage
 } from "@/components/ui/breadcrumb"
 
 export function SiteHeader() {
@@ -20,8 +27,12 @@ export function SiteHeader() {
   const params = useParams()
   const [projectName, setProjectName] = useState<string | null>(null)
   const [threadId, setThreadId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
   
+  const copyUrl = () => {
+    navigator.clipboard.writeText(window.location.href)
+    toast.success("URL copied to clipboard")
+  }
+
   // Extract page name from pathname
   const getPageTitle = () => {
     if (!pathname) return "Dashboard"
@@ -49,7 +60,6 @@ export function SiteHeader() {
       const projectId = params.id as string
       
       if (!projectId) return
-      setLoading(true)
       
       try {
         const projectData = await getProject(projectId)
@@ -64,8 +74,6 @@ export function SiteHeader() {
         }
       } catch (error) {
         console.error("Error fetching project data:", error)
-      } finally {
-        setLoading(false)
       }
     }
     
@@ -175,14 +183,32 @@ export function SiteHeader() {
   
   return (
     <header className="flex h-14 shrink-0 items-center">
-      <div className="flex w-full items-center gap-1 px-4">
-        <SidebarTrigger className="h-8 w-8 rounded-md hover:bg-zinc-50" />
-        <Separator
-          orientation="vertical"
-          className="mx-2 h-4 bg-zinc-200"
-        />
-        
-        {renderBreadcrumbs()}
+      <div className="flex w-full items-center justify-between px-4">
+        <div className="flex items-center gap-1">
+          <SidebarTrigger className="h-8 w-8 rounded-md hover:bg-zinc-50" />
+          <Separator
+            orientation="vertical"
+            className="mx-2 h-4 bg-zinc-200"
+          />
+          {renderBreadcrumbs()}
+        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={copyUrl}
+                className="h-8 w-8"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Copy link</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </header>
   )

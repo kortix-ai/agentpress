@@ -94,7 +94,7 @@ class XMLResultsAdder(ResultsAdderBase):
                         # Create a simple reference message as user role
                         result_message = {
                             "role": "user",
-                            "content": f"Result for {root_tag}\n{result['content']}"
+                            "content": f"<tool_result>Result for {root_tag}\n{result['content']}</tool_result>"
                         }
                         await self.add_message(thread_id, result_message)
                         return
@@ -102,7 +102,7 @@ class XMLResultsAdder(ResultsAdderBase):
             # Fallback if we can't find the root tag
             result_message = {
                 "role": "user",
-                "content": f"Result for {result['name']}:\n{result['content']}"
+                "content": f"<tool_result>>Result for {result['name']}:\n{result['content']}</<tool_result>>"
             }
             await self.add_message(thread_id, result_message)
             
@@ -111,6 +111,6 @@ class XMLResultsAdder(ResultsAdderBase):
             # Ensure the result is still added even if there's an error
             result_message = {
                 "role": "user",
-                "content": f"Result for {result['name']}:\n{result['content']}"
+                "content": f"<tool_result>Result for {result['name']}:\n{result['content']}</tool_result>"
             }
             await self.add_message(thread_id, result_message)

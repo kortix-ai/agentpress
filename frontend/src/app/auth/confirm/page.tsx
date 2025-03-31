@@ -1,15 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/utils/supabase/client';
 import { toast } from 'sonner';
 import { AuthLayout } from '@/components/auth-layout';
-import { CheckCircle2, Mail } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
-export default function ConfirmPage() {
+function ConfirmContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const code = searchParams.get('code');
@@ -31,9 +31,9 @@ export default function ConfirmPage() {
           console.error('Session exchange error:', sessionErr);
           // Continue even if this fails
         }
-      } catch (err: any) {
+      } catch (err: Error | unknown) {
         console.error('Confirmation error:', err);
-        toast.error(err.message || 'Failed to confirm email');
+        toast.error(err instanceof Error ? err.message : 'Failed to confirm email');
       }
     };
 
@@ -41,19 +41,17 @@ export default function ConfirmPage() {
   }, [code, router]);
 
   return (
-    <AuthLayout icon={isConfirmed ? CheckCircle2 : Mail}>
-      <div className="text-center mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {code ? 'Email verification' : 'Confirm your email'}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {code
-            ? isConfirmed 
-              ? 'Your email has been verified!' 
-              : 'Please wait while we verify your email...'
-            : 'Please check your email for the confirmation link.'}
-        </p>
-      </div>
+    <div className="text-center mb-6">
+      <h1 className="text-2xl font-semibold tracking-tight">
+        {code ? 'Email verification' : 'Confirm your email'}
+      </h1>
+      <p className="text-sm text-muted-foreground mt-1">
+        {code
+          ? isConfirmed 
+            ? 'Your email has been verified!' 
+            : 'Please wait while we verify your email...'
+          : 'Please check your email for the confirmation link.'}
+      </p>
       
       {!code && (
         <div className="text-sm text-muted-foreground mb-6">
@@ -93,6 +91,21 @@ export default function ConfirmPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+export default function ConfirmPage() {
+  return (
+    <AuthLayout>
+      <Suspense fallback={
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight">Loading...</h1>
+          <p className="text-sm text-muted-foreground mt-1">Please wait while we verify your email...</p>
+        </div>
+      }>
+        <ConfirmContent />
+      </Suspense>
     </AuthLayout>
   );
 } 

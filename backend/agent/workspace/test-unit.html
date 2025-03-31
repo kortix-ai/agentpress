@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGI Explorer - Unit Tests</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/mocha/9.1.3/mocha.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            padding: 20px;
+        }
+        
+        #mocha {
+            margin: 0;
+        }
+        
+        #mocha-stats {
+            position: static;
+            margin-bottom: 20px;
+        }
+        
+        .test-container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .test-panel {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .app-panel {
+            flex: 1;
+            border-left: 1px solid #eee;
+            position: relative;
+        }
+        
+        .app-panel iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .test-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .test-header h1 {
+            margin: 0;
+            color: #6366f1;
+        }
+        
+        .test-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        button {
+            background-color: #6366f1;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        button:hover {
+            background-color: #4f46e5;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-panel">
+            <div class="test-header">
+                <h1>AGI Explorer Unit Tests</h1>
+                <div class="test-controls">
+                    <button id="runTests">Run Tests</button>
+                </div>
+            </div>
+            
+            <div id="mocha"></div>
+        </div>
+        
+        <div class="app-panel">
+            <iframe id="appFrame" src="index.html"></iframe>
+        </div>
+    </div>
+    
+    <!-- Test libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mocha/9.1.3/mocha.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chai/4.3.4/chai.min.js"></script>
+    
+    <script>
+        // Initialize Mocha
+        mocha.setup('bdd');
+        
+        // Make Chai's expect available globally
+        const expect = chai.expect;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const runTestsBtn = document.getElementById('runTests');
+            const appFrame = document.getElementById('appFrame');
+            
+            // Wait for iframe to load
+            appFrame.addEventListener('load', function() {
+                runTestsBtn.disabled = false;
+            });
+            
+            // Run tests button
+            runTestsBtn.addEventListener('click', function() {
+                runTests();
+            });
+            
+            async function runTests() {
+                // Clear previous test results
+                document.getElementById('mocha').innerHTML = '';
+                mocha.setup('bdd');
+                
+                try {
+                    // Load test script in the iframe context
+                    const iframeDoc = appFrame.contentDocument;
+                    const script = iframeDoc.createElement('script');
+                    script.src = 'test-unit.js';
+                    iframeDoc.head.appendChild(script);
+                    
+                    // Wait for script to load
+                    await new Promise(resolve => {
+                        script.onload = resolve;
+                    });
+                    
+                    // Run the tests in the iframe context and get results
+                    const results = await new Promise(resolve => {
+                        appFrame.contentWindow.mocha.run(resolve);
+                    });
+                    
+                    // Display results in the main window
+                    mocha.run();
+                } catch (error) {
+                    console.error('Error running tests:', error);
+                    document.getElementById('mocha').innerHTML = `
+                        <div class="error">
+                            <h2>Error running tests</h2>
+                            <p>${error.message}</p>
+                        </div>
+                    `;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { AuthLayout } from '@/components/auth-layout';
 import { LogIn } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
@@ -37,16 +37,16 @@ export default function LoginPage() {
       const redirectTo = searchParams.get('redirectedFrom') || '/projects';
       router.push(redirectTo);
       router.refresh();
-    } catch (err: any) {
+    } catch (err: Error | unknown) {
       console.error('Login error:', err);
-      toast.error(err.message || 'Failed to login');
+      toast.error(err instanceof Error ? err.message : 'Failed to login');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <AuthLayout icon={LogIn}>
+    <>
       <div className="text-center mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">
           Welcome back
@@ -118,6 +118,21 @@ export default function LoginPage() {
           Create an account
         </Link>
       </div>
+    </>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <AuthLayout>
+      <Suspense fallback={
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight">Loading...</h1>
+          <p className="text-sm text-muted-foreground mt-1">Please wait while we load the login form...</p>
+        </div>
+      }>
+        <LoginContent />
+      </Suspense>
     </AuthLayout>
   );
 } 

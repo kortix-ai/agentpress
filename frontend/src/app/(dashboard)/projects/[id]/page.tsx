@@ -3,11 +3,8 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Plus, MessageSquare, ArrowLeft } from 'lucide-react';
+import { Plus, MessageSquare } from 'lucide-react';
 import { getProject, getThreads, createThread, type Thread as ApiThread } from '@/lib/api';
 import { Project } from '@/lib/types';
 import { toast } from 'sonner';
@@ -30,8 +27,8 @@ interface ApiProject {
   created_at: string;
 }
 
-export default function ProjectPage({ params }: { params: ProjectParams }) {
-  const unwrappedParams = React.use(params as any) as ProjectParams;
+export default function ProjectPage({ params }: { params: Promise<ProjectParams> }) {
+  const unwrappedParams = React.use(params);
   const projectId = unwrappedParams.id;
   
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -65,9 +62,9 @@ export default function ProjectPage({ params }: { params: ProjectParams }) {
         
         const threadsData = await getThreads(projectId);
         setThreads(threadsData);
-      } catch (err: any) {
+      } catch (err) {
         console.error('Error loading project:', err);
-        setError(err.message || 'Failed to load project');
+        setError(err instanceof Error ? err.message : 'Failed to load project');
         toast.error('Failed to load project details');
       } finally {
         setIsLoading(false);
@@ -92,9 +89,9 @@ export default function ProjectPage({ params }: { params: ProjectParams }) {
       
       // Redirect to the new thread immediately
       router.push(`/projects/${projectId}/threads/${newThread.thread_id}`);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating thread:', err);
-      toast.error(err.message || 'Failed to create thread');
+      toast.error(err instanceof Error ? err.message : 'Failed to create thread');
       setIsCreatingThread(false);
     }
   };
