@@ -8,7 +8,6 @@ from typing import AsyncGenerator, Optional, Dict, Any
 import sys
 from agent.prompt import INSTRUCTIONS
 
-
 async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None):
     """Run the development agent with specified configuration."""
     

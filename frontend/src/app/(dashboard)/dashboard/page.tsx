@@ -55,7 +55,6 @@ function DashboardContent() {
           onSubmit={handleSubmit} 
           loading={isSubmitting}
           placeholder="Ask anything..."
-          minHeight="min-h-[100px]"
           value={inputValue}
           onChange={setInputValue}
         />
