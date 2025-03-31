@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Send, Play, Square, Wifi } from 'lucide-react';
+import { Loader2, Send, Play, Square, Wifi, ChevronDown, ArrowDown } from 'lucide-react';
 import { getProject, getThread, addMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -35,6 +35,12 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
   const streamCleanupRef = useRef<(() => void) | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const initialLoadCompleted = useRef<boolean>(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const latestMessageRef = useRef<HTMLDivElement>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [buttonOpacity, setButtonOpacity] = useState(0);
+  const [isLatestMessageVisible, setIsLatestMessageVisible] = useState(true);
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -360,6 +366,81 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
     }
   };
 
+  // Scroll to bottom of messages
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  // Setup intersection observer to detect if latest message is visible
+  useEffect(() => {
+    if (!latestMessageRef.current || messages.length === 0) return;
+    
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Ensure we're setting a boolean value, not null
+        setIsLatestMessageVisible(entry.isIntersecting === true);
+      },
+      {
+        root: messagesContainerRef.current,
+        threshold: 0.1, // 10% of the element needs to be visible
+      }
+    );
+    
+    observer.observe(latestMessageRef.current);
+    
+    return () => {
+      observer.disconnect();
+    };
+  }, [messages, streamContent]);
+
+  // Update scroll button visibility based on latest message visibility and scroll position
+  useEffect(() => {
+    const shouldShowButton = !isLatestMessageVisible || 
+      (messagesContainerRef.current && 
+       messagesContainerRef.current.scrollHeight - 
+       messagesContainerRef.current.scrollTop - 
+       messagesContainerRef.current.clientHeight > 100);
+    
+    // Fix the linter error by ensuring we pass a boolean
+    setShowScrollButton(!!shouldShowButton);
+    setButtonOpacity(shouldShowButton ? 1 : 0);
+  }, [isLatestMessageVisible]);
+
+  // Check if user has scrolled up from bottom
+  const handleScroll = () => {
+    if (!messagesContainerRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    
+    // If we're scrolled up a significant amount and latest message isn't visible
+    const isScrolledUp = scrollHeight - scrollTop - clientHeight > 100;
+    
+    if (isScrolledUp !== showScrollButton) {
+      setShowScrollButton(isScrolledUp);
+      setButtonOpacity(isScrolledUp ? 1 : 0);
+    }
+  };
+
+  // Auto-scroll when messages change
+  useEffect(() => {
+    // Only auto-scroll if already at bottom or is a new message
+    if (!showScrollButton || messages.length > 0 && messages[messages.length - 1]?.role === 'assistant') {
+      scrollToBottom();
+    }
+  }, [messages, streamContent]);
+
+  // Initial scroll to bottom with animation
+  useEffect(() => {
+    if (!isLoading) {
+      // Short delay to ensure content is rendered before scrolling
+      const timer = setTimeout(() => {
+        scrollToBottom('smooth');
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
+
   // Only show a full-screen loader on the very first load
   if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {
     return (
@@ -386,11 +467,7 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
     );
   }
 
-  // Preserve UI structure during subsequent loads
-  // This keeps the layout stable even when refreshing data
-  const isReady = project && thread;
   const projectName = project?.name || 'Loading...';
-  const threadInfo = thread?.thread_id ? `Thread ${thread.thread_id.slice(0, 8)}` : 'Loading...';
 
   return (
     <div className="container mx-auto p-6 flex flex-col h-[calc(100vh-64px)]">
@@ -401,7 +478,7 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
             <div className="mx-2 text-zinc-300">•</div>
             <div className="text-zinc-500 text-sm">Thread {thread?.thread_id ? thread.thread_id.slice(0, 8) : '...'}</div>
           </div>
-          
+                    
           <div className="flex items-center text-zinc-700 border border-zinc-200 py-1 px-2.5 rounded-full shadow-sm bg-white">
             <div className={`w-1.5 h-1.5 rounded-full mr-2 ${isStreaming ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
             <span className="text-xs font-medium">{isStreaming ? 'Live' : 'Offline'}</span>
@@ -409,7 +486,11 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
         </div>
       </div>
 
-      <div className="flex-1 bg-gray-50 rounded-lg overflow-y-auto mb-4 border relative">
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 bg-gray-50 rounded-lg overflow-y-auto mb-4 border relative" 
+        onScroll={handleScroll}
+      >
         <div className="p-4 min-h-full flex flex-col">
           {messages.length === 0 && !streamContent ? (
             <div className="flex-1 flex items-center justify-center">
@@ -423,6 +504,7 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
               {messages.map((message, index) => (
                 <div 
                   key={index} 
+                  ref={index === messages.length - 1 && message.role === 'assistant' ? latestMessageRef : null}
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div 
@@ -432,16 +514,19 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
                         : 'bg-white border border-zinc-100 rounded-bl-none'
                     }`}
                   >
-                    <div className="whitespace-pre-wrap text-sm">{message.content}</div>
+                    <div className="whitespace-pre-wrap text-sm break-words overflow-hidden">{message.content}</div>
                   </div>
                 </div>
               ))}
               
               {/* Streaming content */}
               {streamContent && (
-                <div className="flex justify-start">
+                <div 
+                  ref={latestMessageRef}
+                  className="flex justify-start"
+                >
                   <div className="max-w-[80%] px-4 py-3 rounded-2xl shadow-sm bg-white border border-zinc-100 rounded-bl-none">
-                    <div className="whitespace-pre-wrap text-sm">
+                    <div className="whitespace-pre-wrap text-sm break-words overflow-hidden">
                       {streamContent}
                       {isStreaming && <span className="inline-block h-4 w-0.5 bg-zinc-800 ml-0.5 animate-pulse">​</span>}
                     </div>
@@ -462,8 +547,34 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
                 </div>
               )}
               
+              {/* Invisible element at the end to scroll to */}
+              <div ref={messagesEndRef} />
+              
+              {/* Extra space at the bottom with smoother transitions */}
+              <div 
+                className="transition-all duration-700 ease-in-out" 
+                style={{ 
+                  height: (isStreaming || agentStatus === 'running') ? '40px' : '20px',
+                  opacity: (isStreaming || agentStatus === 'running') ? 1 : 0.5
+                }}
+              />
             </div>
           )}
+        </div>
+        
+        {/* Scroll to bottom button - improved UI with smooth animation */}
+        <div 
+          className="sticky bottom-6 w-full flex justify-center pointer-events-none"
+          style={{ 
+            marginTop: '-60px',
+            opacity: buttonOpacity,
+            transition: 'opacity 0.3s ease-in-out',
+            visibility: showScrollButton ? 'visible' : 'hidden'
+          }}
+        >
+          <div className="bg-zinc-900/90 backdrop-blur-sm rounded-full shadow-lg p-2.5 flex items-center justify-center hover:bg-black transition-all duration-200 transform hover:scale-105 cursor-pointer pointer-events-auto" onClick={() => scrollToBottom()}>
+            <ArrowDown className="h-4 w-4 text-white" />
+          </div>
         </div>
       </div>
 
