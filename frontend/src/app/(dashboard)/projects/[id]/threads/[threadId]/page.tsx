@@ -4,12 +4,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Send, Square, ArrowDown } from 'lucide-react';
+import { ArrowDown } from 'lucide-react';
 import { getProject, getThread, addMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
 import { toast } from 'sonner';
 import { Project } from '@/lib/types';
 import { Skeleton } from "@/components/ui/skeleton";
+import { ChatInput } from '@/components/chat-input';
 
 // Define a type for the params to make React.use() work properly
 type ThreadParams = { id: string; threadId: string };
@@ -264,10 +264,8 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     };
   }, [projectId, threadId, user, handleStreamAgent]);
 
-  const handleSubmitMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!newMessage.trim()) return;
+  const handleSubmitMessage = async (message: string) => {
+    if (!message.trim()) return;
     
     setIsSending(true);
     
@@ -275,7 +273,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       // Add the message optimistically to the UI
       const userMessage: ApiMessage = {
         role: 'user',
-        content: newMessage
+        content: message
       };
       
       setMessages(prev => [...prev, userMessage]);
@@ -397,7 +395,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       e.preventDefault();
       
       if (newMessage.trim() && !isSending && agentStatus !== 'running') {
-        handleSubmitMessage(e as React.FormEvent);
+        handleSubmitMessage(newMessage);
       }
     }
   };
@@ -651,66 +649,17 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
 
         <div className="absolute inset-x-0 bottom-0 border-t bg-background/80 backdrop-blur-sm">
           <div className="mx-auto max-w-3xl px-6 py-4">
-            <form onSubmit={handleSubmitMessage} className="relative">
-              <Textarea
-                ref={textareaRef}
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={
-                  agentStatus === 'running' 
-                    ? "Agent is thinking..." 
-                    : "Type your message... (Enter to send, Shift+Enter for new line)"
-                }
-                className="min-h-[50px] max-h-[200px] pr-12 resize-none"
-                disabled={isSending || agentStatus === 'running'}
-                rows={1}
-              />
-              
-              <Button 
-                type={agentStatus === 'running' ? 'button' : 'submit'}
-                onClick={agentStatus === 'running' ? handleStopAgent : undefined}
-                variant="ghost"
-                size="icon"
-                className="absolute right-2 bottom-2 h-8 w-8 rounded-full"
-                disabled={(!newMessage.trim() && agentStatus !== 'running') || isSending}
-                aria-label={agentStatus === 'running' ? 'Stop agent' : 'Send message'}
-              >
-                {isSending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : agentStatus === 'running' ? (
-                  <Square className="h-4 w-4" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
-            </form>
-
-            {agentStatus === 'running' && (
-              <div className="mt-2 flex items-center justify-center gap-2">
-                <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  {isStreaming ? (
-                    <>
-                      <span className="inline-flex items-center">
-                        <span className="relative flex h-2 w-2 mr-1">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-                        </span>
-                        Agent is responding
-                      </span>
-                      <span className="text-muted-foreground/60 border-l pl-1.5">
-                        Press <kbd className="inline-flex items-center justify-center p-0.5 bg-muted border rounded text-xs"><Square className="h-2.5 w-2.5" /></kbd> to stop
-                      </span>
-                    </>
-                  ) : (
-                    <span className="inline-flex items-center">
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                      Agent is thinking...
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+            <ChatInput
+              value={newMessage}
+              onChange={setNewMessage}
+              onSubmit={handleSubmitMessage}
+              placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+              loading={isSending}
+              disabled={isSending}
+              isAgentRunning={agentStatus === 'running'}
+              onStopAgent={handleStopAgent}
+              autoFocus={!isLoading}
+            />
           </div>
         </div>
       </div>

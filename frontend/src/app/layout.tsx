@@ -1,13 +1,8 @@
-'use client';
 import './globals.css';
 import { Inter } from 'next/font/google';
 import { AuthProvider } from '@/context/auth-context';
 import { Toaster } from 'sonner';
-import { usePathname } from 'next/navigation';
-import { MainNav } from '@/components/main-nav';
-import { AppSidebar } from "@/components/app-sidebar"
-import { SiteHeader } from "@/components/site-header"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { LayoutContent } from '@/components/layout-content';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -16,43 +11,13 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-  
-  // Check if current path is in dashboard routes
-  const isDashboardRoute = pathname.startsWith('/dashboard') || 
-                           pathname.startsWith('/projects');
-  
-  // Only show MainNav on marketing pages, not in dashboard routes
-  const showMainNav = !isDashboardRoute;
-
-  // Render dashboard layout or regular layout based on route
-  const renderContent = () => {
-    if (isDashboardRoute) {
-      return (
-        <SidebarProvider>
-          <AppSidebar variant="inset" />
-          <SidebarInset>
-            
-              <SiteHeader />
-              {children}
-          </SidebarInset>
-        </SidebarProvider>
-      );
-    }
-    
-    return (
-      <>
-        {showMainNav && <MainNav />}
-            {children}
-      </>
-    );
-  };
-
   return (
     <html lang="en" className="h-full">
-      <body className={`${inter.className} h-full overflow-hidden`}>
+      <body className={`${inter.className} h-full`}>
         <AuthProvider>
-            {renderContent()}
+          <LayoutContent>
+            {children}
+          </LayoutContent>
           <Toaster position="top-right" />
         </AuthProvider>
       </body>
