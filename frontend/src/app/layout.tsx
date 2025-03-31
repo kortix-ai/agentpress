@@ -32,10 +32,9 @@ export default function RootLayout({
         <SidebarProvider>
           <AppSidebar variant="inset" />
           <SidebarInset>
-            <SiteHeader />
-            <div className="h-[calc(100vh-3.5rem)] overflow-y-auto">
+            
+              <SiteHeader />
               {children}
-            </div>
           </SidebarInset>
         </SidebarProvider>
       );
@@ -44,7 +43,7 @@ export default function RootLayout({
     return (
       <>
         {showMainNav && <MainNav />}
-        <main className="flex-1 overflow-auto">{children}</main>
+            {children}
       </>
     );
   };
@@ -53,7 +52,7 @@ export default function RootLayout({
     <html lang="en" className="h-full">
       <body className={`${inter.className} h-full overflow-hidden`}>
         <AuthProvider>
-          {renderContent()}
+            {renderContent()}
           <Toaster position="top-right" />
         </AuthProvider>
       </body>
