@@ -41,6 +41,7 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [buttonOpacity, setButtonOpacity] = useState(0);
   const [isLatestMessageVisible, setIsLatestMessageVisible] = useState(true);
+  const [userHasScrolled, setUserHasScrolled] = useState(false);
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -245,14 +246,16 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
     
     console.log(`[PAGE] Setting up stream for agent run ${runId}`);
     
-    // Start streaming the agent's responses
+    // Start streaming the agent's responses with improved implementation
     const cleanup = streamAgent(runId, {
       onMessage: (content: string) => {
         // Skip empty content chunks
         if (!content.trim()) return;
         
-        // Immediately append content as it arrives without forcing scroll
-        setStreamContent(prev => prev + content);
+        // Improved stream update with requestAnimationFrame for smoother UI updates
+        window.requestAnimationFrame(() => {
+          setStreamContent(prev => prev + content);
+        });
       },
       onToolCall: (name: string, args: any) => {
         console.log('[PAGE] Tool call received:', name, args);
@@ -372,9 +375,47 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
     }
   };
 
-  // Scroll to bottom of messages
+  // Check if user has scrolled up from bottom
+  const handleScroll = () => {
+    if (!messagesContainerRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    
+    // If we're scrolled up a significant amount and latest message isn't visible
+    const isScrolledUp = scrollHeight - scrollTop - clientHeight > 100;
+    
+    if (isScrolledUp !== showScrollButton) {
+      setShowScrollButton(isScrolledUp);
+      setButtonOpacity(isScrolledUp ? 1 : 0);
+    }
+    
+    // Track if user has manually scrolled
+    if (isScrolledUp) {
+      setUserHasScrolled(true);
+    } else {
+      // Reset user scroll state when they scroll back to bottom
+      setUserHasScrolled(false);
+    }
+  };
+
+  // Auto-scroll when messages change
+  useEffect(() => {
+    // Only auto-scroll if:
+    // 1. User hasn't manually scrolled up, or
+    // 2. This is a new message sent by the user (but not during streaming)
+    const isNewUserMessage = messages.length > 0 && messages[messages.length - 1]?.role === 'user';
+    
+    if ((!userHasScrolled && isLatestMessageVisible) || (isNewUserMessage && !isStreaming)) {
+      scrollToBottom();
+    }
+  }, [messages, streamContent, isLatestMessageVisible, userHasScrolled, isStreaming]);
+
+  // Scroll to bottom explicitly when user sends a message
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
+    if (behavior === 'instant' || behavior === 'auto') {
+      setUserHasScrolled(false);
+    }
   };
 
   // Setup intersection observer to detect if latest message is visible
@@ -412,48 +453,13 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
     setButtonOpacity(shouldShowButton ? 1 : 0);
   }, [isLatestMessageVisible]);
 
-  // Check if user has scrolled up from bottom
-  const handleScroll = () => {
-    if (!messagesContainerRef.current) return;
-    
-    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-    
-    // If we're scrolled up a significant amount and latest message isn't visible
-    const isScrolledUp = scrollHeight - scrollTop - clientHeight > 100;
-    
-    if (isScrolledUp !== showScrollButton) {
-      setShowScrollButton(isScrolledUp);
-      setButtonOpacity(isScrolledUp ? 1 : 0);
-    }
-  };
-
-  // Auto-scroll when messages change
-  useEffect(() => {
-    // Only auto-scroll if user hasn't manually scrolled up
-    if (isLatestMessageVisible) {
-      scrollToBottom();
-    }
-  }, [messages, streamContent, isLatestMessageVisible]);
-
-  // Initial scroll to bottom with animation
-  useEffect(() => {
-    if (!isLoading) {
-      // Short delay to ensure content is rendered before scrolling
-      const timer = setTimeout(() => {
-        scrollToBottom('smooth');
-      }, 100);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isLoading]);
-
   // Update UI states when agent status changes
   useEffect(() => {
-    // Scroll to bottom when agent starts responding
-    if (agentStatus === 'running') {
+    // Scroll to bottom when agent starts responding, but only if user hasn't scrolled up manually
+    if (agentStatus === 'running' && !userHasScrolled) {
       scrollToBottom();
     }
-  }, [agentStatus]);
+  }, [agentStatus, userHasScrolled]);
 
   // Only show a full-screen loader on the very first load
   if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {
@@ -482,6 +488,12 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
   }
 
   const projectName = project?.name || 'Loading...';
+
+  // Make sure clicking the scroll button resets user scroll state
+  const handleScrollButtonClick = () => {
+    scrollToBottom();
+    setUserHasScrolled(false);
+  };
 
   return (
     <div className="container mx-auto p-6 flex flex-col h-[calc(100vh-64px)]">
@@ -533,7 +545,7 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
                 </div>
               ))}
               
-              {/* Streaming content */}
+              {/* Streaming content with improved rendering */}
               {streamContent && (
                 <div 
                   ref={latestMessageRef}
@@ -542,7 +554,23 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
                   <div className="max-w-[80%] px-4 py-3 rounded-2xl shadow-sm bg-white border border-zinc-100 rounded-bl-none">
                     <div className="whitespace-pre-wrap text-sm break-words overflow-hidden">
                       {streamContent}
-                      {isStreaming && <span className="inline-block h-4 w-0.5 bg-zinc-800 ml-0.5 animate-pulse">​</span>}
+                      {isStreaming && (
+                        <span className="inline-flex items-center ml-0.5">
+                          <span 
+                            className="inline-block h-4 w-0.5 bg-zinc-800 mx-px"
+                            style={{ 
+                              opacity: 0.7,
+                              animation: 'cursorBlink 1s ease-in-out infinite',
+                            }}
+                          />
+                          <style jsx global>{`
+                            @keyframes cursorBlink {
+                              0%, 100% { opacity: 1; }
+                              50% { opacity: 0; }
+                            }
+                          `}</style>
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -568,7 +596,7 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
               <div 
                 className="transition-all duration-700 ease-in-out" 
                 style={{ 
-                  height: (isStreaming || agentStatus === 'running') ? '40px' : '20px',
+                  height: (isStreaming || agentStatus === 'running') ? '20px' : '20px',
                   opacity: (isStreaming || agentStatus === 'running') ? 1 : 0.5
                 }}
               />
@@ -586,7 +614,7 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
             visibility: showScrollButton ? 'visible' : 'hidden'
           }}
         >
-          <div className="bg-zinc-900/90 backdrop-blur-sm rounded-full shadow-lg p-2.5 flex items-center justify-center hover:bg-black transition-all duration-200 transform hover:scale-105 cursor-pointer pointer-events-auto" onClick={() => scrollToBottom()}>
+          <div className="bg-zinc-900/90 backdrop-blur-sm rounded-full shadow-lg p-2.5 flex items-center justify-center hover:bg-black transition-all duration-200 transform hover:scale-105 cursor-pointer pointer-events-auto" onClick={handleScrollButtonClick}>
             <ArrowDown className="h-4 w-4 text-white" />
           </div>
         </div>
@@ -625,12 +653,31 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
         </Button>
       </form>
 
-      {/* Fixed height container to prevent layout shifts */}
-      <div className="h-5 mt-1">
+      {/* Status indicator with improved spacing and styling */}
+      <div className="h-6 mt-2">
         {agentStatus === 'running' && (
-          <div className="text-xs text-gray-500 text-center">
-            {isStreaming ? 'Agent is responding...' : 'Agent is thinking...'}
-            {isStreaming && ' Click the stop button to interrupt.'}
+          <div className="flex items-center justify-center gap-1.5">
+            <div className="text-xs text-zinc-500 flex items-center gap-1.5">
+              {isStreaming ? (
+                <>
+                  <span className="inline-flex items-center">
+                    <span className="relative flex h-2 w-2 mr-1">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
+                    Agent is responding
+                  </span>
+                  <span className="font-normal border-l border-zinc-200 pl-1.5 ml-0.5 text-zinc-400">
+                    Press <kbd className="inline-flex items-center justify-center p-0.5 bg-zinc-100 border border-zinc-200 rounded text-zinc-600"><Square className="h-2.5 w-2.5" /></kbd> to stop
+                  </span>
+                </>
+              ) : (
+                <span className="inline-flex items-center">
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  Agent is thinking...
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>

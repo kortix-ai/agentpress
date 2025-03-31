@@ -204,4 +204,68 @@ document.addEventListener('DOMContentLoaded', function() {
             element.style.transform = 'translateY(0)';
         });
     });
+    
+    // Testimonial slider functionality
+    const testimonialTrack = document.querySelector('.testimonial-track');
+    const testimonialCards = document.querySelectorAll('.testimonial-card');
+    const dots = document.querySelectorAll('.dot');
+    const prevBtn = document.querySelector('.prev-btn');
+    const nextBtn = document.querySelector('.next-btn');
+    
+    if (testimonialTrack && testimonialCards.length > 0) {
+        let currentIndex = 0;
+        const cardCount = testimonialCards.length;
+        
+        // Function to update the slider position
+        function updateSlider() {
+            testimonialTrack.style.transform = `translateX(-${currentIndex * 100}%)`;
+            
+            // Update active dot
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentIndex);
+            });
+        }
+        
+        // Event listeners for navigation buttons
+        if (prevBtn) {
+            prevBtn.addEventListener('click', function() {
+                currentIndex = (currentIndex - 1 + cardCount) % cardCount;
+                updateSlider();
+            });
+        }
+        
+        if (nextBtn) {
+            nextBtn.addEventListener('click', function() {
+                currentIndex = (currentIndex + 1) % cardCount;
+                updateSlider();
+            });
+        }
+        
+        // Event listeners for dots
+        dots.forEach((dot, index) => {
+            dot.addEventListener('click', function() {
+                currentIndex = index;
+                updateSlider();
+            });
+        });
+        
+        // Auto-advance the slider every 5 seconds
+        let sliderInterval = setInterval(function() {
+            currentIndex = (currentIndex + 1) % cardCount;
+            updateSlider();
+        }, 5000);
+        
+        // Pause auto-advance when hovering over the slider
+        testimonialTrack.addEventListener('mouseenter', function() {
+            clearInterval(sliderInterval);
+        });
+        
+        // Resume auto-advance when mouse leaves the slider
+        testimonialTrack.addEventListener('mouseleave', function() {
+            sliderInterval = setInterval(function() {
+                currentIndex = (currentIndex + 1) % cardCount;
+                updateSlider();
+            }, 5000);
+        });
+    }
 });
