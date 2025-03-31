@@ -9,6 +9,7 @@ import { Loader2, Send, Square, ArrowDown } from 'lucide-react';
 import { getProject, getThread, addMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
 import { toast } from 'sonner';
 import { Project } from '@/lib/types';
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Define a type for the params to make React.use() work properly
 type ThreadParams = { id: string; threadId: string };
@@ -65,7 +66,6 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const latestMessageRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [buttonOpacity, setButtonOpacity] = useState(0);
-  const [isLatestMessageVisible, setIsLatestMessageVisible] = useState(true);
   const [userHasScrolled, setUserHasScrolled] = useState(false);
 
   const handleStreamAgent = useCallback(async (runId: string) => {
@@ -407,78 +407,54 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     if (!messagesContainerRef.current) return;
     
     const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-    
-    // If we're scrolled up a significant amount and latest message isn't visible
     const isScrolledUp = scrollHeight - scrollTop - clientHeight > 100;
     
-    if (isScrolledUp !== showScrollButton) {
-      setShowScrollButton(isScrolledUp);
-      setButtonOpacity(isScrolledUp ? 1 : 0);
-    }
-    
-    // Track if user has manually scrolled
-    if (isScrolledUp) {
-      setUserHasScrolled(true);
-    } else {
-      // Reset user scroll state when they scroll back to bottom
-      setUserHasScrolled(false);
-    }
+    setShowScrollButton(isScrolledUp);
+    setButtonOpacity(isScrolledUp ? 1 : 0);
+    setUserHasScrolled(isScrolledUp);
   };
 
-  // Auto-scroll when messages change
-  useEffect(() => {
-    // Only auto-scroll if:
-    // 1. User hasn't manually scrolled up, or
-    // 2. This is a new message sent by the user (but not during streaming)
-    const isNewUserMessage = messages.length > 0 && messages[messages.length - 1]?.role === 'user';
-    
-    if ((!userHasScrolled && isLatestMessageVisible) || (isNewUserMessage && !isStreaming)) {
-      scrollToBottom();
-    }
-  }, [messages, streamContent, isLatestMessageVisible, userHasScrolled, isStreaming]);
-
-  // Scroll to bottom explicitly when user sends a message
+  // Scroll to bottom explicitly
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
-    if (behavior === 'instant' || behavior === 'auto') {
-      setUserHasScrolled(false);
-    }
   };
 
-  // Setup intersection observer to detect if latest message is visible
+  // Auto-scroll only when:
+  // 1. User sends a new message
+  // 2. Agent starts responding
+  // 3. User clicks the scroll button
+  useEffect(() => {
+    const isNewUserMessage = messages.length > 0 && messages[messages.length - 1]?.role === 'user';
+    
+    if (isNewUserMessage || agentStatus === 'running') {
+      scrollToBottom();
+    }
+  }, [messages, agentStatus]);
+
+  // Make sure clicking the scroll button scrolls to bottom
+  const handleScrollButtonClick = () => {
+    scrollToBottom();
+    setUserHasScrolled(false);
+  };
+
+  // Remove unnecessary scroll effects
   useEffect(() => {
     if (!latestMessageRef.current || messages.length === 0) return;
     
     const observer = new IntersectionObserver(
       ([entry]) => {
-        // Ensure we're setting a boolean value, not null
-        setIsLatestMessageVisible(entry?.isIntersecting === true);
+        setShowScrollButton(!entry?.isIntersecting);
+        setButtonOpacity(entry?.isIntersecting ? 0 : 1);
       },
       {
         root: messagesContainerRef.current,
-        threshold: 0.1, // 10% of the element needs to be visible
+        threshold: 0.1,
       }
     );
     
     observer.observe(latestMessageRef.current);
-    
-    return () => {
-      observer.disconnect();
-    };
+    return () => observer.disconnect();
   }, [messages, streamContent]);
-
-  // Update scroll button visibility based on latest message visibility and scroll position
-  useEffect(() => {
-    const shouldShowButton = !isLatestMessageVisible || 
-      (messagesContainerRef.current && 
-       messagesContainerRef.current.scrollHeight - 
-       messagesContainerRef.current.scrollTop - 
-       messagesContainerRef.current.clientHeight > 100);
-    
-    // Fix the linter error by ensuring we pass a boolean
-    setShowScrollButton(!!shouldShowButton);
-    setButtonOpacity(shouldShowButton ? 1 : 0);
-  }, [isLatestMessageVisible]);
 
   // Update UI states when agent status changes
   useEffect(() => {
@@ -491,10 +467,55 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   // Only show a full-screen loader on the very first load
   if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {
     return (
-      <div className="container mx-auto p-6 flex justify-center items-center min-h-[80vh]">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p>Loading...</p>
+      <div className="flex h-[calc(100vh-4rem)] flex-col">
+        <div className="relative flex-1 flex flex-col">
+          <div className="absolute inset-0 overflow-y-auto px-6 py-4 pb-[5.5rem]">
+            <div className="mx-auto max-w-3xl">
+              <div className="space-y-4">
+                {/* User message skeleton */}
+                <div className="flex justify-end">
+                  <div className="max-w-[85%] rounded-lg bg-primary/10 px-4 py-3">
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                </div>
+                
+                {/* Assistant message skeleton */}
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] rounded-lg bg-muted px-4 py-3">
+                    <Skeleton className="h-4 w-48 mb-2" />
+                    <Skeleton className="h-4 w-40" />
+                  </div>
+                </div>
+                
+                {/* User message skeleton */}
+                <div className="flex justify-end">
+                  <div className="max-w-[85%] rounded-lg bg-primary/10 px-4 py-3">
+                    <Skeleton className="h-4 w-40" />
+                  </div>
+                </div>
+                
+                {/* Assistant message skeleton */}
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] rounded-lg bg-muted px-4 py-3">
+                    <Skeleton className="h-4 w-56 mb-2" />
+                    <Skeleton className="h-4 w-44" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Input area skeleton */}
+          <div className="absolute inset-x-0 bottom-0 border-t bg-background/80 backdrop-blur-sm">
+            <div className="mx-auto max-w-3xl px-6 py-4">
+              <div className="relative">
+                <Skeleton className="h-[50px] w-full rounded-md" />
+                <div className="absolute right-2 bottom-2">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -502,10 +523,10 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
 
   if (error) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <h2 className="text-xl text-red-800 font-medium mb-2">Error</h2>
-          <p className="text-red-600 mb-4">{error}</p>
+      <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+        <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-lg border bg-card p-6 text-center">
+          <h2 className="text-lg font-semibold text-destructive">Error</h2>
+          <p className="text-sm text-muted-foreground">{error}</p>
           <Button variant="outline" onClick={() => router.push(`/projects/${projectId}`)}>
             Back to Project
           </Button>
@@ -514,199 +535,184 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     );
   }
 
-  const projectName = project?.name || 'Loading...';
-
-  // Make sure clicking the scroll button resets user scroll state
-  const handleScrollButtonClick = () => {
-    scrollToBottom();
-    setUserHasScrolled(false);
-  };
+  // const projectName = project?.name || 'Loading...';
 
   return (
-    <div className="container mx-auto p-6 flex flex-col h-[calc(100vh-64px)]">
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-baseline">
-            <h1 className="text-2xl font-bold">{projectName}</h1>
-            <div className="mx-2 text-zinc-300">•</div>
-            <div className="text-zinc-500 text-sm">Thread {thread?.thread_id ? thread.thread_id.slice(0, 8) : '...'}</div>
-          </div>
-                    
-          <div className="flex items-center text-zinc-700 border border-zinc-200 py-1 px-2.5 rounded-full shadow-sm bg-white">
-            <div className={`w-1.5 h-1.5 rounded-full mr-2 ${isStreaming ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-            <span className="text-xs font-medium">{isStreaming ? 'Live' : 'Offline'}</span>
-          </div>
+    <div className="flex h-[calc(100vh-4rem)] flex-col">
+      {/* <div className="flex items-center justify-between border-b px-6 py-4">
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold">{projectName}</h1>
+          <div className="text-muted-foreground">•</div>
+          <div className="text-sm text-muted-foreground">Thread {thread?.thread_id ? thread.thread_id.slice(0, 8) : '...'}</div>
         </div>
-      </div>
+        <div className="flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-xs">
+          <div className={`h-1.5 w-1.5 rounded-full ${isStreaming ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+          <span className="font-medium">{isStreaming ? 'Live' : 'Offline'}</span>
+        </div>
+      </div> */}
 
-      <div 
-        ref={messagesContainerRef}
-        className="flex-1 bg-gray-50 rounded-lg overflow-y-auto mb-4 border relative" 
-        onScroll={handleScroll}
-      >
-        <div className="p-4 min-h-full flex flex-col">
-          {messages.length === 0 && !streamContent ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center py-8 px-4 max-w-md mx-auto">
-                <p className="text-zinc-500 mb-1">Send a message to start the conversation.</p>
-                <p className="text-zinc-400 text-xs">The AI agent will respond automatically.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {messages.map((message, index) => (
-                <div 
-                  key={index} 
-                  ref={index === messages.length - 1 && message.role === 'assistant' ? latestMessageRef : null}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div 
-                    className={`max-w-[80%] px-4 py-3 rounded-2xl shadow-sm ${
-                      message.role === 'user' 
-                        ? 'bg-zinc-900 text-white rounded-br-none' 
-                        : 'bg-white border border-zinc-100 rounded-bl-none'
-                    }`}
-                  >
-                    <div className="whitespace-pre-wrap text-sm break-words overflow-hidden">{message.content}</div>
-                  </div>
-                </div>
-              ))}
-              
-              {/* Streaming content with improved rendering */}
-              {streamContent && (
-                <div 
-                  ref={latestMessageRef}
-                  className="flex justify-start"
-                >
-                  <div className="max-w-[80%] px-4 py-3 rounded-2xl shadow-sm bg-white border border-zinc-100 rounded-bl-none">
-                    <div className="whitespace-pre-wrap text-sm break-words overflow-hidden">
-                      {streamContent}
-                      {isStreaming && (
-                        <span className="inline-flex items-center ml-0.5">
-                          <span 
-                            className="inline-block h-4 w-0.5 bg-zinc-800 mx-px"
-                            style={{ 
-                              opacity: 0.7,
-                              animation: 'cursorBlink 1s ease-in-out infinite',
-                            }}
-                          />
-                          <style jsx global>{`
-                            @keyframes cursorBlink {
-                              0%, 100% { opacity: 1; }
-                              50% { opacity: 0; }
-                            }
-                          `}</style>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Create space for agent response when running */}
-              {agentStatus === 'running' && !streamContent && (
-                <div className="flex justify-start">
-                  <div className="max-w-[80%] pl-6 rounded-2xl shadow-sm bg-white border border-zinc-100 rounded-bl-none min-h-[2.5rem] min-w-[5rem]">
-                    <div className="flex items-center justify-start h-full w-full space-x-1">
-                      <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-pulse"></div>
-                      <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-pulse delay-150"></div>
-                      <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-pulse delay-300"></div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Invisible element at the end to scroll to */}
-              <div ref={messagesEndRef} />
-              
-              {/* Extra space at the bottom with smoother transitions */}
-              <div 
-                className="transition-all duration-700 ease-in-out" 
-                style={{ 
-                  height: (isStreaming || agentStatus === 'running') ? '20px' : '20px',
-                  opacity: (isStreaming || agentStatus === 'running') ? 1 : 0.5
-                }}
-              />
-            </div>
-          )}
-        </div>
-        
-        {/* Scroll to bottom button - improved UI with smooth animation */}
+      <div className="relative flex-1 flex flex-col">
         <div 
-          className="sticky bottom-6 w-full flex justify-center pointer-events-none"
-          style={{ 
-            marginTop: '-60px',
-            opacity: buttonOpacity,
-            transition: 'opacity 0.3s ease-in-out',
-            visibility: showScrollButton ? 'visible' : 'hidden'
-          }}
+          ref={messagesContainerRef}
+          className="absolute inset-0 overflow-y-auto px-6 py-4 pb-[5.5rem]" 
+          onScroll={handleScroll}
         >
-          <div className="bg-zinc-900/90 backdrop-blur-sm rounded-full shadow-lg p-2.5 flex items-center justify-center hover:bg-black transition-all duration-200 transform hover:scale-105 cursor-pointer pointer-events-auto" onClick={handleScrollButtonClick}>
-            <ArrowDown className="h-4 w-4 text-white" />
+          <div className="mx-auto max-w-3xl">
+            {messages.length === 0 && !streamContent ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="flex flex-col items-center gap-1 text-center">
+                  <p className="text-sm text-muted-foreground">Send a message to start the conversation.</p>
+                  <p className="text-xs text-muted-foreground/60">The AI agent will respond automatically.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {messages.map((message, index) => (
+                  <div 
+                    key={index} 
+                    ref={index === messages.length - 1 && message.role === 'assistant' ? latestMessageRef : null}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div 
+                      className={`max-w-[85%] rounded-lg px-4 py-3 text-sm ${
+                        message.role === 'user' 
+                          ? 'bg-primary text-primary-foreground' 
+                          : 'bg-muted'
+                      }`}
+                    >
+                      <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                    </div>
+                  </div>
+                ))}
+                
+                {streamContent && (
+                  <div 
+                    ref={latestMessageRef}
+                    className="flex justify-start"
+                  >
+                    <div className="max-w-[85%] rounded-lg bg-muted px-4 py-3 text-sm">
+                      <div className="whitespace-pre-wrap break-words">
+                        {streamContent}
+                        {isStreaming && (
+                          <span className="inline-flex items-center ml-0.5">
+                            <span 
+                              className="inline-block h-4 w-0.5 bg-foreground/50 mx-px"
+                              style={{ 
+                                opacity: 0.7,
+                                animation: 'cursorBlink 1s ease-in-out infinite',
+                              }}
+                            />
+                            <style jsx global>{`
+                              @keyframes cursorBlink {
+                                0%, 100% { opacity: 1; }
+                                50% { opacity: 0; }
+                              }
+                            `}</style>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {agentStatus === 'running' && !streamContent && (
+                  <div className="flex justify-start">
+                    <div className="flex items-center gap-1.5 rounded-lg bg-muted px-4 py-3">
+                      <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-150" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-300" />
+                    </div>
+                  </div>
+                )}
+                
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
+          
+          <div 
+            className="sticky bottom-6 flex justify-center"
+            style={{ 
+              opacity: buttonOpacity,
+              transition: 'opacity 0.3s ease-in-out',
+              visibility: showScrollButton ? 'visible' : 'hidden'
+            }}
+          >
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm hover:bg-background"
+              onClick={handleScrollButtonClick}
+            >
+              <ArrowDown className="h-4 w-4" />
+            </Button>
           </div>
         </div>
-      </div>
 
-      <form onSubmit={handleSubmitMessage} className="flex gap-2 items-end relative">
-        <Textarea
-          ref={textareaRef}
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            agentStatus === 'running' 
-              ? "Agent is thinking..." 
-              : "Type your message... (Enter to send, Shift+Enter for new line)"
-          }
-          className="flex-1 min-h-[50px] max-h-[200px] pr-12 resize-none py-3 shadow-sm focus-visible:ring-zinc-500 rounded-xl"
-          disabled={isSending || agentStatus === 'running'}
-          rows={1}
-        />
-        
-        <Button 
-          type={agentStatus === 'running' ? 'button' : 'submit'}
-          onClick={agentStatus === 'running' ? handleStopAgent : undefined}
-          className="absolute right-2 bottom-2 h-8 w-8 p-0 rounded-full bg-zinc-900 hover:bg-black"
-          disabled={(!newMessage.trim() && agentStatus !== 'running') || isSending}
-          aria-label={agentStatus === 'running' ? 'Stop agent' : 'Send message'}
-        >
-          {isSending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : agentStatus === 'running' ? (
-            <Square className="h-4 w-4" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
-      </form>
+        <div className="absolute inset-x-0 bottom-0 border-t bg-background/80 backdrop-blur-sm">
+          <div className="mx-auto max-w-3xl px-6 py-4">
+            <form onSubmit={handleSubmitMessage} className="relative">
+              <Textarea
+                ref={textareaRef}
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  agentStatus === 'running' 
+                    ? "Agent is thinking..." 
+                    : "Type your message... (Enter to send, Shift+Enter for new line)"
+                }
+                className="min-h-[50px] max-h-[200px] pr-12 resize-none"
+                disabled={isSending || agentStatus === 'running'}
+                rows={1}
+              />
+              
+              <Button 
+                type={agentStatus === 'running' ? 'button' : 'submit'}
+                onClick={agentStatus === 'running' ? handleStopAgent : undefined}
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 bottom-2 h-8 w-8 rounded-full"
+                disabled={(!newMessage.trim() && agentStatus !== 'running') || isSending}
+                aria-label={agentStatus === 'running' ? 'Stop agent' : 'Send message'}
+              >
+                {isSending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : agentStatus === 'running' ? (
+                  <Square className="h-4 w-4" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </form>
 
-      {/* Status indicator with improved spacing and styling */}
-      <div className="h-6 mt-2">
-        {agentStatus === 'running' && (
-          <div className="flex items-center justify-center gap-1.5">
-            <div className="text-xs text-zinc-500 flex items-center gap-1.5">
-              {isStreaming ? (
-                <>
-                  <span className="inline-flex items-center">
-                    <span className="relative flex h-2 w-2 mr-1">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            {agentStatus === 'running' && (
+              <div className="mt-2 flex items-center justify-center gap-2">
+                <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  {isStreaming ? (
+                    <>
+                      <span className="inline-flex items-center">
+                        <span className="relative flex h-2 w-2 mr-1">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                        </span>
+                        Agent is responding
+                      </span>
+                      <span className="text-muted-foreground/60 border-l pl-1.5">
+                        Press <kbd className="inline-flex items-center justify-center p-0.5 bg-muted border rounded text-xs"><Square className="h-2.5 w-2.5" /></kbd> to stop
+                      </span>
+                    </>
+                  ) : (
+                    <span className="inline-flex items-center">
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      Agent is thinking...
                     </span>
-                    Agent is responding
-                  </span>
-                  <span className="font-normal border-l border-zinc-200 pl-1.5 ml-0.5 text-zinc-400">
-                    Press <kbd className="inline-flex items-center justify-center p-0.5 bg-zinc-100 border border-zinc-200 rounded text-zinc-600"><Square className="h-2.5 w-2.5" /></kbd> to stop
-                  </span>
-                </>
-              ) : (
-                <span className="inline-flex items-center">
-                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                  Agent is thinking...
-                </span>
-              )}
-            </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
