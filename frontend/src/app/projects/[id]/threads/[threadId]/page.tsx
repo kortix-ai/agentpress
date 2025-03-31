@@ -146,6 +146,9 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
       // Clear the input
       setNewMessage('');
       
+      // Scroll to bottom immediately when user sends a message
+      scrollToBottom();
+      
       // Send to the API
       await addMessage(threadId, userMessage);
       
@@ -158,6 +161,9 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
       const result = await startAgent(threadId);
       setAgentRunId(result.agent_run_id);
       setAgentStatus('running');
+      
+      // Scroll to bottom when agent starts responding
+      scrollToBottom();
       
       // Start streaming the agent's responses
       handleStreamAgent(result.agent_run_id);
@@ -423,11 +429,11 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
 
   // Auto-scroll when messages change
   useEffect(() => {
-    // Only auto-scroll if already at bottom or is a new message
-    if (!showScrollButton || messages.length > 0 && messages[messages.length - 1]?.role === 'assistant') {
+    // Only auto-scroll if user hasn't manually scrolled up
+    if (isLatestMessageVisible) {
       scrollToBottom();
     }
-  }, [messages, streamContent]);
+  }, [messages, streamContent, isLatestMessageVisible]);
 
   // Initial scroll to bottom with animation
   useEffect(() => {
@@ -440,6 +446,14 @@ export default function ThreadPage({ params }: { params: ThreadParams }) {
       return () => clearTimeout(timer);
     }
   }, [isLoading]);
+
+  // Update UI states when agent status changes
+  useEffect(() => {
+    // Scroll to bottom when agent starts responding
+    if (agentStatus === 'running') {
+      scrollToBottom();
+    }
+  }, [agentStatus]);
 
   // Only show a full-screen loader on the very first load
   if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {

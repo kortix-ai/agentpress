@@ -10,6 +10,29 @@
     --border-radius: 8px;
     --box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
     --transition: all 0.3s ease;
+    
+    /* Background and text colors */
+    --bg-color: #f9fafb;
+    --text-color: #1f2937;
+    --card-bg: #ffffff;
+    --header-bg: #ffffff;
+    --footer-bg: #1f2937;
+    --footer-text: #ffffff;
+}
+
+/* Dark mode colors */
+[data-theme="dark"] {
+    --primary-color: #6366f1;
+    --primary-dark: #4f46e5;
+    --bg-color: #111827;
+    --text-color: #f9fafb;
+    --card-bg: #1f2937;
+    --gray-color: #9ca3af;
+    --light-gray: #374151;
+    --header-bg: #1f2937;
+    --footer-bg: #111827;
+    --footer-text: #f9fafb;
+    --box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
 }
 
 * {
@@ -25,8 +48,9 @@ html {
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     line-height: 1.6;
-    color: var(--dark-color);
-    background-color: var(--light-color);
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 a {
@@ -92,11 +116,12 @@ section {
 
 /* Header Styles */
 header {
-    background-color: white;
+    background-color: var(--header-bg);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     position: sticky;
     top: 0;
     z-index: 100;
+    transition: background-color 0.3s ease;
 }
 
 .navbar {
@@ -104,6 +129,58 @@ header {
     justify-content: space-between;
     align-items: center;
     padding: 20px 0;
+}
+
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.dark-mode-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    color: var(--text-color);
+    background-color: var(--light-gray);
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.dark-mode-toggle:hover {
+    background-color: var(--gray-color);
+}
+
+.dark-mode-toggle .fa-sun {
+    position: absolute;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: var(--transition);
+}
+
+.dark-mode-toggle .fa-moon {
+    position: absolute;
+    opacity: 1;
+    transform: translateY(0);
+    transition: var(--transition);
+}
+
+[data-theme="dark"] .dark-mode-toggle .fa-sun {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+[data-theme="dark"] .dark-mode-toggle .fa-moon {
+    opacity: 0;
+    transform: translateY(-20px);
 }
 
 .logo {
@@ -200,7 +277,8 @@ header {
 
 /* Features Section */
 .features {
-    background-color: white;
+    background-color: var(--card-bg);
+    transition: background-color 0.3s ease;
 }
 
 .features-grid {
@@ -210,11 +288,11 @@ header {
 }
 
 .feature-card {
-    background-color: white;
+    background-color: var(--card-bg);
     padding: 30px;
     border-radius: var(--border-radius);
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-    transition: var(--transition);
+    transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
     text-align: center;
     border: 1px solid var(--light-gray);
 }
@@ -278,7 +356,8 @@ header {
 
 /* Contact Section */
 .contact {
-    background-color: white;
+    background-color: var(--card-bg);
+    transition: background-color 0.3s ease;
 }
 
 .contact-form {
@@ -320,9 +399,10 @@ header {
 
 /* Footer */
 footer {
-    background-color: var(--dark-color);
-    color: white;
+    background-color: var(--footer-bg);
+    color: var(--footer-text);
     padding: 80px 0 30px;
+    transition: background-color 0.3s ease;
 }
 
 .footer-content {
@@ -455,10 +535,11 @@ footer {
     top: 100%;
     left: 0;
     width: 100%;
-    background-color: white;
+    background-color: var(--card-bg);
     padding: 20px;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     z-index: 99;
+    transition: background-color 0.3s ease;
 }
 
 .mobile-nav.active {
