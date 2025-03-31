@@ -3,171 +3,321 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Web Application</title>
+    <title>iWielder.ai - Random AI Stuff!</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <div class="noise-overlay"></div>
+    
     <header>
-        <nav class="navbar container">
-            <a href="#" class="logo">WebApp</a>
-            <div class="nav-links">
-                <a href="#home">Home</a>
-                <a href="#features">Features</a>
-                <a href="#about">About</a>
-                <a href="#contact">Contact</a>
-            </div>
-            <div class="nav-actions">
-                <button id="darkModeToggle" class="dark-mode-toggle" aria-label="Toggle dark mode">
-                    <i class="fas fa-moon"></i>
-                    <i class="fas fa-sun"></i>
-                </button>
-                <button class="mobile-menu-btn">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </button>
-            </div>
+        <div class="logo-container">
+            <img src="https://placehold.co/100x100/FF5757/FFFFFF?text=W" alt="Wielder Logo" class="logo-img">
+            <h1 class="logo">iWielder<span>.ai</span></h1>
+        </div>
+        <nav>
+            <button class="random-button" id="randomStuffBtn">RANDOM STUFF!</button>
+            <ul class="nav-links">
+                <li><a href="#about">ABOUT</a></li>
+                <li><a href="#videos">VIDEOS</a></li>
+                <li><a href="#photos">PHOTOS</a></li>
+                <li><a href="#blog">BLOG</a></li>
+            </ul>
         </nav>
     </header>
 
     <main>
-        <!-- Hero Section -->
-        <section id="home" class="hero">
-            <div class="container">
-                <div class="hero-content">
-                    <div class="hero-text">
-                        <h1>Build Amazing Web Applications</h1>
-                        <p>A modern, responsive web application template to kickstart your next project.</p>
-                        <div class="hero-buttons">
-                            <a href="#features" class="btn btn-primary">Get Started</a>
-                            <a href="#about" class="btn btn-secondary">Learn More</a>
-                        </div>
-                    </div>
-                    <div class="hero-image">
-                        <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80" alt="Web Development">
-                    </div>
+        <section class="hero">
+            <div class="hero-content">
+                <h2 class="glitch-text" data-text="WELCOME TO iWIELDER!">WELCOME TO iWIELDER!</h2>
+                <p>The totally random, completely awesome website about AI, tech, and whatever Adam feels like talking about!</p>
+                <div class="hero-buttons">
+                    <button class="primary-button" id="subscribeBtn">SUBSCRIBE!</button>
+                    <button class="secondary-button" id="leaveCommentBtn">LEAVE A COMMENT!</button>
+                </div>
+            </div>
+            <div class="hero-image">
+                <div class="polaroid">
+                    <img src="https://placehold.co/400x300/5271FF/FFFFFF?text=AI+STUFF" alt="AI Stuff">
+                    <p class="polaroid-caption">Adam's latest AI creation!</p>
                 </div>
             </div>
         </section>
 
-        <!-- Features Section -->
-        <section id="features" class="features">
-            <div class="container">
-                <div class="section-header">
-                    <h2>Key Features</h2>
-                    <p>Everything you need to build modern web applications</p>
-                </div>
-                <div class="features-grid">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-mobile-alt"></i>
-                        </div>
-                        <h3>Responsive Design</h3>
-                        <p>Looks great on all devices, from mobile phones to desktop computers.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-bolt"></i>
-                        </div>
-                        <h3>Fast Performance</h3>
-                        <p>Optimized for speed and efficiency to provide the best user experience.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-code"></i>
-                        </div>
-                        <h3>Clean Code</h3>
-                        <p>Well-structured, maintainable code following best practices.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
+        <div class="separator">
+            <div class="star"></div>
+            <div class="star"></div>
+            <div class="star"></div>
+        </div>
 
-        <!-- About Section -->
         <section id="about" class="about">
-            <div class="container">
-                <div class="about-content">
-                    <div class="about-text">
-                        <h2>About Our Platform</h2>
-                        <p>Our web application platform is designed to help developers build amazing applications quickly and efficiently. With a focus on user experience and performance, we provide all the tools you need to succeed.</p>
-                        <p>Whether you're building a simple landing page or a complex web application, our platform has you covered with modern features and best practices built in.</p>
-                        <a href="#contact" class="btn btn-primary">Get in Touch</a>
+            <h2 class="section-title">ABOUT iWIELDER</h2>
+            <div class="about-content">
+                <div class="about-text">
+                    <p class="speech-bubble">Hey there, people of the internet! Welcome to iWielder, where we talk about AI, machine learning, and all the cool tech stuff that's changing the world!</p>
+                    <p>iWielder is run by Adam, the AI enthusiast who's always tinkering with the latest models and creating awesome AI applications. This is where he shares his experiments, thoughts, and occasionally his lunch (just kidding... or are we?).</p>
+                    <div class="fun-fact">
+                        <h3>RANDOM FACT!</h3>
+                        <p>Adam once trained an AI to write poetry about tacos. It was surprisingly emotional.</p>
                     </div>
-                    <div class="about-image">
-                        <img src="https://images.unsplash.com/photo-1522542550221-31fd19575a2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=600&q=80" alt="Web Development Team">
+                </div>
+                <div class="about-image">
+                    <div class="tv-frame">
+                        <div class="tv-screen">
+                            <img src="https://placehold.co/400x300/57FFAD/000000?text=WIELDER.AI" alt="Wielder.ai">
+                        </div>
+                        <div class="tv-stand"></div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Contact Section -->
-        <section id="contact" class="contact">
-            <div class="container">
-                <div class="section-header">
-                    <h2>Contact Us</h2>
-                    <p>Get in touch with our team</p>
+        <div class="separator">
+            <div class="star"></div>
+            <div class="star"></div>
+            <div class="star"></div>
+        </div>
+
+        <section id="videos" class="videos">
+            <h2 class="section-title">LATEST VIDEOS</h2>
+            <div class="video-grid">
+                <div class="video-card">
+                    <div class="video-thumbnail">
+                        <img src="https://placehold.co/300x200/FF9E57/FFFFFF?text=AI+Demo" alt="AI Demo">
+                        <div class="play-button">
+                            <i class="fas fa-play"></i>
+                        </div>
+                    </div>
+                    <h3>How I Built an AI That Writes Dad Jokes</h3>
+                    <p class="video-stats">
+                        <span><i class="fas fa-eye"></i> 42,069 views</span>
+                        <span><i class="fas fa-thumbs-up"></i> 1,337 likes</span>
+                    </p>
                 </div>
-                <div class="contact-form">
-                    <form id="contactForm">
-                        <div class="form-group">
-                            <label for="name">Name</label>
-                            <input type="text" id="name" name="name" required>
+                <div class="video-card">
+                    <div class="video-thumbnail">
+                        <img src="https://placehold.co/300x200/57C7FF/FFFFFF?text=Tutorial" alt="Tutorial">
+                        <div class="play-button">
+                            <i class="fas fa-play"></i>
                         </div>
-                        <div class="form-group">
-                            <label for="email">Email</label>
-                            <input type="email" id="email" name="email" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="message">Message</label>
-                            <textarea id="message" name="message" rows="5" required></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Send Message</button>
-                    </form>
+                    </div>
+                    <h3>Getting Started with Wielder.ai in 10 Minutes</h3>
+                    <p class="video-stats">
+                        <span><i class="fas fa-eye"></i> 31,415 views</span>
+                        <span><i class="fas fa-thumbs-up"></i> 926 likes</span>
+                    </p>
                 </div>
+                <div class="video-card">
+                    <div class="video-thumbnail">
+                        <img src="https://placehold.co/300x200/B157FF/FFFFFF?text=Experiment" alt="Experiment">
+                        <div class="play-button">
+                            <i class="fas fa-play"></i>
+                        </div>
+                    </div>
+                    <h3>I Let an AI Control My Smart Home for 24 Hours</h3>
+                    <p class="video-stats">
+                        <span><i class="fas fa-eye"></i> 87,654 views</span>
+                        <span><i class="fas fa-thumbs-up"></i> 3,210 likes</span>
+                    </p>
+                </div>
+            </div>
+            <button class="more-button">SEE MORE VIDEOS!</button>
+        </section>
+
+        <div class="separator">
+            <div class="star"></div>
+            <div class="star"></div>
+            <div class="star"></div>
+        </div>
+
+        <section id="photos" class="photos">
+            <h2 class="section-title">RANDOM PHOTOS</h2>
+            <div class="photo-gallery">
+                <div class="photo-item">
+                    <img src="https://placehold.co/300x300/FF5757/FFFFFF?text=AI+Art" alt="AI Art">
+                    <div class="photo-caption">AI-generated masterpiece!</div>
+                </div>
+                <div class="photo-item">
+                    <img src="https://placehold.co/300x300/57FFAD/000000?text=Workspace" alt="Workspace">
+                    <div class="photo-caption">Where the magic happens!</div>
+                </div>
+                <div class="photo-item">
+                    <img src="https://placehold.co/300x300/5271FF/FFFFFF?text=Conference" alt="Conference">
+                    <div class="photo-caption">Speaking at AI Con 2023!</div>
+                </div>
+                <div class="photo-item">
+                    <img src="https://placehold.co/300x300/B157FF/FFFFFF?text=Robot" alt="Robot">
+                    <div class="photo-caption">My new robot friend!</div>
+                </div>
+                <div class="photo-item">
+                    <img src="https://placehold.co/300x300/FF9E57/FFFFFF?text=Code" alt="Code">
+                    <div class="photo-caption">Late night coding session!</div>
+                </div>
+                <div class="photo-item">
+                    <img src="https://placehold.co/300x300/57C7FF/FFFFFF?text=Hardware" alt="Hardware">
+                    <div class="photo-caption">New GPU day!</div>
+                </div>
+            </div>
+            <button class="more-button">SEE MORE PHOTOS!</button>
+        </section>
+
+        <div class="separator">
+            <div class="star"></div>
+            <div class="star"></div>
+            <div class="star"></div>
+        </div>
+
+        <section id="blog" class="blog">
+            <h2 class="section-title">LATEST BLOG POSTS</h2>
+            <div class="blog-grid">
+                <article class="blog-card">
+                    <div class="blog-image">
+                        <img src="https://placehold.co/400x200/5271FF/FFFFFF?text=AI+Ethics" alt="AI Ethics">
+                    </div>
+                    <div class="blog-content">
+                        <h3>Why We Need to Talk About AI Ethics</h3>
+                        <p class="blog-excerpt">As AI becomes more powerful, we need to have serious conversations about ethics, bias, and the future of humanity...</p>
+                        <div class="blog-meta">
+                            <span class="blog-date"><i class="fas fa-calendar"></i> May 15, 2023</span>
+                            <span class="blog-comments"><i class="fas fa-comment"></i> 42 comments</span>
+                        </div>
+                        <a href="#" class="read-more">READ MORE</a>
+                    </div>
+                </article>
+                <article class="blog-card">
+                    <div class="blog-image">
+                        <img src="https://placehold.co/400x200/FF5757/FFFFFF?text=Tutorial" alt="Tutorial">
+                    </div>
+                    <div class="blog-content">
+                        <h3>Building Your First AI Assistant with Wielder.ai</h3>
+                        <p class="blog-excerpt">In this step-by-step tutorial, I'll show you how to create your very own AI assistant using Wielder.ai's powerful API...</p>
+                        <div class="blog-meta">
+                            <span class="blog-date"><i class="fas fa-calendar"></i> April 28, 2023</span>
+                            <span class="blog-comments"><i class="fas fa-comment"></i> 87 comments</span>
+                        </div>
+                        <a href="#" class="read-more">READ MORE</a>
+                    </div>
+                </article>
+            </div>
+            <button class="more-button">READ MORE POSTS!</button>
+        </section>
+
+        <div class="separator">
+            <div class="star"></div>
+            <div class="star"></div>
+            <div class="star"></div>
+        </div>
+
+        <section class="comments">
+            <h2 class="section-title">COMMENTS</h2>
+            <div class="comments-container">
+                <div class="comment">
+                    <div class="comment-avatar">
+                        <img src="https://placehold.co/50x50/57FFAD/000000?text=S" alt="Sam">
+                    </div>
+                    <div class="comment-content">
+                        <h3 class="comment-author">Sam</h3>
+                        <p class="comment-text">This website is almost as cool as my butter sock! Almost.</p>
+                        <div class="comment-meta">
+                            <span class="comment-date">2 days ago</span>
+                            <span class="comment-reply">Reply</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="comment">
+                    <div class="comment-avatar">
+                        <img src="https://placehold.co/50x50/5271FF/FFFFFF?text=F" alt="Freddie">
+                    </div>
+                    <div class="comment-content">
+                        <h3 class="comment-author">Freddie</h3>
+                        <p class="comment-text">I've been trying to build my own AI model using your tutorial. It keeps generating pictures of tacos though...</p>
+                        <div class="comment-meta">
+                            <span class="comment-date">5 days ago</span>
+                            <span class="comment-reply">Reply</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="comment">
+                    <div class="comment-avatar">
+                        <img src="https://placehold.co/50x50/FF9E57/FFFFFF?text=S" alt="Spencer">
+                    </div>
+                    <div class="comment-content">
+                        <h3 class="comment-author">Spencer</h3>
+                        <p class="comment-text">WHAT IS THIS NEWFANGLED AI TECHNOLOGY?! In my day, we had to program computers with PUNCH CARDS! PUNCH CARDS!</p>
+                        <div class="comment-meta">
+                            <span class="comment-date">1 week ago</span>
+                            <span class="comment-reply">Reply</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="comment-form">
+                <h3>Leave a Comment</h3>
+                <form>
+                    <div class="form-group">
+                        <label for="name">Name</label>
+                        <input type="text" id="name" placeholder="Your name">
+                    </div>
+                    <div class="form-group">
+                        <label for="comment">Comment</label>
+                        <textarea id="comment" placeholder="What's on your mind?"></textarea>
+                    </div>
+                    <button type="submit" class="primary-button">POST COMMENT</button>
+                </form>
             </div>
         </section>
     </main>
 
     <footer>
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-logo">
-                    <a href="#">WebApp</a>
-                    <p>Building the future of web applications.</p>
-                </div>
-                <div class="footer-links">
-                    <div class="footer-column">
-                        <h4>Product</h4>
-                        <a href="#">Features</a>
-                        <a href="#">Pricing</a>
-                        <a href="#">Documentation</a>
-                    </div>
-                    <div class="footer-column">
-                        <h4>Company</h4>
-                        <a href="#">About</a>
-                        <a href="#">Team</a>
-                        <a href="#">Contact</a>
-                    </div>
-                    <div class="footer-column">
-                        <h4>Resources</h4>
-                        <a href="#">Blog</a>
-                        <a href="#">Help Center</a>
-                        <a href="#">Community</a>
-                    </div>
-                </div>
+        <div class="footer-content">
+            <div class="footer-logo">
+                <h2>iWielder<span>.ai</span></h2>
+                <p>The totally random AI website!</p>
             </div>
-            <div class="footer-bottom">
-                <p>&copy; 2023 WebApp. All rights reserved.</p>
-                <div class="social-links">
-                    <a href="#"><i class="fab fa-twitter"></i></a>
-                    <a href="#"><i class="fab fa-facebook-f"></i></a>
-                    <a href="#"><i class="fab fa-instagram"></i></a>
-                    <a href="#"><i class="fab fa-github"></i></a>
+            <div class="footer-links">
+                <div class="footer-column">
+                    <h3>SITE LINKS</h3>
+                    <ul>
+                        <li><a href="#about">About</a></li>
+                        <li><a href="#videos">Videos</a></li>
+                        <li><a href="#photos">Photos</a></li>
+                        <li><a href="#blog">Blog</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h3>CONNECT</h3>
+                    <ul>
+                        <li><a href="#"><i class="fab fa-twitter"></i> Twitter</a></li>
+                        <li><a href="#"><i class="fab fa-instagram"></i> Instagram</a></li>
+                        <li><a href="#"><i class="fab fa-youtube"></i> YouTube</a></li>
+                        <li><a href="#"><i class="fab fa-github"></i> GitHub</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h3>LEGAL STUFF</h3>
+                    <ul>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms of Service</a></li>
+                        <li><a href="#">Cookie Policy</a></li>
+                    </ul>
                 </div>
             </div>
         </div>
+        <div class="footer-bottom">
+            <p>&copy; 2023 iWielder.ai | Created by Adam | No AI were harmed in the making of this website</p>
+        </div>
     </footer>
+
+    <div class="random-popup" id="randomPopup">
+        <div class="random-content">
+            <h2>RANDOM STUFF!</h2>
+            <p id="randomText">Did you know that AI can now generate images of cats wearing hats in space? What a time to be alive!</p>
+            <button class="close-button" id="closePopup">CLOSE</button>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>
