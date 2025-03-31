@@ -167,20 +167,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader className="border-b-0 h-14 px-4 py-3">
-        <Link href="/dashboard" className="flex items-center group">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="mr-2 h-5 w-5 text-black transition-transform duration-200 group-hover:scale-110"
-          >
-            <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
-          </svg>
-          <span className="text-base font-medium">AgentPress</span>
+        <Link href="/dashboard" className="flex items-center">
+          <div className="group/logo flex items-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="mr-2.5 h-6 w-6 text-black transition-transform duration-200 group-hover/logo:scale-110"
+            >
+              <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
+            </svg>
+            <span className="text-lg font-medium tracking-tight">AgentPress</span>
+          </div>
         </Link>
       </SidebarHeader>
       <SidebarContent className="py-0 px-2">
@@ -194,7 +196,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-6 w-6 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 rounded-md cursor-pointer"
+                      className="h-6 w-6 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-md cursor-pointer transition-colors duration-200"
                       onClick={() => setIsDialogOpen(true)}
                     >
                       <IconPlus className="size-3.5" />
@@ -224,22 +226,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <React.Fragment key={project.id}>
                   <li className="relative">
                     <div 
-                      className={`flex items-center justify-between px-2 py-1.5 text-sm rounded-md ${
+                      className={`flex items-center justify-between px-2 py-1.5 text-sm rounded-md transition-all duration-200 ${
                         expandedProjectId === project.id 
-                          ? 'text-zinc-900 font-medium' 
-                          : 'text-zinc-700 hover:bg-zinc-50'
+                          ? 'text-zinc-900 font-medium bg-zinc-50' 
+                          : 'text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
                       }`}
                     >
                       <Link 
                         href={`/projects/${project.id}`}
-                        className="flex-1 truncate"
+                        className="flex-1 truncate transition-colors duration-200"
                       >
                         {project.name}
                       </Link>
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="h-5 w-5 p-0 ml-1 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100" 
+                        className={`h-5 w-5 p-0 ml-1 transition-all duration-200 ${
+                          expandedProjectId === project.id
+                            ? 'text-zinc-900 hover:bg-zinc-100'
+                            : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
+                        }`}
                         onClick={(e) => {
                           e.preventDefault()
                           toggleProjectExpanded(project.id)
@@ -267,10 +273,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             <li key={thread.thread_id}>
                               <Link
                                 href={`/projects/${project.id}/threads/${thread.thread_id}`}
-                                className={`block px-2 py-1.5 text-sm rounded-md ${
+                                className={`block px-2 py-1.5 text-sm rounded-md transition-all duration-200 ${
                                   pathname?.includes(`/threads/${thread.thread_id}`)
                                     ? 'text-zinc-900 font-medium bg-zinc-50'
-                                    : 'text-zinc-700 hover:bg-zinc-50'
+                                    : 'text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
                                 }`}
                               >
                                 {thread.messages[0]?.content || 'New Conversation'}
@@ -282,7 +288,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="w-full justify-start px-2 py-1.5 text-sm text-zinc-700 hover:text-zinc-900 hover:bg-zinc-50"
+                              className="w-full justify-start px-2 py-1.5 text-sm text-zinc-700 hover:text-zinc-900 hover:bg-zinc-50 transition-all duration-200"
                               onClick={() => handleCreateThread(project.id)}
                               disabled={isCreatingThread[project.id]}
                             >

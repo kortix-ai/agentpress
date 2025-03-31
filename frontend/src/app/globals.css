@@ -117,11 +117,14 @@
   }
   body {
     @apply bg-background text-foreground;
-    height: 100vh;
+    min-height: 100vh;
     overflow: hidden;
   }
   html {
     height: 100%;
     overflow: hidden;
+  }
+  #__next {
+    height: 100%;
   }
 }

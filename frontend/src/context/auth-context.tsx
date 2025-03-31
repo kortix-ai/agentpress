@@ -7,6 +7,7 @@ import { createClient } from '@/utils/supabase/client';
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
+  isLoggingOut: boolean;
   login: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUp: (email: string, password: string) => Promise<{ error: AuthError | null; data: AuthResponse['data'] | null }>;
   logout: () => Promise<void>;
@@ -25,6 +26,7 @@ export function useAuth() {
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -75,13 +77,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    try {
+      setIsLoggingOut(true);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const value = {
     user,
     isLoading,
+    isLoggingOut,
     login,
     signUp,
     logout,

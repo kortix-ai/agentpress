@@ -11,10 +11,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 export function MainNav() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, logout, isLoggingOut } = useAuth();
+  const router = useRouter();
 
   const getUserInitials = () => {
     if (!user?.email) return 'U';
@@ -22,6 +25,17 @@ export function MainNav() {
       .split('@')[0]
       .slice(0, 2)
       .toUpperCase();
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success('Successfully logged out');
+      router.push('/auth/login');
+      router.refresh();
+    } catch (error) {
+      toast.error('Failed to log out. Please try again.');
+    }
   };
 
   return (
@@ -37,11 +51,11 @@ export function MainNav() {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="mr-2.5 h-6 w-6 text-black transition-transform duration-200 group-hover:scale-110"
+              className="mr-2 h-5 w-5 text-black transition-transform duration-200 group-hover:scale-110"
             >
               <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
             </svg>
-            <span className="text-lg font-medium tracking-tight">AgentPress</span>
+            <span className="text-base font-medium tracking-tight">AgentPress</span>
           </Link>
           {user && (
             <div className="hidden md:flex items-center space-x-6">
@@ -80,10 +94,18 @@ export function MainNav() {
                     <span className="truncate">{user.email}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem 
-                    onClick={logout} 
+                    onClick={handleLogout} 
                     className="cursor-pointer px-3 py-2 text-sm hover:bg-zinc-50 hover:text-black transition-colors"
+                    disabled={isLoggingOut}
                   >
-                    Log out
+                    {isLoggingOut ? (
+                      <>
+                        <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                        Logging out...
+                      </>
+                    ) : (
+                      'Log out'
+                    )}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

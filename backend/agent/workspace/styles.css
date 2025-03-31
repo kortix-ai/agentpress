@@ -142,6 +142,49 @@ body {
     width: 100%;
 }
 
+/* Particle effect for button */
+.particle {
+    position: absolute;
+    pointer-events: none;
+    z-index: 99;
+}
+
+/* Add a cool text shadow effect to title */
+.title {
+    text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+}
+
+/* Add a subtle pulse effect to the button */
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(233, 69, 96, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(233, 69, 96, 0);
+    }
+}
+
+.glow-button {
+    animation: pulse 2s infinite;
+}
+
+/* Custom cursor */
+.custom-cursor {
+    position: fixed;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e94560;
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    transition: width 0.2s, height 0.2s, background-color 0.2s;
+    mix-blend-mode: difference;
+}
+
 /* Add responsive design */
 @media (max-width: 768px) {
     .title {

@@ -29,6 +29,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { toast } from 'sonner'
 
 export function NavUser({
   user,
@@ -40,13 +41,18 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-  const { logout } = useAuth()
+  const { logout, isLoggingOut } = useAuth()
   const router = useRouter()
 
   const handleLogout = async () => {
-    await logout()
-    router.push('/auth/login')
-    router.refresh()
+    try {
+      await logout()
+      toast.success('Successfully logged out')
+      router.push('/auth/login')
+      router.refresh()
+    } catch (error) {
+      toast.error('Failed to log out. Please try again.')
+    }
   }
 
   if (!user) {
@@ -114,9 +120,19 @@ export function NavUser({
             <DropdownMenuItem 
               onClick={handleLogout}
               className="py-1.5 px-2 text-sm text-red-500 focus:text-red-600 focus:bg-red-50"
+              disabled={isLoggingOut}
             >
-              <IconLogout className="mr-2 size-4" />
-              Log out
+              {isLoggingOut ? (
+                <>
+                  <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                  Logging out...
+                </>
+              ) : (
+                <>
+                  <IconLogout className="mr-2 size-4" />
+                  Log out
+                </>
+              )}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
