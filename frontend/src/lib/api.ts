@@ -14,7 +14,7 @@ export type Thread = {
   thread_id: string;
   user_id: string | null;
   project_id?: string | null;
-  messages: any[];
+  messages: Message[];
   created_at: string;
 }
 
@@ -29,8 +29,13 @@ export type AgentRun = {
   status: 'running' | 'completed' | 'stopped' | 'error';
   started_at: string;
   completed_at: string | null;
-  responses: any[];
+  responses: Message[];
   error: string | null;
+}
+
+export type ToolCall = {
+  name: string;
+  arguments: Record<string, unknown>;
 }
 
 // Project APIs
@@ -323,8 +328,8 @@ export const getAgentRuns = async (threadId: string): Promise<AgentRun[]> => {
 
 export const streamAgent = (agentRunId: string, callbacks: {
   onMessage: (content: string) => void;
-  onToolCall: (name: string, args: any) => void;
-  onError: (error: any) => void;
+  onToolCall: (name: string, args: Record<string, unknown>) => void;
+  onError: (error: Error | string) => void;
   onClose: () => void;
 }): () => void => {
   let eventSourceInstance: EventSource | null = null;
@@ -378,7 +383,7 @@ export const streamAgent = (agentRunId: string, callbacks: {
                 } else if (innerData.type === 'tool_call') {
                   callbacks.onToolCall(innerData.name, innerData.arguments);
                 }
-              } catch (e) {
+              } catch {
                 callbacks.onMessage(data.content);
               }
             } else {
@@ -388,7 +393,7 @@ export const streamAgent = (agentRunId: string, callbacks: {
             callbacks.onToolCall(data.name, data.arguments);
           } else if (data.type === 'error') {
             console.error(`[STREAM] Error from server: ${data.message}`);
-            callbacks.onError(data.message);
+            callbacks.onError(data.message instanceof Error ? data.message : new Error(data.message));
           } else if (data.type === 'status') {
             console.log(`[STREAM] Status update: ${data.status}`);
             
@@ -412,11 +417,11 @@ export const streamAgent = (agentRunId: string, callbacks: {
           }
         } catch (error) {
           console.error(`[STREAM] Error parsing message:`, error);
-          callbacks.onError(error);
+          callbacks.onError(error instanceof Error ? error : String(error));
         }
       };
       
-      eventSourceInstance.onerror = (event) => {
+      eventSourceInstance.onerror = () => {
         // EventSource errors are often just connection closures
         // For clean closures (manual or completed), we don't need to log an error
         if (isClosing) {
@@ -447,7 +452,7 @@ export const streamAgent = (agentRunId: string, callbacks: {
       
       if (!isClosing) {
         isClosing = true;
-        callbacks.onError(error);
+        callbacks.onError(error instanceof Error ? error : String(error));
         callbacks.onClose();
       }
     }

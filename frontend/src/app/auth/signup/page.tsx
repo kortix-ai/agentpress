@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { AuthLayout } from '@/components/auth-layout';
 import { UserPlus } from 'lucide-react';
 
-export default function SignupPage() {
+function SignupContent() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,16 +42,16 @@ export default function SignupPage() {
 
       toast.success('Check your email to confirm your account!');
       router.push('/auth/confirm');
-    } catch (err: any) {
+    } catch (err: Error | unknown) {
       console.error('Signup error:', err);
-      toast.error(err.message || 'Failed to sign up');
+      toast.error(err instanceof Error ? err.message : 'Failed to sign up');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <AuthLayout icon={UserPlus}>
+    <>
       <div className="text-center mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">
           Create an account
@@ -139,6 +139,21 @@ export default function SignupPage() {
         </Link>
         .
       </p>
+    </>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <AuthLayout>
+      <Suspense fallback={
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight">Loading...</h1>
+          <p className="text-sm text-muted-foreground mt-1">Please wait while we load the signup form...</p>
+        </div>
+      }>
+        <SignupContent />
+      </Suspense>
     </AuthLayout>
   );
 } 

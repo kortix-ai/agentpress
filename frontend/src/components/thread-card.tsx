@@ -1,12 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { Message } from '@/lib/api';
 
 interface Thread {
   thread_id: string;
   project_id?: string | null;
   user_id?: string | null;
-  messages: any[];
+  messages: Message[];
   created_at: string;
 }
 

@@ -33,7 +33,7 @@ import {
 export function NavUser({
   user,
 }: {
-  user: {
+  user?: {
     name: string
     email: string
     avatar: string
@@ -47,6 +47,10 @@ export function NavUser({
     await logout()
     router.push('/auth/login')
     router.refresh()
+  }
+
+  if (!user) {
+    return null
   }
 
   return (

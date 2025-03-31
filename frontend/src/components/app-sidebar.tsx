@@ -2,16 +2,14 @@
 
 import * as React from "react"
 import {
-  IconHelp,
   IconPlus,
-  IconSearch,
-  IconSettings,
   IconChevronRight,
   IconChevronDown,
 } from "@tabler/icons-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useParams, usePathname } from "next/navigation"
+import { motion, AnimatePresence } from "framer-motion"
 
 import { NavUser } from "@/components/nav-user"
 import {
@@ -19,12 +17,9 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { getProjects, getThreads, createThread } from "@/lib/api"
 import { Project } from "@/lib/types"
 import { toast } from "sonner"
@@ -32,6 +27,7 @@ import { useAuth } from "@/context/auth-context"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CreateProjectDialog } from "@/components/create-project-dialog"
 import { useRouter } from "next/navigation"
+import { User } from "@supabase/supabase-js"
 
 interface ApiProject {
   project_id: string;
@@ -47,87 +43,105 @@ interface ApiThread {
   user_id: string;
   created_at: string;
   updated_at: string;
-  messages: any[];
+  messages: Array<{
+    role: string;
+    content: string;
+  }>;
+}
+
+function useProjectsAndThreads(user: User | null) {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [threads, setThreads] = useState<Record<string, ApiThread[]>>({})
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasLoaded, setHasLoaded] = useState(false)
+
+  const loadData = useCallback(async () => {
+    if (!user || hasLoaded) return
+    
+    try {
+      setIsLoading(true)
+      const fetchedProjects = await getProjects() as unknown as ApiProject[]
+      
+      // Map the API response to our Project type format
+      const mappedProjects = fetchedProjects.map(project => ({
+        id: project.project_id,
+        name: project.name,
+        description: project.description || '',
+        user_id: project.user_id,
+        created_at: project.created_at
+      }))
+      
+      setProjects(mappedProjects)
+      
+      // Load threads for each project
+      const threadsMap: Record<string, ApiThread[]> = {}
+      await Promise.all(
+        mappedProjects.map(async (project) => {
+          try {
+            const projectThreads = await getThreads(project.id) as unknown as ApiThread[]
+            threadsMap[project.id] = projectThreads
+          } catch (error) {
+            console.error(`Failed to load threads for project ${project.id}:`, error)
+          }
+        })
+      )
+      
+      setThreads(threadsMap)
+      setHasLoaded(true)
+    } catch (error) {
+      console.error('Failed to load projects:', error)
+      toast.error('Failed to load projects')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [user, hasLoaded])
+
+  const addProject = useCallback((newProject: Project) => {
+    setProjects((prevProjects: Project[]) => [...prevProjects, newProject])
+  }, [])
+
+  const addThread = useCallback((projectId: string, newThread: ApiThread) => {
+    setThreads((prev: Record<string, ApiThread[]>) => ({
+      ...prev,
+      [projectId]: [...(prev[projectId] || []), newThread]
+    }))
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  return { projects, threads, isLoading, addProject, addThread }
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
   const router = useRouter()
-  const [projects, setProjects] = useState<Project[]>([])
-  const [threads, setThreads] = useState<Record<string, any[]>>({})
-  const [isLoading, setIsLoading] = useState(true)
-  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({})
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCreatingThread, setIsCreatingThread] = useState<Record<string, boolean>>({})
   const pathname = usePathname()
   const params = useParams()
   const currentProjectId = params?.id as string
   
+  const { projects, threads, isLoading, addProject, addThread } = useProjectsAndThreads(user)
+
   useEffect(() => {
     if (currentProjectId) {
-      setExpandedProjects(prev => ({...prev, [currentProjectId]: true}))
+      setExpandedProjectId(currentProjectId)
     }
   }, [currentProjectId])
 
-  useEffect(() => {
-    async function loadProjects() {
-      if (!user) return
-      
-      try {
-        setIsLoading(true)
-        const fetchedProjects = await getProjects() as unknown as ApiProject[]
-        
-        // Map the API response to our Project type format
-        const mappedProjects = fetchedProjects.map(project => ({
-          id: project.project_id,
-          name: project.name,
-          description: project.description || '',
-          user_id: project.user_id,
-          created_at: project.created_at
-        }))
-        
-        setProjects(mappedProjects)
-        
-        // Load threads for each project
-        const threadsMap: Record<string, any[]> = {}
-        await Promise.all(
-          mappedProjects.map(async (project) => {
-            try {
-              const projectThreads = await getThreads(project.id)
-              threadsMap[project.id] = projectThreads
-            } catch (error) {
-              console.error(`Failed to load threads for project ${project.id}:`, error)
-            }
-          })
-        )
-        
-        setThreads(threadsMap)
-      } catch (error) {
-        console.error('Failed to load projects:', error)
-        toast.error('Failed to load projects')
-      } finally {
-        setIsLoading(false)
-      }
-    }
+  const toggleProjectExpanded = useCallback((projectId: string) => {
+    setExpandedProjectId(prev => prev === projectId ? null : projectId)
+  }, [])
 
-    if (user) {
-      loadProjects()
-    }
-  }, [user])
-
-  const toggleProjectExpanded = (projectId: string) => {
-    setExpandedProjects(prev => ({
-      ...prev,
-      [projectId]: !prev[projectId]
-    }))
-  }
-
-  const handleProjectCreated = (newProject: Project) => {
-    setProjects((prevProjects) => [...prevProjects, newProject])
+  const handleProjectCreated = useCallback((newProject: Project) => {
+    addProject(newProject)
     setIsDialogOpen(false)
     toast.success('Project created successfully')
     router.push(`/projects/${newProject.id}`)
-  }
+  }, [router, addProject])
 
   const handleCreateThread = async (projectId: string) => {
     if (!user) {
@@ -138,22 +152,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     setIsCreatingThread(prev => ({ ...prev, [projectId]: true }))
     
     try {
-      const newThread = await createThread(projectId)
-      
-      // Update threads list
-      const updatedThreads = await getThreads(projectId)
-      setThreads(prev => ({
-        ...prev,
-        [projectId]: updatedThreads
-      }))
-      
+      const newThread = await createThread(projectId) as unknown as ApiThread
+      addThread(projectId, newThread)
       toast.success('Thread created successfully')
-      
-      // Redirect to the new thread
       router.push(`/projects/${projectId}/threads/${newThread.thread_id}`)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating thread:', err)
-      toast.error(err.message || 'Failed to create thread')
+      toast.error(err instanceof Error ? err.message : 'Failed to create thread')
     } finally {
       setIsCreatingThread(prev => ({ ...prev, [projectId]: false }))
     }
@@ -183,14 +188,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <div className="py-1 mt-2">
           <div className="flex items-center justify-between px-2 py-1.5">
             <h3 className="text-xs uppercase tracking-wider text-zinc-500 font-medium">Projects</h3>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-6 w-6 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 rounded-md"
-              onClick={() => setIsDialogOpen(true)}
-            >
-              <IconPlus className="size-3.5" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 rounded-md cursor-pointer"
+                      onClick={() => setIsDialogOpen(true)}
+                    >
+                      <IconPlus className="size-3.5" />
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>New Project</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           
           <ul className="space-y-0.5 mt-1">
@@ -211,8 +225,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <li className="relative">
                     <div 
                       className={`flex items-center justify-between px-2 py-1.5 text-sm rounded-md ${
-                        currentProjectId === project.id 
-                          ? 'bg-zinc-100 text-zinc-900 font-medium' 
+                        expandedProjectId === project.id 
+                          ? 'text-zinc-900 font-medium' 
                           : 'text-zinc-700 hover:bg-zinc-50'
                       }`}
                     >
@@ -231,63 +245,80 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           toggleProjectExpanded(project.id)
                         }}
                       >
-                        {expandedProjects[project.id] ? (
+                        {expandedProjectId === project.id ? (
                           <IconChevronDown className="size-3.5" />
                         ) : (
                           <IconChevronRight className="size-3.5" />
                         )}
                       </Button>
                     </div>
-                  
-                    {/* Show threads if expanded */}
-                    {expandedProjects[project.id] && (
-                      <ul className="mt-0.5 mb-1 ml-3 pl-2 border-l border-zinc-100 space-y-0.5">
-                        {threads[project.id]?.map((thread) => (
-                          <li key={thread.thread_id}>
-                            <Link 
-                              href={`/projects/${project.id}/threads/${thread.thread_id}`}
-                              className={`block px-2 py-1.5 text-xs rounded-md ${
-                                pathname === `/projects/${project.id}/threads/${thread.thread_id}`
-                                  ? 'bg-zinc-100 text-zinc-900 font-medium'
-                                  : 'text-zinc-600 hover:bg-zinc-50'
-                              }`}
-                            >
-                              Thread {thread.thread_id.slice(0, 8)}
-                            </Link>
-                          </li>
-                        ))}
-                        <li>
-                          <button
-                            onClick={() => handleCreateThread(project.id)}
-                            disabled={isCreatingThread[project.id]}
-                            className={`w-full flex items-center px-2 py-1.5 text-xs rounded-md ${
-                              isCreatingThread[project.id]
-                                ? 'opacity-70 cursor-not-allowed'
-                                : 'text-zinc-600 hover:bg-zinc-50 cursor-pointer'
-                            }`}
-                          >
-                            <IconPlus className="mr-1 size-3 text-zinc-500" />
-                            {isCreatingThread[project.id] ? 'Creating...' : 'New Thread'}
-                          </button>
-                        </li>
-                      </ul>
-                    )}
                   </li>
+                  <AnimatePresence>
+                    {expandedProjectId === project.id && (
+                      <motion.li
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <ul className="pl-4 space-y-0.5">
+                          {threads[project.id]?.map((thread) => (
+                            <li key={thread.thread_id}>
+                              <Link
+                                href={`/projects/${project.id}/threads/${thread.thread_id}`}
+                                className={`block px-2 py-1.5 text-sm rounded-md ${
+                                  pathname?.includes(`/threads/${thread.thread_id}`)
+                                    ? 'text-zinc-900 font-medium bg-zinc-50'
+                                    : 'text-zinc-700 hover:bg-zinc-50'
+                                }`}
+                              >
+                                {thread.messages[0]?.content || 'New Conversation'}
+                                {thread.messages[0]?.content && thread.messages[0].content.length > 30 ? '...' : ''}
+                              </Link>
+                            </li>
+                          ))}
+                          <li>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start px-2 py-1.5 text-sm text-zinc-700 hover:text-zinc-900 hover:bg-zinc-50"
+                              onClick={() => handleCreateThread(project.id)}
+                              disabled={isCreatingThread[project.id]}
+                            >
+                              {isCreatingThread[project.id] ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="h-3 w-3 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
+                                  <span>Creating...</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <IconPlus className="size-3.5" />
+                                  <span>New Conversation</span>
+                                </div>
+                              )}
+                            </Button>
+                          </li>
+                        </ul>
+                      </motion.li>
+                    )}
+                  </AnimatePresence>
                 </React.Fragment>
               ))
             )}
           </ul>
         </div>
       </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={{
-          name: user?.email?.split('@')[0] || 'Guest',
-          email: user?.email || '',
-          avatar: '/avatars/user.jpg',
-        }} />
+      <SidebarFooter className="border-t border-border/40">
+        {user && (
+          <NavUser user={{
+            name: user.email?.split('@')[0] || 'Guest',
+            email: user.email || '',
+            avatar: '/avatars/user.jpg',
+          }} />
+        )}
       </SidebarFooter>
-
-      <CreateProjectDialog 
+      <CreateProjectDialog
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         onProjectCreated={handleProjectCreated}

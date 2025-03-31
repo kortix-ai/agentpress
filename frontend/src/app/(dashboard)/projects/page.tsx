@@ -1,16 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { CreateProjectDialog } from '@/components/create-project-dialog';
-import { Button } from '@/components/ui/button';
 import { getProjects } from '@/lib/api';
 import { Project } from '@/lib/types';
 import { toast } from 'sonner';
 import { Plus, FolderPlus } from 'lucide-react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { ProjectCard } from '@/components/project-card';
 import { CardSkeleton } from '@/components/card-skeleton';
@@ -25,7 +22,7 @@ interface ApiProject {
   created_at: string;
 }
 
-export default function ProjectsPage() {
+function ProjectsContent() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -146,5 +143,31 @@ export default function ProjectsPage() {
         onProjectCreated={handleProjectCreated}
       />
     </DashboardLayout>
+  );
+}
+
+export default function ProjectsPage() {
+  return (
+    <Suspense fallback={
+      <DashboardLayout>
+        <PageHeader 
+          title="Projects"
+          action={{
+            label: "New Project",
+            icon: Plus,
+            onClick: () => {}
+          }}
+        />
+        
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+          <CardSkeleton variant="new" />
+        </div>
+      </DashboardLayout>
+    }>
+      <ProjectsContent />
+    </Suspense>
   );
 } 

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, Search, Database, Play, Zap, Brain, Calculator, Image } from 'lucide-react';
+import { Search, Image, Calculator } from 'lucide-react';
 
 export default function HomePage() {
   const { user, isLoading } = useAuth();
@@ -74,7 +74,7 @@ export default function HomePage() {
                   <span>3</span>
                 </div>
                 <div>
-                  <h3 className="font-medium mb-1">Integration is just a few lines of code for "information access"</h3>
+                  <h3 className="font-medium mb-1">Integration is just a few lines of code for &quot;information access&quot;</h3>
                   <p className="text-zinc-500 text-sm">Simple API to connect to your comprehensive search</p>
                 </div>
               </div>
@@ -128,10 +128,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Featured on Vercel's Blog */}
+      {/* Featured on Vercel&apos;s Blog */}
       <section className="py-16 px-6 bg-zinc-50">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-xl font-medium mb-6">Featured on Vercel's Blog</h2>
+          <h2 className="text-xl font-medium mb-6">Featured on Vercel&apos;s Blog</h2>
           <div className="flex flex-col md:flex-row gap-12">
             <div className="md:w-1/2">
               <p className="text-sm mb-4">
@@ -161,7 +161,7 @@ export default function HomePage() {
             
             <div className="border border-zinc-100 rounded-lg p-6 bg-white">
               <div className="mb-4 w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center">
-                <Image className="h-5 w-5 text-zinc-600" />
+                <Image className="h-5 w-5 text-zinc-600" aria-label="Image understanding icon" />
               </div>
               <h3 className="text-md font-medium mb-2">Image Understanding</h3>
               <p className="text-sm text-zinc-500">Get contextual responses based on visual inputs</p>
