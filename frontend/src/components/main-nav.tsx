@@ -33,7 +33,7 @@ export function MainNav() {
       toast.success('Successfully logged out');
       router.push('/auth/login');
       router.refresh();
-    } catch (error) {
+    } catch {
       toast.error('Failed to log out. Please try again.');
     }
   };

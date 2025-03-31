@@ -5,24 +5,15 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
 import { ArrowDown } from 'lucide-react';
-import { getProject, getThread, addMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
+import { addMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
 import { toast } from 'sonner';
-import { Project } from '@/lib/types';
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChatInput } from '@/components/chat-input';
 
 // Define a type for the params to make React.use() work properly
 type ThreadParams = { id: string; threadId: string };
 
-// Define types for the API responses
-interface ApiThread {
-  thread_id: string;
-  messages: Array<{
-    role: string;
-    content: string;
-  }>;
-  created_at: string;
-}
+
 
 interface ApiMessage {
   role: string;
@@ -46,8 +37,6 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   
   const { user, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
-  const [project, setProject] = useState<Project | null>(null);
-  const [thread, setThread] = useState<ApiThread | null>(null);
   const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -175,7 +164,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     
     // Store cleanup function
     streamCleanupRef.current = cleanup;
-  }, [threadId]);
+  }, [threadId, streamContent]);
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -198,12 +187,12 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
         }
         
         // Load project data
-        const projectData = await getProject(projectId) as unknown as Project;
-        setProject(projectData);
+        // const projectData = await getProject(projectId) as unknown as Project;
+        // setProject(projectData);
         
         // Load thread data
-        const threadData = await getThread(threadId) as unknown as ApiThread;
-        setThread(threadData);
+        // const threadData = await getThread(threadId) as unknown as ApiThread;
+        // setThread(threadData);
         
         // Load messages
         const messagesData = await getMessages(threadId) as unknown as ApiMessage[];
@@ -372,13 +361,11 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
 
   // Adjust textarea height based on content
   useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
     const adjustHeight = () => {
-      textarea.style.height = 'auto';
-      const newHeight = Math.min(textarea.scrollHeight, 200); // Max height of 200px
-      textarea.style.height = `${newHeight}px`;
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      }
     };
 
     adjustHeight();
@@ -388,17 +375,17 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     return () => window.removeEventListener('resize', adjustHeight);
   }, [newMessage]);
 
-  // Handle keyboard shortcuts
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Send on Enter (without Shift)
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
+  // // Handle keyboard shortcuts
+  // const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  //   // Send on Enter (without Shift)
+  //   if (e.key === 'Enter' && !e.shiftKey) {
+  //     e.preventDefault();
       
-      if (newMessage.trim() && !isSending && agentStatus !== 'running') {
-        handleSubmitMessage(newMessage);
-      }
-    }
-  };
+  //     if (newMessage.trim() && !isSending && agentStatus !== 'running') {
+  //       handleSubmitMessage(newMessage);
+  //     }
+  //   }
+  // };
 
   // Check if user has scrolled up from bottom
   const handleScroll = () => {
