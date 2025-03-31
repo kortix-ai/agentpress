@@ -25,8 +25,8 @@ export function MainNav() {
   };
 
   return (
-    <nav className="border-b border-zinc-100 bg-white shadow-sm shrink-0">
-      <div className="container mx-auto px-6 flex h-16 items-center justify-between">
+    <nav className="border-b border-zinc-100 bg-white">
+      <div className="max-w-6xl mx-auto px-6 flex h-16 items-center justify-between">
         <div className="flex items-center space-x-8">
           <Link href="/" className="flex items-center group">
             <svg
@@ -37,11 +37,11 @@ export function MainNav() {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="mr-2.5 h-7 w-7 text-black transition-transform duration-200 group-hover:scale-110"
+              className="mr-2.5 h-6 w-6 text-black transition-transform duration-200 group-hover:scale-110"
             >
               <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
             </svg>
-            <span className="text-xl font-bold tracking-tight">AgentPress</span>
+            <span className="text-lg font-medium tracking-tight">AgentPress</span>
           </Link>
           {user && (
             <div className="hidden md:flex items-center space-x-6">
@@ -61,35 +61,42 @@ export function MainNav() {
 
         <div className="flex items-center space-x-5">
           {user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full overflow-hidden border border-zinc-200 hover:bg-zinc-50 transition-colors">
-                  <Avatar>
-                    <AvatarFallback className="bg-zinc-100 text-zinc-800">{getUserInitials()}</AvatarFallback>
-                  </Avatar>
+            <>
+              <Link href="/dashboard">
+                <Button variant="outline" size="sm" className="text-sm font-normal border-zinc-200 text-zinc-800 hover:bg-zinc-50">
+                  Dashboard
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 p-1.5">
-                <DropdownMenuItem className="cursor-default px-3 py-2 text-zinc-500 font-medium">
-                  <span>{user.email}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={logout} 
-                  className="cursor-pointer px-3 py-2 hover:bg-zinc-100 hover:text-black transition-colors"
-                >
-                  Log out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full overflow-hidden hover:bg-zinc-50 transition-colors p-0">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="bg-zinc-100 text-zinc-800 text-xs">{getUserInitials()}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 p-1">
+                  <DropdownMenuItem className="cursor-default px-3 py-2 text-xs text-zinc-500">
+                    <span className="truncate">{user.email}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={logout} 
+                    className="cursor-pointer px-3 py-2 text-sm hover:bg-zinc-50 hover:text-black transition-colors"
+                  >
+                    Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           ) : (
             <div className="flex space-x-3">
               <Link href="/auth/login">
-                <Button variant="ghost" className="text-zinc-800 hover:text-black hover:bg-zinc-100 border border-transparent">
+                <Button variant="ghost" size="sm" className="text-zinc-700 hover:text-black hover:bg-zinc-50">
                   Log in
                 </Button>
               </Link>
               <Link href="/auth/signup">
-                <Button className="bg-zinc-900 text-white hover:bg-black transition-colors">
+                <Button size="sm" className="bg-zinc-900 text-white hover:bg-black transition-colors">
                   Sign up
                 </Button>
               </Link>

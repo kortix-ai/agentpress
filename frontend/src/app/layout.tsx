@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import './globals.css';
 import { Inter } from 'next/font/google';
-import { MainNav } from '@/components/layout/main-nav';
 import { AuthProvider } from '@/context/auth-context';
 import { Toaster } from 'sonner';
-import { toast } from 'sonner';
-import { createClient } from '@/utils/supabase/client';
+import { usePathname } from 'next/navigation';
+import { MainNav } from '@/components/main-nav';
+import { AppSidebar } from "@/components/app-sidebar"
+import { SiteHeader } from "@/components/site-header"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -16,58 +18,44 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [apiConnected, setApiConnected] = useState<boolean | null>(null);
+  const pathname = usePathname();
+  
+  // Check if current path is in dashboard routes
+  const isDashboardRoute = pathname.startsWith('/dashboard') || 
+                           pathname.startsWith('/projects');
+  
+  // Only show MainNav on marketing pages, not in dashboard routes
+  const showMainNav = !isDashboardRoute;
 
-  useEffect(() => {
-    async function checkApiConnection() {
-      try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        
-        const headers: HeadersInit = {
-          'Content-Type': 'application/json',
-        };
-        
-        // Add auth token if available
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        
-        // Try to access an authenticated endpoint
-        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/health-check`, {
-          method: 'GET',
-          headers,
-        });
-        
-        setApiConnected(response.ok);
-        
-        if (!response.ok) {
-          console.error('Backend API is not responding:', response.status, response.statusText);
-          toast.error('Cannot connect to backend API. Some features may not work.');
-        }
-      } catch (error) {
-        console.error('Error connecting to backend API:', error);
-        setApiConnected(false);
-        toast.error('Cannot connect to backend API. Some features may not work.');
-      }
+  // Render dashboard layout or regular layout based on route
+  const renderContent = () => {
+    if (isDashboardRoute) {
+      return (
+        <SidebarProvider>
+          <AppSidebar variant="inset" />
+          <SidebarInset>
+            <SiteHeader />
+            <div className="h-[calc(100vh-3.5rem)] overflow-y-auto">
+              {children}
+            </div>
+          </SidebarInset>
+        </SidebarProvider>
+      );
     }
     
-    checkApiConnection();
-  }, []);
+    return (
+      <>
+        {showMainNav && <MainNav />}
+        <main className="flex-1 overflow-auto">{children}</main>
+      </>
+    );
+  };
 
   return (
     <html lang="en" className="h-full">
-      <body className={`${inter.className} h-full flex flex-col`}>
+      <body className={`${inter.className} h-full overflow-hidden`}>
         <AuthProvider>
-          <MainNav />
-          {apiConnected === false && (
-            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-2 text-sm" role="alert">
-              <p className="font-bold">Warning</p>
-              <p>Could not connect to backend API. Agent and thread features may not work properly.</p>
-            </div>
-          )}
-          <main className="flex-1 overflow-hidden">{children}</main>
+          {renderContent()}
           <Toaster position="top-right" />
         </AuthProvider>
       </body>
