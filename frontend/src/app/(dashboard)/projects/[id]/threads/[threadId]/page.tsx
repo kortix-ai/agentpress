@@ -13,8 +13,6 @@ import { ChatInput } from '@/components/chat-input';
 // Define a type for the params to make React.use() work properly
 type ThreadParams = { id: string; threadId: string };
 
-
-
 interface ApiMessage {
   role: string;
   content: string;
