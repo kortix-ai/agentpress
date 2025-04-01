@@ -7,91 +7,21 @@ This module provides a unified interface for making API calls to different LLM p
 - Tool calls and function calling
 - Retry logic with exponential backoff
 - Model-specific configurations
-- Comprehensive error handling
+- Comprehensive error handling and logging
 """
 
-from typing import Union, Dict, Any, Optional, AsyncGenerator
+from typing import Union, Dict, Any, Optional, AsyncGenerator, List
 import os
 import json
-import logging
 import asyncio
 from openai import OpenAIError
 import litellm
+from agentpress.logger import logger
 
-# Environment variables for API keys
-API_KEYS = {
-    'OPENAI': os.environ.get('OPENAI_API_KEY'),
-    'ANTHROPIC': os.environ.get('ANTHROPIC_API_KEY'),
-    'GROQ': os.environ.get('GROQ_API_KEY')
-}
-
-# Set environment variables for API keys
-for provider, key in API_KEYS.items():
-    if key:
-        os.environ[f'{provider}_API_KEY'] = key
-
-class LLMConfig:
-    """Configuration class for LLM API calls."""
-    
-    def __init__(
-        self,
-        model_name: str,
-        temperature: float = 0,
-        max_tokens: Optional[int] = None,
-        response_format: Optional[Any] = None,
-        tools: Optional[list] = None,
-        tool_choice: str = "auto",
-        api_key: Optional[str] = None,
-        api_base: Optional[str] = None,
-        stream: bool = False,
-        top_p: Optional[float] = None
-    ):
-        self.model_name = model_name
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.response_format = response_format
-        self.tools = tools
-        self.tool_choice = tool_choice
-        self.api_key = api_key
-        self.api_base = api_base
-        self.stream = stream
-        self.top_p = top_p
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert config to dictionary for API call."""
-        params = {
-            "model": self.model_name,
-            "messages": self.messages,
-            "temperature": self.temperature,
-            "response_format": self.response_format,
-            "top_p": self.top_p,
-            "stream": self.stream,
-        }
-
-        if self.api_key:
-            params["api_key"] = self.api_key
-        if self.api_base:
-            params["api_base"] = self.api_base
-
-        # Handle token limits for different models
-        if 'o1' in self.model_name:
-            if self.max_tokens is not None:
-                params["max_completion_tokens"] = self.max_tokens
-        else:
-            if self.max_tokens is not None:
-                params["max_tokens"] = self.max_tokens
-
-        if self.tools:
-            params["tools"] = self.tools
-            params["tool_choice"] = self.tool_choice
-
-        # Add special headers for Claude models
-        if "claude" in self.model_name.lower() or "anthropic" in self.model_name.lower():
-            params["extra_headers"] = {
-                "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
-            }
-
-        return params
+# Constants
+MAX_RETRIES = 3
+RATE_LIMIT_DELAY = 30
+RETRY_DELAY = 5
 
 class LLMError(Exception):
     """Base exception for LLM-related errors."""
@@ -101,13 +31,80 @@ class LLMRetryError(LLMError):
     """Exception raised when retries are exhausted."""
     pass
 
+def setup_api_keys() -> None:
+    """Set up API keys from environment variables."""
+    providers = ['OPENAI', 'ANTHROPIC', 'GROQ']
+    for provider in providers:
+        key = os.environ.get(f'{provider}_API_KEY')
+        if key:
+            logger.debug(f"API key set for provider: {provider}")
+        else:
+            logger.warning(f"No API key found for provider: {provider}")
+
+async def handle_error(error: Exception, attempt: int, max_attempts: int) -> None:
+    """Handle API errors with appropriate delays and logging."""
+    delay = RATE_LIMIT_DELAY if isinstance(error, litellm.exceptions.RateLimitError) else RETRY_DELAY
+    logger.warning(f"Error on attempt {attempt + 1}/{max_attempts}: {str(error)}")
+    logger.debug(f"Waiting {delay} seconds before retry...")
+    await asyncio.sleep(delay)
+
+def prepare_params(
+    messages: List[Dict[str, Any]],
+    model_name: str,
+    temperature: float = 0,
+    max_tokens: Optional[int] = None,
+    response_format: Optional[Any] = None,
+    tools: Optional[List[Dict[str, Any]]] = None,
+    tool_choice: str = "auto",
+    api_key: Optional[str] = None,
+    api_base: Optional[str] = None,
+    stream: bool = False,
+    top_p: Optional[float] = None
+) -> Dict[str, Any]:
+    """Prepare parameters for the API call."""
+    params = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": temperature,
+        "response_format": response_format,
+        "top_p": top_p,
+        "stream": stream,
+    }
+
+    if api_key:
+        params["api_key"] = api_key
+    if api_base:
+        params["api_base"] = api_base
+
+    # Handle token limits
+    if max_tokens is not None:
+        param_name = "max_completion_tokens" if 'o1' in model_name else "max_tokens"
+        params[param_name] = max_tokens
+
+    # Add tools if provided
+    if tools:
+        params.update({
+            "tools": tools,
+            "tool_choice": tool_choice
+        })
+        logger.debug(f"Added {len(tools)} tools to API parameters")
+
+    # Add Claude-specific headers
+    if "claude" in model_name.lower() or "anthropic" in model_name.lower():
+        params["extra_headers"] = {
+            "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
+        }
+        logger.debug("Added Claude-specific headers")
+
+    return params
+
 async def make_llm_api_call(
-    messages: list,
+    messages: List[Dict[str, Any]],
     model_name: str,
     response_format: Optional[Any] = None,
     temperature: float = 0,
     max_tokens: Optional[int] = None,
-    tools: Optional[list] = None,
+    tools: Optional[List[Dict[str, Any]]] = None,
     tool_choice: str = "auto",
     api_key: Optional[str] = None,
     api_base: Optional[str] = None,
@@ -137,7 +134,9 @@ async def make_llm_api_call(
         LLMRetryError: If API call fails after retries
         LLMError: For other API-related errors
     """
-    config = LLMConfig(
+    logger.info(f"Making LLM API call to model: {model_name}")
+    params = prepare_params(
+        messages=messages,
         model_name=model_name,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -149,33 +148,32 @@ async def make_llm_api_call(
         stream=stream,
         top_p=top_p
     )
-    config.messages = messages
+    
+    last_error = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            logger.debug(f"Attempt {attempt + 1}/{MAX_RETRIES}")
+            logger.debug(f"API request parameters: {json.dumps(params, indent=2)}")
+            
+            response = await litellm.acompletion(**params)
+            logger.info(f"Successfully received API response from {model_name}")
+            logger.debug(f"Response: {response}")
+            return response
+            
+        except (litellm.exceptions.RateLimitError, OpenAIError, json.JSONDecodeError) as e:
+            last_error = e
+            await handle_error(e, attempt, MAX_RETRIES)
+            
+        except Exception as e:
+            logger.error(f"Unexpected error during API call: {str(e)}", exc_info=True)
+            raise LLMError(f"API call failed: {str(e)}")
+    
+    error_msg = f"Failed to make API call after {MAX_RETRIES} attempts"
+    if last_error:
+        error_msg += f". Last error: {str(last_error)}"
+    logger.error(error_msg, exc_info=True)
+    raise LLMRetryError(error_msg)
 
-    async def attempt_api_call(max_attempts: int = 3) -> Any:
-        """Attempt API call with retry logic."""
-        for attempt in range(max_attempts):
-            try:
-                params = config.to_dict()
-                logging.info(f"Sending API request: {json.dumps(params, indent=2)}")
-                
-                response = await litellm.acompletion(**params)
-                logging.info(f"Received API response: {response}")
-                return response
-                
-            except litellm.exceptions.RateLimitError as e:
-                logging.warning(f"Rate limit exceeded. Waiting for 30 seconds before retrying...")
-                await asyncio.sleep(30)
-            except OpenAIError as e:
-                logging.info(f"API call failed, retrying attempt {attempt + 1}. Error: {e}")
-                await asyncio.sleep(5)
-            except json.JSONDecodeError:
-                logging.error(f"JSON decoding failed, retrying attempt {attempt + 1}")
-                await asyncio.sleep(5)
-            except Exception as e:
-                logging.error(f"Unexpected error during API call: {e}")
-                raise LLMError(f"API call failed: {str(e)}")
-                
-        raise LLMRetryError("Failed to make API call after multiple attempts")
-
-    return await attempt_api_call()
+# Initialize API keys on module import
+setup_api_keys()
 

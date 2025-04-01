@@ -9,12 +9,13 @@ This module provides comprehensive processing of LLM responses, including:
 """
 
 import asyncio
-from typing import Callable, Dict, Any, AsyncGenerator, Optional
+from typing import Callable, Dict, Any, AsyncGenerator, Optional, Awaitable
 import logging
 from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
 from agentpress.processor.standard.standard_tool_parser import StandardToolParser
 from agentpress.processor.standard.standard_tool_executor import StandardToolExecutor
 from agentpress.processor.standard.standard_results_adder import StandardResultsAdder
+from agentpress.logger import logger
 
 class LLMResponseProcessor:
     """Handles LLM response processing and tool execution management.
@@ -37,15 +38,14 @@ class LLMResponseProcessor:
     def __init__(
         self,
         thread_id: str,
-        available_functions: Dict = None,
-        add_message_callback: Callable = None,
-        update_message_callback: Callable = None,
-        get_messages_callback: Callable = None,
-        parallel_tool_execution: bool = True,
+        available_functions: Dict[str, Any],
+        add_message_callback: Callable[[str, Dict[str, Any]], Awaitable[None]],
+        update_message_callback: Callable[[str, Dict[str, Any]], Awaitable[None]],
+        get_messages_callback: Callable[[str], Awaitable[list]],
+        parallel_tool_execution: bool = False,
         tool_parser: Optional[ToolParserBase] = None,
         tool_executor: Optional[ToolExecutorBase] = None,
-        results_adder: Optional[ResultsAdderBase] = None,
-        thread_manager = None
+        results_adder: Optional[ResultsAdderBase] = None
     ):
         """Initialize the response processor.
         
@@ -59,37 +59,33 @@ class LLMResponseProcessor:
             tool_parser: Custom tool parser implementation
             tool_executor: Custom tool executor implementation
             results_adder: Custom results adder implementation
-            thread_manager: Optional thread manager instance
         """
+        logger.debug(f"Initializing LLMResponseProcessor for thread {thread_id}")
         self.thread_id = thread_id
         self.tool_executor = tool_executor or StandardToolExecutor(parallel=parallel_tool_execution)
         self.tool_parser = tool_parser or StandardToolParser()
-        self.available_functions = available_functions or {}
-        
-        # Create minimal thread manager if needed
-        if thread_manager is None and (add_message_callback and update_message_callback and get_messages_callback):
-            class MinimalThreadManager:
-                def __init__(self, add_msg, update_msg, list_msg):
-                    self.add_message = add_msg
-                    self._update_message = update_msg
-                    self.get_messages = list_msg
-            thread_manager = MinimalThreadManager(add_message_callback, update_message_callback, get_messages_callback)
-        
-        self.results_adder = results_adder or StandardResultsAdder(thread_manager)
+        self.available_functions = available_functions
+        self.add_message_callback = add_message_callback
+        self.update_message_callback = update_message_callback
+        self.get_messages_callback = get_messages_callback
+        self.parallel_tool_execution = parallel_tool_execution
+        self.results_adder = results_adder or StandardResultsAdder()
         
         # State tracking for streaming
         self.tool_calls_buffer = {}
         self.processed_tool_calls = set()
         self.content_buffer = ""
         self.tool_calls_accumulated = []
+        logger.debug(f"Available functions: {list(available_functions.keys())}")
 
     async def process_stream(
         self,
-        response_stream: AsyncGenerator,
+        response_stream: AsyncGenerator[Dict[str, Any], None],
         execute_tools: bool = True,
-        execute_tools_on_stream: bool = True 
-    ) -> AsyncGenerator:
+        execute_tools_on_stream: bool = False
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """Process streaming LLM response and handle tool execution."""
+        logger.info(f"Processing streaming response for thread {self.thread_id}")
         pending_tool_calls = []
         background_tasks = set()
 
@@ -185,29 +181,46 @@ class LLMResponseProcessor:
                     task.cancel()
             raise
 
-    async def process_response(self, response: Any, execute_tools: bool = True) -> None:
+    async def process_response(self, response: Dict[str, Any], execute_tools: bool = True) -> None:
         """Process complete LLM response and execute tools."""
+        logger.info(f"Processing non-streaming response for thread {self.thread_id}")
         try:
-            assistant_message = await self.tool_parser.parse_response(response)
-            await self.results_adder.add_initial_response(
-                self.thread_id,
-                assistant_message['content'],
-                assistant_message.get('tool_calls')
-            )
-
-            if execute_tools and 'tool_calls' in assistant_message and assistant_message['tool_calls']:
-                results = await self.tool_executor.execute_tool_calls(
-                    tool_calls=assistant_message['tool_calls'],
-                    available_functions=self.available_functions,
-                    thread_id=self.thread_id,
-                    executed_tool_calls=self.processed_tool_calls
-                )
-                
-                for result in results:
-                    await self.results_adder.add_tool_result(self.thread_id, result)
-                    logging.info(f"Tool execution result: {result}")
-        
+            if 'tool_calls' in response:
+                logger.debug(f"Found {len(response['tool_calls'])} tool calls in response")
+                if execute_tools:
+                    await self._execute_tool_calls(response)
+                else:
+                    logger.info("Tool execution disabled, skipping tool calls")
+            else:
+                logger.debug("No tool calls found in response")
+                await self.add_message_callback(self.thread_id, response)
         except Exception as e:
-            logging.error(f"Error processing response: {e}")
-            response_content = response.choices[0].message.get('content', '')
-            await self.results_adder.add_initial_response(self.thread_id, response_content)
+            logger.error(f"Error processing response: {str(e)}", exc_info=True)
+            raise
+
+    async def _execute_tool_calls(self, response: Dict[str, Any]) -> None:
+        """Execute tool calls from the response."""
+        logger.info(f"Executing tool calls for thread {self.thread_id}")
+        try:
+            if not self.tool_parser or not self.tool_executor or not self.results_adder:
+                logger.error("Missing required tool processing components")
+                raise ValueError("Missing required tool processing components")
+
+            # Parse tool calls
+            logger.debug("Parsing tool calls")
+            tool_calls = self.tool_parser.parse_tool_calls(response)
+            logger.debug(f"Parsed {len(tool_calls)} tool calls")
+
+            # Execute tool calls
+            logger.info("Executing tool calls")
+            tool_results = await self.tool_executor.execute_tool_calls(tool_calls)
+            logger.debug(f"Tool execution completed: {len(tool_results)} results")
+
+            # Add results to thread
+            logger.info("Adding tool results to thread")
+            await self.results_adder.add_results(self.thread_id, tool_results)
+            logger.debug("Successfully added tool results")
+
+        except Exception as e:
+            logger.error(f"Error executing tool calls: {str(e)}", exc_info=True)
+            raise

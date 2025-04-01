@@ -1,0 +1,119 @@
+/* Animation styles for RideShare app */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-10px); }
+  60% { transform: translateY(-5px); }
+}
+
+.pulse {
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.slide-up {
+  animation: slideUp 0.5s ease-out forwards;
+}
+
+.bounce {
+  animation: bounce 1s ease;
+}
+
+/* Marker animations */
+.marker-pulse {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: rgba(39, 110, 241, 0.3);
+  position: absolute;
+  animation: markerPulse 1.5s infinite;
+}
+
+@keyframes markerPulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+/* Loading animations */
+.loading-dots:after {
+  content: '.';
+  animation: dots 1.5s steps(5, end) infinite;
+}
+
+@keyframes dots {
+  0%, 20% { content: '.'; }
+  40% { content: '..'; }
+  60% { content: '...'; }
+  80%, 100% { content: ''; }
+}
+
+/* Ride type selection animation */
+.ride-type {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ride-type:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ride-type.selected {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Button animations */
+.request-ride-btn, .confirm-schedule-btn, .submit-rating-btn {
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.request-ride-btn:hover, .confirm-schedule-btn:hover, .submit-rating-btn:hover {
+  transform: translateY(-2px);
+}
+
+.request-ride-btn:active, .confirm-schedule-btn:active, .submit-rating-btn:active {
+  transform: translateY(1px);
+}
+
+/* Driver approaching animation */
+.driver-approaching {
+  position: relative;
+  padding-left: 24px;
+}
+
+.driver-approaching:before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #276EF1;
+  animation: pulse 1.5s infinite;
+}

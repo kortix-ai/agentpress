@@ -64,11 +64,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     }
     
     setIsStreaming(true);
-    
-    // Reset stream content when starting a new stream
-    if (!streamContent) {
-      setStreamContent('');
-    }
+    setStreamContent('');
     
     console.log(`[PAGE] Setting up stream for agent run ${runId}`);
     
@@ -112,9 +108,6 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
           // Immediately set appropriate UI state
           if (status.status === 'completed' || status.status === 'stopped' || status.status === 'error') {
             setAgentStatus('idle');
-            
-            // Keep the streaming content visible during transition
-            // but mark that we're no longer actively streaming
             setIsStreaming(false);
             
             // Fetch final messages first, then clear streaming content
@@ -162,7 +155,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     
     // Store cleanup function
     streamCleanupRef.current = cleanup;
-  }, [threadId, streamContent]);
+  }, [threadId]);
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -171,6 +164,8 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   }, [user, isAuthLoading, router]);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadData() {
       // Only show loading state on the first load, not when switching tabs
       if (!initialLoadCompleted.current) {
@@ -184,17 +179,11 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
           throw new Error('Invalid project or thread ID');
         }
         
-        // Load project data
-        // const projectData = await getProject(projectId) as unknown as Project;
-        // setProject(projectData);
-        
-        // Load thread data
-        // const threadData = await getThread(threadId) as unknown as ApiThread;
-        // setThread(threadData);
-        
         // Load messages
         const messagesData = await getMessages(threadId) as unknown as ApiMessage[];
-        setMessages(messagesData);
+        if (isMounted) {
+          setMessages(messagesData);
+        }
 
         // Check for active agent runs
         const checkForActiveAgentRuns = async () => {
@@ -204,7 +193,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
             
             // Look for running agent runs
             const activeRuns = agentRuns.filter(run => run.status === 'running');
-            if (activeRuns.length > 0) {
+            if (activeRuns.length > 0 && isMounted) {
               // Sort by start time to get the most recent
               activeRuns.sort((a, b) => 
                 new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
@@ -232,10 +221,14 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
         initialLoadCompleted.current = true;
       } catch (err) {
         console.error('Error loading thread data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load thread');
-        toast.error('Failed to load thread data');
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load thread');
+          toast.error('Failed to load thread data');
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
     
@@ -245,6 +238,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
 
     // Cleanup function
     return () => {
+      isMounted = false;
       if (streamCleanupRef.current) {
         streamCleanupRef.current();
       }
