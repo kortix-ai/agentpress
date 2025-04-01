@@ -1,57 +1,35 @@
-# Modern Web Application Template
+# Brand Identity Business Card
 
-A clean, responsive web application template built with HTML, CSS, and JavaScript.
+This is a modern, interactive business card design implemented with HTML, CSS, and JavaScript.
 
 ## Features
 
-- Responsive design that works on all devices
-- Light/dark theme toggle with local storage persistence
-- Interactive demo section
-- Modern UI with smooth animations
-- Easy to customize and extend
+- Interactive flip animation to show front and back of the card
+- Color theme customization with predefined color options
+- Responsive design that works on different screen sizes
+- Modern, clean aesthetic with attention to typography and spacing
+- Social media icons and contact information
 
-## Getting Started
+## Usage
 
-1. Clone or download this repository
-2. Open `index.html` in your browser
-3. Start customizing the template for your needs
-
-## Structure
-
-- `index.html` - Main HTML structure
-- `styles.css` - All styling and responsive design
-- `script.js` - JavaScript functionality
+1. Open `index.html` in any modern web browser
+2. Click the "Flip Card" button to see both sides of the business card
+3. Use the color dots below to change the card's color theme
+4. You can also double-click on the card to flip it
 
 ## Customization
 
-### Colors
+To customize this business card for your own use:
 
-You can easily change the color scheme by modifying the CSS variables in the `:root` selector in `styles.css`:
+1. Edit the HTML to change the name, title, and contact information
+2. Modify the logo and branding elements in the CSS
+3. Add or remove social media icons as needed
+4. Adjust the color palette by changing the color option values
 
-```css
-:root {
-    --primary-color: #3498db;
-    --secondary-color: #2ecc71;
-    /* other variables */
-}
-```
+## Technologies Used
 
-### Adding Pages
-
-To add new pages, create additional HTML files following the same structure as `index.html`.
-
-### Extending Functionality
-
-The JavaScript file is organized to make it easy to add new features. Simply add your code to `script.js` or create new JS files and link them in the HTML.
-
-## Browser Support
-
-This template works in all modern browsers including:
-- Chrome
-- Firefox
-- Safari
-- Edge
-
-## License
-
-This template is available under the MIT License.
+- HTML5
+- CSS3 (with variables, flexbox, and transitions)
+- JavaScript
+- Font Awesome for icons
+- Google Fonts (Montserrat and Playfair Display)
