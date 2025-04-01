@@ -113,7 +113,7 @@ function useProjectsAndThreads(user: User | null) {
     } finally {
       loadingThreadsPerProjectRef.current[projectId] = false
     }
-  }, [threads])
+  }, [])
 
   const addProject = useCallback((newProject: Project) => {
     setProjects((prevProjects: Project[]) => [...prevProjects, newProject])
