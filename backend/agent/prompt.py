@@ -25,6 +25,7 @@ You have access to these tools:
 </available_tools>
 
 <response_format>
+
 RESPONSE FORMAT – STRICTLY Output XML tags
 
 <create-file file_path="path/to/file">
@@ -48,5 +49,28 @@ command here
 </execute-command>
 
 </response_format>
-
 """
+
+# RESPONSE FORMAT – STRICTLY Output XML tags
+
+# <create-file file_path="path/to/file">
+# file contents here
+# </create-file>
+
+# <str-replace file_path="path/to/file">
+# <old_str>text to replace</old_str>
+# <new_str>replacement text</new_str>
+# </str-replace>
+
+# <full-file-rewrite file_path="path/to/file">
+# New file contents go here, replacing all existing content
+# </full-file-rewrite>
+
+# <delete-file file_path="path/to/file">
+# </delete-file>
+
+# <execute-command>
+# command here
+# </execute-command>
+
+# </response_format>

@@ -268,15 +268,26 @@ class ThreadManager:
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Run a conversation thread with specified parameters."""
         logger.info(f"Starting thread execution for thread {thread_id}")
-        logger.debug(f"Parameters: model={model_name}, temperature={temperature}, stream={stream}")
+        logger.debug(f"Parameters: model={model_name}, temperature={temperature}, max_tokens={max_tokens}, "
+                    f"tool_choice={tool_choice}, native_tool_calling={native_tool_calling}, "
+                    f"xml_tool_calling={xml_tool_calling}, execute_tools={execute_tools}, stream={stream}, "
+                    f"execute_tools_on_stream={execute_tools_on_stream}, "
+                    f"parallel_tool_execution={parallel_tool_execution}")
         
         try:
-            # Validate tool calling configuration
+            # 1. Get messages from thread
+            messages = await self.get_messages(thread_id)
+            
+            # 2. Prepare messages for LLM + add temporary message if it exists
+            prepared_messages = [system_message] + messages
+            if temporary_message:
+                prepared_messages.append(temporary_message)
+                logger.debug("Added temporary message to prepared messages")
+
             if native_tool_calling and xml_tool_calling:
                 logger.error("Invalid configuration: Cannot use both native and XML tool calling")
                 raise ValueError("Cannot use both native LLM tool calling and XML tool calling simultaneously")
 
-            # Initialize tool components if any tool calling is enabled
             if native_tool_calling or xml_tool_calling:
                 logger.debug("Initializing tool components")
                 if tool_parser is None:
@@ -291,12 +302,6 @@ class ThreadManager:
                     results_adder = XMLResultsAdder(self) if xml_tool_calling else StandardResultsAdder(self)
                     logger.debug(f"Using {results_adder.__class__.__name__} for results adding")
 
-            messages = await self.get_messages(thread_id)
-            prepared_messages = [system_message] + messages
-            if temporary_message:
-                prepared_messages.append(temporary_message)
-                logger.debug("Added temporary message to prepared messages")
-
             openapi_tool_schemas = None
             if native_tool_calling:
                 openapi_tool_schemas = self.tool_registry.get_openapi_schemas()
@@ -308,6 +313,17 @@ class ThreadManager:
             else:
                 available_functions = {}
                 logger.debug("No tool calling enabled")
+
+            logger.info("Making LLM API call")
+            llm_response = await self._run_thread_completion(
+                messages=prepared_messages,
+                model_name=model_name,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                tools=openapi_tool_schemas,
+                tool_choice=tool_choice if native_tool_calling else None,
+                stream=stream
+            )
 
             response_processor = LLMResponseProcessor(
                 thread_id=thread_id,
@@ -321,17 +337,6 @@ class ThreadManager:
                 results_adder=results_adder
             )
 
-            logger.info("Making LLM API call")
-            llm_response = await self._run_thread_completion(
-                messages=prepared_messages,
-                model_name=model_name,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                tools=openapi_tool_schemas,
-                tool_choice=tool_choice if native_tool_calling else None,
-                stream=stream
-            )
-
             if stream:
                 logger.info("Processing streaming response")
                 return response_processor.process_stream(
@@ -339,15 +344,13 @@ class ThreadManager:
                     execute_tools=execute_tools,
                     execute_tools_on_stream=execute_tools_on_stream
                 )
-
-            logger.info("Processing non-streaming response")
-            await response_processor.process_response(
-                response=llm_response,
-                execute_tools=execute_tools
-            )
-
-            logger.info("Thread execution completed successfully")
-            return llm_response
+            else:
+                logger.info("Processing non-streaming response")
+                await response_processor.process_response(
+                    response=llm_response,
+                    execute_tools=execute_tools
+                )
+                return llm_response
 
         except Exception as e:
             logger.error(f"Error in run_thread: {str(e)}", exc_info=True)

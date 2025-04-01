@@ -45,38 +45,35 @@ Current development environment workspace state:
         native_tool_calling=False,
         xml_tool_calling=True,
         stream=stream,
-        execute_tools_on_stream=True,
+        execute_tools_on_stream=False,
         parallel_tool_execution=False        
     )
     
     if stream:
         if isinstance(response, AsyncGenerator):
             async for chunk in response:
-                if hasattr(chunk.choices[0], 'delta'):
-                    delta = chunk.choices[0].delta
-                    
-                    if hasattr(delta, 'content') and delta.content is not None:
-                        yield f"data: {json.dumps({'type': 'content', 'content': delta.content})}\n\n"
-                    
-                    if hasattr(delta, 'tool_calls') and delta.tool_calls:
-                        for tool_call in delta.tool_calls:
-                            if tool_call.function:
-                                tool_data = {
-                                    'type': 'tool_call',
-                                    'name': tool_call.function.name if tool_call.function.name else '',
-                                    'arguments': tool_call.function.arguments if tool_call.function.arguments else ''
-                                }
-                                yield f"data: {json.dumps(tool_data)}\n\n"
+                # print(f"\n[run.py] ===== CHUNK START =====")
+                # print(f"[run.py] Raw chunk: {chunk}")
+                # print(f"[run.py] Chunk type: {type(chunk)}")
+                # print(f"[run.py] Chunk dir: {dir(chunk)}")
+                if hasattr(chunk, 'choices'):
+                    # print(f"[run.py] Choices: {chunk.choices}")
+                    # print(f"[run.py] Choices type: {type(chunk.choices)}")
+                    for i, choice in enumerate(chunk.choices):
+                        # print(f"[run.py] Choice {i} dir: {dir(choice)}")
+                        # print(f"[run.py] Choice {i} delta: {choice.delta}")
+                        if hasattr(choice.delta, 'tool_calls'):
+                            # print(f"[run.py] Tool calls: {choice.delta.tool_calls}")
+                            pass
+                # print(f"[run.py] ===== CHUNK END =====\n")
+                yield str(chunk)  # Convert to string to ensure we capture everything
         else:
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Invalid response type'})}\n\n"
+            # print(f"[run.py] Non-generator response: {response}")
+            # print(f"[run.py] Response type: {type(response)}")
+            # print(f"[run.py] Response dir: {dir(response)}")
+            yield str(response)
     else:
-        if isinstance(response, AsyncGenerator):
-            full_response = []
-            async for chunk in response:
-                if hasattr(chunk.choices[0], 'delta'):
-                    delta = chunk.choices[0].delta
-                    if hasattr(delta, 'content') and delta.content is not None:
-                        full_response.append(delta.content)
-            yield f"data: {json.dumps({'type': 'content', 'content': ''.join(full_response)})}\n\n"
-        else:
-            yield f"data: {json.dumps({'type': 'content', 'content': response})}\n\n"
+        # print(f"[run.py] Non-streaming response: {response}")
+        # print(f"[run.py] Response type: {type(response)}")
+        # print(f"[run.py] Response dir: {dir(response)}")
+        yield str(response)

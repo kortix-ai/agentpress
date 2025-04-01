@@ -195,14 +195,14 @@ async def stream_agent_run(
                     else:
                         data_str = str(data)
                         
-                    # Don't add extra formatting to already JSON-formatted data
+                    # Send raw data without wrapping
                     yield f"data: {data_str}\n\n"
                     
                 # Check if agent is still running
                 current_run = await client.table('agent_runs').select('status').eq('id', agent_run_id).execute()
                 if not current_run.data or current_run.data[0]['status'] != 'running':
-                    # Send final status update
-                    yield f"data: {json.dumps({'type': 'status', 'status': current_run.data[0]['status'] if current_run.data else 'unknown'})}\n\n"
+                    # Send final status update without wrapping
+                    yield f"data: {json.dumps({'status': current_run.data[0]['status'] if current_run.data else 'unknown'})}\n\n"
                     break
                 
                 await asyncio.sleep(0.01)  # Minimal sleep to prevent CPU spinning
@@ -316,27 +316,21 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
             
             # Handle different types of responses
             if isinstance(response, str):
-                formatted_response = {"type": "content", "content": response}
+                formatted_response = response
             elif isinstance(response, dict):
-                if "type" in response:
-                    formatted_response = response
-                else:
-                    formatted_response = {"type": "content", **response}
+                formatted_response = response
             else:
-                formatted_response = {"type": "content", "content": str(response)}
+                formatted_response = str(response)
                 
             # Add response to batch and responses list
             responses.append(formatted_response)
             batch.append(formatted_response)
             total_responses += 1
             
-            # Log response type for debugging
-            # logger.debug(f"Received response type '{formatted_response.get('type', 'unknown')}' for agent run: {agent_run_id}")
-            
             # Immediately publish the response to Redis
             await redis_client.publish(
                 f"agent_run:{agent_run_id}:responses", 
-                json.dumps(formatted_response)
+                formatted_response
             )
             
             # Update database less frequently to reduce overhead

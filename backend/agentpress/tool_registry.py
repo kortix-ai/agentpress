@@ -84,9 +84,7 @@ class ToolRegistry:
         available_functions = {}
         for tool_name, tool_info in self.tools.items():
             tool_instance = tool_info['instance']
-            for func_name, func in tool_instance.__class__.__dict__.items():
-                if callable(func) and not func_name.startswith("__"):
-                    available_functions[func_name] = getattr(tool_instance, func_name)
+            available_functions[tool_name] = getattr(tool_instance, tool_name)
         logger.debug(f"Retrieved {len(available_functions)} available functions")
         return available_functions
 

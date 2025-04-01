@@ -9,6 +9,8 @@ import { addMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamA
 import { toast } from 'sonner';
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChatInput } from '@/components/chat-input';
+import { useStreamParser } from '@/hooks/useStreamParser';
+import { StreamContent } from '@/components/stream-content';
 
 // Define a type for the params to make React.use() work properly
 type ThreadParams = { id: string; threadId: string };
@@ -59,6 +61,8 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const hasInitiallyScrolled = useRef<boolean>(false);
 
+  const { content: parsedStreamContent, processStreamData, reset: resetStreamParser } = useStreamParser();
+
   const handleStreamAgent = useCallback(async (runId: string) => {
     // Clean up any existing stream
     if (streamCleanupRef.current) {
@@ -69,45 +73,31 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     
     setIsStreaming(true);
     setStreamContent('');
+    resetStreamParser();
     
     console.log(`[PAGE] Setting up stream for agent run ${runId}`);
     
     // Start streaming the agent's responses with improved implementation
     const cleanup = streamAgent(runId, {
       onMessage: (rawData: string) => {
-        try {
-          // Parse the outer data structure
-          const data = JSON.parse(rawData);
-          
-          // Handle the nested data structure
-          if (data.content?.startsWith('data: ')) {
-            try {
-              const innerJson = data.content.replace('data: ', '');
-              const innerData = JSON.parse(innerJson);
-              
-              // Skip empty messages
-              if (!innerData.content && !innerData.arguments) return;
-              
-              window.requestAnimationFrame(() => {
-                if (innerData.type === 'tool_call') {
-                  const toolContent = innerData.name 
-                    ? `Tool: ${innerData.name}\n${innerData.arguments || ''}`
-                    : innerData.arguments || '';
-                  setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
-                } else if (innerData.type === 'content' && innerData.content) {
-                  setStreamContent(prev => prev + innerData.content);
-                }
-              });
-            } catch (innerError) {
-              console.warn('[PAGE] Failed to parse inner data:', innerError);
-            }
-          }
-        } catch (error) {
-          console.warn('[PAGE] Failed to parse message:', error);
+        // Skip ping messages
+        if (rawData.includes('"type":"ping"')) return;
+        
+        // Log exact format of raw data for debugging
+        if (rawData.startsWith('data:')) {
+          console.log(`[PAGE] Raw format starts with 'data:'`);
+        } else if (rawData.startsWith('ModelResponse')) {
+          console.log(`[PAGE] Raw format starts with 'ModelResponse'`);
         }
+        
+        // Log incoming data for debugging (truncated)
+        console.log(`[PAGE] Received data: ${rawData.substring(0, 100)}${rawData.length > 100 ? '...' : ''}`);
+        
+        // Process stream data using our parser
+        processStreamData(rawData);
       },
       onToolCall: (name: string, args: Record<string, unknown>) => {
-        console.log('[PAGE] Tool call received:', name, args);
+        console.log('[PAGE] Tool call received via callback:', name, args);
       },
       onError: (error: Error | unknown) => {
         console.error('[PAGE] Streaming error:', error);
@@ -182,7 +172,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     
     // Store cleanup function
     streamCleanupRef.current = cleanup;
-  }, [threadId]);
+  }, [threadId, resetStreamParser, processStreamData]);
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -590,16 +580,18 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                           : 'bg-muted'
                       }`}
                     >
-                      <div className="whitespace-pre-wrap break-words">
-                        {message.type === 'tool_call' ? (
-                          <div className="font-mono text-xs">
-                            <div className="text-muted-foreground">Tool: {message.name}</div>
-                            <div className="mt-1">{message.arguments}</div>
+                      {message.type === 'tool_call' ? (
+                        <div className="whitespace-pre-wrap break-words">
+                          <div className="font-semibold text-xs text-muted-foreground mb-1">Tool Call: {message.name || 'unnamed'}</div>
+                          <div className="font-mono text-xs bg-background/50 p-2 rounded">
+                            {message.arguments || ''}
                           </div>
-                        ) : (
-                          message.content
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <div className="whitespace-pre-wrap break-words">
+                          {message.content}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -610,26 +602,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                     className="flex justify-start"
                   >
                     <div className="max-w-[85%] rounded-lg bg-muted px-4 py-3 text-sm">
-                      <div className="whitespace-pre-wrap break-words">
-                        {streamContent}
-                        {isStreaming && (
-                          <span className="inline-flex items-center ml-0.5">
-                            <span 
-                              className="inline-block h-4 w-0.5 bg-foreground/50 mx-px"
-                              style={{ 
-                                opacity: 0.7,
-                                animation: 'cursorBlink 1s ease-in-out infinite',
-                              }}
-                            />
-                            <style jsx global>{`
-                              @keyframes cursorBlink {
-                                0%, 100% { opacity: 1; }
-                                50% { opacity: 0; }
-                              }
-                            `}</style>
-                          </span>
-                        )}
-                      </div>
+                      <StreamContent content={parsedStreamContent} isStreaming={isStreaming} />
                     </div>
                   </div>
                 )}

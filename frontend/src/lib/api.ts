@@ -365,36 +365,8 @@ export const streamAgent = (agentRunId: string, callbacks: {
       };
       
       eventSourceInstance.onmessage = (event) => {
-        try {
-          const rawData = event.data;
-          if (rawData.includes('"type":"ping"')) return;
-          
-          // Log raw data for debugging
-          console.log(`[STREAM] Received data: ${rawData.substring(0, 100)}${rawData.length > 100 ? '...' : ''}`);
-          
-          // Pass the raw data directly to onMessage for handling in the component
-          callbacks.onMessage(rawData);
-          
-          // Try to parse for tool calls
-          try {
-            const data = JSON.parse(rawData);
-            if (data.content?.startsWith('data: ')) {
-              const innerJson = data.content.replace('data: ', '');
-              const innerData = JSON.parse(innerJson);
-              
-              if (innerData.type === 'tool_call') {
-                callbacks.onToolCall(innerData.name || '', innerData.arguments || '');
-              }
-            }
-          } catch (parseError) {
-            // Ignore parsing errors for tool calls
-            console.debug('[STREAM] Could not parse tool call data:', parseError);
-          }
-          
-        } catch (error) {
-          console.error(`[STREAM] Error handling message:`, error);
-          callbacks.onError(error instanceof Error ? error : String(error));
-        }
+        // Simply pass the raw event data to the onMessage callback
+        callbacks.onMessage(event.data);
       };
       
       eventSourceInstance.onerror = () => {
