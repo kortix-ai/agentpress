@@ -20,7 +20,7 @@ from agentpress.tool_registry import ToolRegistry
 from agentpress.processor.llm_response_processor import LLMResponseProcessor
 from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
 from services.supabase import DBConnection
-from agentpress.logger import logger
+from backend.utils.logger import logger
 
 from agentpress.processor.xml.xml_tool_parser import XMLToolParser
 from agentpress.processor.xml.xml_tool_executor import XMLToolExecutor

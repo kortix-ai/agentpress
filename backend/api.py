@@ -9,6 +9,7 @@ from services.supabase import DBConnection
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 import asyncio
+from backend.utils.logger import logger
 
 # Import the agent API module
 from agent import api as agent_api
@@ -24,6 +25,7 @@ thread_manager = None
 async def lifespan(app: FastAPI):
     # Startup
     global thread_manager
+    logger.info("Starting up FastAPI application")
     await db.initialize()
     thread_manager = ThreadManager()
     
@@ -42,9 +44,11 @@ async def lifespan(app: FastAPI):
     yield
     
     # Clean up agent resources (including Redis)
+    logger.info("Cleaning up agent resources")
     await agent_api.cleanup()
     
     # Clean up database connection
+    logger.info("Disconnecting from database")
     await db.disconnect()
 
 app = FastAPI(lifespan=lifespan)
@@ -63,8 +67,10 @@ app.include_router(agent_api.router, prefix="/api")
 @app.get("/api/health-check")
 async def health_check():
     """Health check endpoint to verify API is working."""
+    logger.info("Health check endpoint called")
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 if __name__ == "__main__":
     import uvicorn
+    logger.info("Starting server on 0.0.0.0:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000) 

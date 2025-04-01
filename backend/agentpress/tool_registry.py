@@ -1,6 +1,6 @@
 from typing import Dict, Type, Any, List, Optional, Callable
 from agentpress.tool import Tool, SchemaType, ToolSchema
-import logging
+from backend.utils.logger import logger
 
 
 class ToolRegistry:
@@ -29,6 +29,7 @@ class ToolRegistry:
             cls._instance = super().__new__(cls)
             cls._instance.tools = {}
             cls._instance.xml_tools = {}
+            logger.info("Initialized new ToolRegistry instance")
         return cls._instance
     
     def register_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
@@ -43,11 +44,14 @@ class ToolRegistry:
             - If function_names is None, all functions are registered
             - Handles both OpenAPI and XML schema registration
         """
+        logger.info(f"Registering tool class: {tool_class.__name__}")
         tool_instance = tool_class(**kwargs)
         schemas = tool_instance.get_schemas()
         
-        logging.info(f"Registering tool class: {tool_class.__name__}")
-        logging.info(f"Available schemas: {list(schemas.keys())}")
+        logger.debug(f"Available schemas for {tool_class.__name__}: {list(schemas.keys())}")
+        
+        registered_openapi = 0
+        registered_xml = 0
         
         for func_name, schema_list in schemas.items():
             if function_names is None or func_name in function_names:
@@ -57,7 +61,8 @@ class ToolRegistry:
                             "instance": tool_instance,
                             "schema": schema
                         }
-                        logging.info(f"Registered OpenAPI function {func_name}")
+                        registered_openapi += 1
+                        logger.debug(f"Registered OpenAPI function {func_name} from {tool_class.__name__}")
                     
                     if schema.schema_type == SchemaType.XML and schema.xml_schema:
                         self.xml_tools[schema.xml_schema.tag_name] = {
@@ -65,7 +70,10 @@ class ToolRegistry:
                             "method": func_name,
                             "schema": schema
                         }
-                        logging.info(f"Registered XML tag {schema.xml_schema.tag_name} -> {func_name}")
+                        registered_xml += 1
+                        logger.debug(f"Registered XML tag {schema.xml_schema.tag_name} -> {func_name} from {tool_class.__name__}")
+        
+        logger.info(f"Tool registration complete for {tool_class.__name__}: {registered_openapi} OpenAPI functions, {registered_xml} XML tags")
 
     def get_available_functions(self) -> Dict[str, Callable]:
         """Get all available tool functions.
@@ -79,6 +87,7 @@ class ToolRegistry:
             for func_name, func in tool_instance.__class__.__dict__.items():
                 if callable(func) and not func_name.startswith("__"):
                     available_functions[func_name] = getattr(tool_instance, func_name)
+        logger.debug(f"Retrieved {len(available_functions)} available functions")
         return available_functions
 
     def get_tool(self, tool_name: str) -> Dict[str, Any]:
@@ -90,7 +99,10 @@ class ToolRegistry:
         Returns:
             Dict containing tool instance and schema, or empty dict if not found
         """
-        return self.tools.get(tool_name, {})
+        tool = self.tools.get(tool_name, {})
+        if not tool:
+            logger.warning(f"Tool not found: {tool_name}")
+        return tool
 
     def get_xml_tool(self, tag_name: str) -> Dict[str, Any]:
         """Get tool info by XML tag name.
@@ -101,7 +113,10 @@ class ToolRegistry:
         Returns:
             Dict containing tool instance, method name, and schema
         """
-        return self.xml_tools.get(tag_name, {})
+        tool = self.xml_tools.get(tag_name, {})
+        if not tool:
+            logger.warning(f"XML tool not found for tag: {tag_name}")
+        return tool
 
     def get_openapi_schemas(self) -> List[Dict[str, Any]]:
         """Get OpenAPI schemas for function calling.
@@ -109,11 +124,13 @@ class ToolRegistry:
         Returns:
             List of OpenAPI-compatible schema definitions
         """
-        return [
+        schemas = [
             tool_info['schema'].schema 
             for tool_info in self.tools.values()
             if tool_info['schema'].schema_type == SchemaType.OPENAPI
         ]
+        logger.debug(f"Retrieved {len(schemas)} OpenAPI schemas")
+        return schemas
 
     def get_xml_examples(self) -> Dict[str, str]:
         """Get all XML tag examples.
@@ -126,4 +143,5 @@ class ToolRegistry:
             schema = tool_info['schema']
             if schema.xml_schema and schema.xml_schema.example:
                 examples[schema.xml_schema.tag_name] = schema.xml_schema.example
+        logger.debug(f"Retrieved {len(examples)} XML examples")
         return examples

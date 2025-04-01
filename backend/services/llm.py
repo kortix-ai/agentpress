@@ -16,7 +16,7 @@ import json
 import asyncio
 from openai import OpenAIError
 import litellm
-from agentpress.logger import logger
+from backend.utils.logger import logger
 
 # Constants
 MAX_RETRIES = 3
