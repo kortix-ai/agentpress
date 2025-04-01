@@ -66,7 +66,7 @@ export function NavUser({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton 
               size="lg"
-              className="hover:bg-zinc-50 rounded-md transition-colors w-full py-1"
+              className="hover:bg-zinc-50 rounded-md transition-all duration-200 w-full py-1 group cursor-pointer active:bg-zinc-100"
             >
               <Avatar className="h-7 w-7 rounded-full mr-2">
                 <AvatarImage src={user.avatar} alt={user.name} />
@@ -80,7 +80,9 @@ export function NavUser({
                   {user.email}
                 </span>
               </div>
-              <IconDotsVertical className="ml-auto size-3.5 text-zinc-400" />
+              <div className="ml-auto p-0.5 rounded-full transition-all duration-200 group-hover:bg-zinc-100 group-active:bg-zinc-200">
+                <IconDotsVertical className="size-3.5 text-zinc-400 transition-all duration-200 group-hover:text-zinc-600 group-active:text-zinc-700" />
+              </div>
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
