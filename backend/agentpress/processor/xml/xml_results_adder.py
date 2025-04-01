@@ -55,15 +55,23 @@ class XMLResultsAdder(ResultsAdderBase):
             - Creates initial message if none exists
             - Preserves XML structure in updates
         """
-        if not self.message_added:
-            await self.add_initial_response(thread_id, content, tool_calls)
-            return
-        
         message = {
             "role": "assistant",
             "content": content
         }
-        await self.update_message(thread_id, message)
+        
+        # Check if an assistant message already exists in the thread
+        existing_messages = await self.get_messages(thread_id)
+        assistant_msg = next((msg for msg in reversed(existing_messages) 
+                           if msg['role'] == 'assistant'), None)
+        
+        if assistant_msg:
+            # Update existing message
+            await self.update_message(thread_id, message)
+        else:
+            # Add new message
+            await self.add_message(thread_id, message)
+            self.message_added = True
     
     async def add_tool_result(self, thread_id: str, result: Dict[str, Any]):
         """Add XML tool result with proper referencing.
