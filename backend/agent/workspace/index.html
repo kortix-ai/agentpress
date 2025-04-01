@@ -3,97 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Web Application</title>
+    <title>Brand Identity Business Card</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <header>
-        <div class="container">
-            <div class="logo">
-                <h1>WebApp</h1>
+    <div class="container">
+        <div class="card-container">
+            <div class="card front">
+                <div class="logo">
+                    <div class="logo-symbol">A</div>
+                    <div class="logo-text">ACME</div>
+                </div>
+                <div class="tagline">Creative Solutions</div>
+                <div class="pattern"></div>
             </div>
-            <nav>
-                <ul>
-                    <li><a href="#" class="active">Home</a></li>
-                    <li><a href="#">Features</a></li>
-                    <li><a href="#">Pricing</a></li>
-                    <li><a href="#">Contact</a></li>
-                </ul>
-            </nav>
-            <div class="theme-toggle">
-                <button id="themeToggle"><i class="fas fa-moon"></i></button>
+            <div class="card back">
+                <div class="info">
+                    <h2 class="name">ALEX JOHNSON</h2>
+                    <p class="title">Creative Director</p>
+                    <div class="divider"></div>
+                    <div class="contact">
+                        <p><i class="fas fa-phone"></i> (555) 123-4567</p>
+                        <p><i class="fas fa-envelope"></i> alex@acmecreative.com</p>
+                        <p><i class="fas fa-map-marker-alt"></i> 123 Design Street, Creative City</p>
+                        <p><i class="fas fa-globe"></i> www.acmecreative.com</p>
+                    </div>
+                </div>
+                <div class="social-icons">
+                    <i class="fab fa-linkedin"></i>
+                    <i class="fab fa-twitter"></i>
+                    <i class="fab fa-instagram"></i>
+                    <i class="fab fa-behance"></i>
+                </div>
             </div>
         </div>
-    </header>
-
-    <main>
-        <section class="hero">
-            <div class="container">
-                <h1>Welcome to Our Web Application</h1>
-                <p>A modern, responsive web application template to kickstart your projects.</p>
-                <div class="cta">
-                    <button class="btn primary">Get Started</button>
-                    <button class="btn secondary">Learn More</button>
-                </div>
-            </div>
-        </section>
-
-        <section class="features">
-            <div class="container">
-                <h2>Key Features</h2>
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <i class="fas fa-mobile-alt"></i>
-                        <h3>Responsive Design</h3>
-                        <p>Looks great on all devices, from mobile to desktop.</p>
-                    </div>
-                    <div class="feature-card">
-                        <i class="fas fa-bolt"></i>
-                        <h3>Fast Performance</h3>
-                        <p>Optimized for speed and efficiency.</p>
-                    </div>
-                    <div class="feature-card">
-                        <i class="fas fa-palette"></i>
-                        <h3>Modern UI</h3>
-                        <p>Clean and intuitive user interface.</p>
-                    </div>
-                    <div class="feature-card">
-                        <i class="fas fa-code"></i>
-                        <h3>Easy to Customize</h3>
-                        <p>Simple structure that's easy to modify and extend.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="demo">
-            <div class="container">
-                <h2>Interactive Demo</h2>
-                <div class="demo-container">
-                    <div class="controls">
-                        <input type="text" id="demoInput" placeholder="Enter some text...">
-                        <button id="demoButton" class="btn primary">Submit</button>
-                    </div>
-                    <div id="message" class="message">
-                        Your message will appear here.
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <footer>
-        <div class="container">
-            <p>&copy; 2023 WebApp. All rights reserved.</p>
-            <div class="social-links">
-                <a href="#"><i class="fab fa-twitter"></i></a>
-                <a href="#"><i class="fab fa-facebook"></i></a>
-                <a href="#"><i class="fab fa-instagram"></i></a>
-                <a href="#"><i class="fab fa-github"></i></a>
+        
+        <div class="controls">
+            <button id="flip-btn">Flip Card</button>
+            <div class="color-options">
+                <div class="color-option" data-color="#1a237e" style="background-color: #1a237e;"></div>
+                <div class="color-option" data-color="#006064" style="background-color: #006064;"></div>
+                <div class="color-option" data-color="#4a148c" style="background-color: #4a148c;"></div>
+                <div class="color-option" data-color="#880e4f" style="background-color: #880e4f;"></div>
+                <div class="color-option" data-color="#bf360c" style="background-color: #bf360c;"></div>
             </div>
         </div>
-    </footer>
+    </div>
 
     <script src="script.js"></script>
 </body>

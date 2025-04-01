@@ -54,6 +54,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [buttonOpacity, setButtonOpacity] = useState(0);
   const [userHasScrolled, setUserHasScrolled] = useState(false);
+  const hasInitiallyScrolled = useRef<boolean>(false);
 
   const handleStreamAgent = useCallback(async (runId: string) => {
     // Clean up any existing stream
@@ -183,6 +184,12 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
         const messagesData = await getMessages(threadId) as unknown as ApiMessage[];
         if (isMounted) {
           setMessages(messagesData);
+          
+          // Only scroll to bottom on initial page load
+          if (!hasInitiallyScrolled.current) {
+            scrollToBottom('auto');
+            hasInitiallyScrolled.current = true;
+          }
         }
 
         // Check for active agent runs
@@ -403,10 +410,10 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   useEffect(() => {
     const isNewUserMessage = messages.length > 0 && messages[messages.length - 1]?.role === 'user';
     
-    if (isNewUserMessage || agentStatus === 'running') {
+    if ((isNewUserMessage || agentStatus === 'running') && !userHasScrolled) {
       scrollToBottom();
     }
-  }, [messages, agentStatus]);
+  }, [messages, agentStatus, userHasScrolled]);
 
   // Make sure clicking the scroll button scrolls to bottom
   const handleScrollButtonClick = () => {
