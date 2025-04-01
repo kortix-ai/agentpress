@@ -5,226 +5,170 @@
 }
 
 body {
-    font-family: 'Montserrat', sans-serif;
-    background-color: #f5f5f5;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
     color: #333;
-}
-
-.container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 30px;
-}
-
-.card-container {
-    width: 350px;
-    height: 200px;
-    perspective: 1000px;
-}
-
-.card {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    transform-style: preserve-3d;
-    transition: transform 0.8s;
-    border-radius: 10px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    background-color: #f5f5f5;
     padding: 20px;
 }
 
-.card.front {
-    background-color: var(--primary-color, #1a237e);
-    color: white;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    backface-visibility: hidden;
-}
-
-.card.back {
+.container {
+    max-width: 800px;
+    margin: 0 auto;
     background-color: white;
-    transform: rotateY(180deg);
-    backface-visibility: hidden;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
 }
 
-.card-container.flipped .card.front {
-    transform: rotateY(180deg);
+header {
+    background: linear-gradient(135deg, #6e8efb, #a777e3);
+    color: white;
+    padding: 30px 20px;
+    text-align: center;
 }
 
-.card-container.flipped .card.back {
-    transform: rotateY(0deg);
-}
-
-.logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+header h1 {
     margin-bottom: 10px;
 }
 
-.logo-symbol {
-    width: 40px;
-    height: 40px;
+main {
+    padding: 20px;
+}
+
+.card {
     background-color: white;
-    color: var(--primary-color, #1a237e);
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-weight: bold;
-    font-size: 24px;
-    font-family: 'Playfair Display', serif;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
-.logo-text {
-    font-size: 24px;
-    font-weight: 700;
-    letter-spacing: 2px;
-}
-
-.tagline {
-    font-size: 14px;
-    font-weight: 300;
-    letter-spacing: 1px;
-    margin-top: -5px;
-}
-
-.pattern {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 150px;
-    height: 80px;
-    background: linear-gradient(135deg, transparent 25%, rgba(255, 255, 255, 0.1) 25%, 
-                                rgba(255, 255, 255, 0.1) 50%, transparent 50%, 
-                                transparent 75%, rgba(255, 255, 255, 0.1) 75%);
-    background-size: 20px 20px;
-    border-radius: 0 0 10px 0;
-}
-
-.info {
-    padding: 10px 0;
-}
-
-.name {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--primary-color, #1a237e);
-    letter-spacing: 1px;
-}
-
-.title {
-    font-size: 14px;
-    color: #666;
+.card h2 {
     margin-bottom: 15px;
+    color: #6e8efb;
 }
 
-.divider {
-    width: 40px;
-    height: 3px;
-    background-color: var(--primary-color, #1a237e);
-    margin-bottom: 15px;
-}
-
-.contact {
-    font-size: 12px;
-    line-height: 1.6;
-}
-
-.contact p {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.contact i {
-    color: var(--primary-color, #1a237e);
-    width: 15px;
-}
-
-.social-icons {
-    display: flex;
-    gap: 15px;
-    margin-top: 10px;
-    justify-content: flex-end;
-    padding: 0 10px 10px 0;
-}
-
-.social-icons i {
-    color: var(--primary-color, #1a237e);
-    font-size: 16px;
-    cursor: pointer;
-    transition: transform 0.3s;
-}
-
-.social-icons i:hover {
-    transform: translateY(-3px);
-}
-
-.controls {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-}
-
-#flip-btn {
-    background-color: var(--primary-color, #1a237e);
+button {
+    background-color: #6e8efb;
     color: white;
     border: none;
-    padding: 10px 20px;
-    border-radius: 5px;
+    padding: 8px 16px;
+    border-radius: 4px;
     cursor: pointer;
-    font-family: 'Montserrat', sans-serif;
-    font-weight: 500;
+    font-size: 16px;
     transition: background-color 0.3s;
 }
 
-#flip-btn:hover {
-    background-color: #0d1642;
+button:hover {
+    background-color: #5d7ce0;
 }
 
-.color-options {
+.color-box {
+    height: 100px;
+    background-color: #f0f0f0;
+    margin-top: 15px;
+    border-radius: 4px;
+    transition: background-color 0.5s;
+}
+
+.counter-container {
     display: flex;
-    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    margin-top: 15px;
 }
 
-.color-option {
-    width: 25px;
-    height: 25px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: transform 0.3s;
-    border: 2px solid white;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+#counterValue {
+    font-size: 24px;
+    margin: 0 20px;
+    min-width: 40px;
+    text-align: center;
 }
 
-.color-option:hover {
-    transform: scale(1.1);
+/* Todo List Styles */
+.todo-container {
+    margin-top: 15px;
 }
 
-@media (max-width: 400px) {
-    .card-container {
-        width: 300px;
-        height: 180px;
+.todo-input-container {
+    display: flex;
+    margin-bottom: 15px;
+}
+
+#todoInput {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px 0 0 4px;
+    font-size: 16px;
+}
+
+#addTodoBtn {
+    border-radius: 0 4px 4px 0;
+}
+
+.todo-list {
+    list-style-type: none;
+    padding: 0;
+}
+
+.todo-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    animation: fadeIn 0.3s ease-in;
+}
+
+.todo-item:last-child {
+    border-bottom: none;
+}
+
+.todo-text {
+    flex: 1;
+    margin-left: 10px;
+}
+
+.todo-item.completed .todo-text {
+    text-decoration: line-through;
+    color: #888;
+}
+
+.delete-btn {
+    background-color: #ff6b6b;
+    margin-left: 10px;
+    padding: 4px 8px;
+    font-size: 14px;
+}
+
+.delete-btn:hover {
+    background-color: #ff5252;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+footer {
+    text-align: center;
+    padding: 20px;
+    background-color: #f9f9f9;
+    color: #777;
+    font-size: 14px;
+}
+
+@media (max-width: 600px) {
+    .container {
+        border-radius: 0;
     }
     
-    .logo-symbol {
-        width: 35px;
-        height: 35px;
-        font-size: 20px;
+    header {
+        padding: 20px 15px;
     }
     
-    .logo-text {
-        font-size: 20px;
+    .card {
+        padding: 15px;
     }
 }

@@ -84,6 +84,31 @@ async def restore_running_agent_runs():
             "completed_at": datetime.now(timezone.utc).isoformat()
         }).eq("id", run['id']).execute()
 
+async def check_for_active_project_agent_run(client, project_id: str):
+    """
+    Check if there is an active agent run for any thread in the given project.
+    
+    Args:
+        client: The Supabase client
+        project_id: The project ID to check
+        
+    Raises:
+        HTTPException: If an agent run is already active for the project
+    """
+    # Get all threads from this project
+    project_threads = await client.table('threads').select('thread_id').eq('project_id', project_id).execute()
+    project_thread_ids = [t['thread_id'] for t in project_threads.data]
+    
+    # Check if there are any active agent runs for any thread in this project
+    if project_thread_ids:
+        active_runs = await client.table('agent_runs').select('id').in_('thread_id', project_thread_ids).eq('status', 'running').execute()
+        
+        if active_runs.data and len(active_runs.data) > 0:
+            raise HTTPException(
+                status_code=409, 
+                detail="Another agent is already running for this project. Please wait for it to complete or stop it before starting a new one."
+            )
+
 @router.post("/thread/{thread_id}/agent/start")
 async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id)):
     """Start an agent for a specific thread in the background."""
@@ -93,6 +118,16 @@ async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id
     
     # Verify user has access to this thread
     await verify_thread_access(client, thread_id, user_id)
+    
+    # Get the project_id for this thread
+    thread_result = await client.table('threads').select('project_id').eq('thread_id', thread_id).execute()
+    if not thread_result.data:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    
+    project_id = thread_result.data[0]['project_id']
+    
+    # Check if there is already an active agent run for this project
+    await check_for_active_project_agent_run(client, project_id)
     
     # Create a new agent run
     agent_run = await client.table('agent_runs').insert({
