@@ -58,7 +58,7 @@ function useSidebar() {
 }
 
 function SidebarProvider({
-  defaultOpen = true,
+  defaultOpen = false,
   open: openProp,
   onOpenChange: setOpenProp,
   className,
@@ -311,14 +311,22 @@ function Sidebar({
         )}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => {
-          setIsHovering(false);
-          // Auto-collapse when mouse leaves, but only if not manually opened (pinned)
-          if (!wasManuallyOpened && open) {
-            // Add a small delay to prevent flickering
-            hoverTimerRef.current = setTimeout(() => {
-              setOpen(false);
-            }, 300);
-          }
+          // Start a timer to check if the hover is really over
+          // This helps with dropdowns that are temporarily outside the sidebar
+          hoverTimerRef.current = setTimeout(() => {
+            // Check if there are any active dropdowns or UI elements
+            const hasActiveDropdowns = document.querySelector('[data-radix-popper-content-wrapper]') !== null;
+            const hasOpenDialogs = document.querySelector('[role="dialog"][data-state="open"]') !== null;
+            const isInteractingWithUI = hasActiveDropdowns || hasOpenDialogs;
+            
+            // If not interacting with UI and not manually pinned, collapse
+            if (!isInteractingWithUI) {
+              setIsHovering(false);
+              if (!wasManuallyOpened && open) {
+                setOpen(false);
+              }
+            }
+          }, 100);
         }}
         {...props}
       >
