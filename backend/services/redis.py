@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import asyncio
 import certifi
 import ssl
+from backend.utils.logger import logger
 
 # Redis client
 client = None
@@ -36,6 +37,7 @@ async def initialize_async(test_connection: bool = False):
     
     async with _init_lock:
         if not _initialized:
+            logger.info("Initializing Redis connection")
             # Initialize the client
             initialize()
             
@@ -43,12 +45,14 @@ async def initialize_async(test_connection: bool = False):
             if test_connection:
                 try:
                     await client.ping()
+                    logger.info("Successfully connected to Redis")
                 except Exception as e:
-                    print(f"Error connecting to Redis: {e}")
+                    logger.error(f"Error connecting to Redis: {e}")
                     client = None
                     raise e
             
             _initialized = True
+            logger.info("Redis connection initialized successfully")
     
     return client
 
@@ -56,13 +60,16 @@ async def close():
     """Close Redis connection."""
     global client, _initialized
     if client:
+        logger.info("Closing Redis connection")
         await client.aclose()
         client = None
         _initialized = False
+        logger.info("Redis connection closed")
 
 async def get_client():
     """Get the Redis client, initializing if necessary."""
     global client, _initialized
     if client is None or not _initialized:
+        logger.debug("Redis client not initialized, initializing now")
         await initialize_async()
     return client 

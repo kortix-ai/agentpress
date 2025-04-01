@@ -1,11 +1,9 @@
 import os
-import asyncio
 import json
 from agentpress.thread_manager import ThreadManager
 from agent.tools.files_tool import FilesTool
 from agent.tools.terminal_tool import TerminalTool
-from typing import AsyncGenerator, Optional, Dict, Any
-import sys
+from typing import AsyncGenerator, Optional
 from agent.prompt import INSTRUCTIONS
 
 async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None):

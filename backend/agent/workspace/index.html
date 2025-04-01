@@ -3,273 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RideShare - Your Ride Service</title>
+    <title>Modern Web Application</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar Navigation -->
-        <nav class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <img src="assets/profile.jpg" alt="Profile" class="profile-img" id="profileImg">
-                <div class="user-info">
-                    <h3>John Doe</h3>
-                    <p>View profile</p>
-                </div>
-                <button class="close-sidebar" id="closeSidebar">
-                    <i class="fas fa-times"></i>
-                </button>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <h1>WebApp</h1>
             </div>
-            <ul class="sidebar-menu">
-                <li><i class="fas fa-home"></i> Home</li>
-                <li id="tripHistoryBtn"><i class="fas fa-history"></i> Trip History</li>
-                <li><i class="fas fa-wallet"></i> Payment</li>
-                <li><i class="fas fa-gift"></i> Promotions</li>
-                <li><i class="fas fa-cog"></i> Settings</li>
-                <li><i class="fas fa-question-circle"></i> Help</li>
-            </ul>
-        </nav>
+            <nav>
+                <ul>
+                    <li><a href="#" class="active">Home</a></li>
+                    <li><a href="#">Features</a></li>
+                    <li><a href="#">Pricing</a></li>
+                    <li><a href="#">Contact</a></li>
+                </ul>
+            </nav>
+            <div class="theme-toggle">
+                <button id="themeToggle"><i class="fas fa-moon"></i></button>
+            </div>
+        </div>
+    </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Header -->
-            <header class="app-header">
-                <button class="menu-toggle" id="menuToggle">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <div class="header-tabs">
-                    <button class="tab-btn active">Ride</button>
-                    <button class="tab-btn">Reserve</button>
-                </div>
-            </header>
-
-            <!-- Map Container -->
-            <div id="map" class="map-container"></div>
-
-            <!-- Ride Panel -->
-            <div class="ride-panel">
-                <div class="location-inputs">
-                    <div class="input-group">
-                        <div class="input-icon pickup">
-                            <div class="dot"></div>
-                        </div>
-                        <input type="text" id="pickupLocation" placeholder="Enter pickup location">
-                    </div>
-                    <div class="input-group">
-                        <div class="input-icon destination">
-                            <div class="square"></div>
-                        </div>
-                        <input type="text" id="destinationLocation" placeholder="Enter destination">
-                        <div id="searchLocationResults" class="search-results hidden"></div>
-                    </div>
-                </div>
-
-                <div class="saved-places">
-                    <div class="saved-place">
-                        <i class="fas fa-briefcase"></i>
-                        <span>Work</span>
-                    </div>
-                    <div class="saved-place">
-                        <i class="fas fa-home"></i>
-                        <span>Home</span>
-                    </div>
-                </div>
-
-                <div class="ride-options hidden" id="rideOptions">
-                    <div class="ride-options-header">
-                        <h3>Choose a ride</h3>
-                        <button id="scheduleRideBtn" class="schedule-btn">
-                            <i class="far fa-clock"></i> Schedule
-                        </button>
-                    </div>
-                    
-                    <div class="ride-types">
-                        <div class="ride-type selected">
-                            <div class="ride-icon">
-                                <i class="fas fa-car"></i>
-                            </div>
-                            <div class="ride-details">
-                                <h4>UberX</h4>
-                                <p>5 min away · Affordable rides</p>
-                            </div>
-                            <div class="ride-price">$15.49</div>
-                        </div>
-                        <div class="ride-type">
-                            <div class="ride-icon">
-                                <i class="fas fa-car-side"></i>
-                            </div>
-                            <div class="ride-details">
-                                <h4>Comfort</h4>
-                                <p>7 min away · Extra legroom</p>
-                            </div>
-                            <div class="ride-price">$22.30</div>
-                        </div>
-                        <div class="ride-type">
-                            <div class="ride-icon">
-                                <i class="fas fa-car-alt"></i>
-                            </div>
-                            <div class="ride-details">
-                                <h4>Black</h4>
-                                <p>10 min away · Premium rides</p>
-                            </div>
-                            <div class="ride-price">$35.75</div>
-                        </div>
-                    </div>
-                    
-                    <div class="payment-promo-section">
-                        <div class="payment-method-selector">
-                            <div class="section-icon">
-                                <i class="fas fa-credit-card"></i>
-                            </div>
-                            <div class="section-content" id="paymentMethodBtn">
-                                <span id="selectedPaymentMethod">Personal Card •••• 4242</span>
-                                <i class="fas fa-chevron-right"></i>
-                            </div>
-                        </div>
-                        
-                        <div class="promo-code-section">
-                            <div class="section-icon">
-                                <i class="fas fa-tag"></i>
-                            </div>
-                            <div class="section-content">
-                                <input type="text" id="promoCodeInput" placeholder="Add promo code">
-                                <button id="applyPromoBtn">Apply</button>
-                            </div>
-                        </div>
-                        
-                        <div id="promoContainer" class="applied-promos">
-                            <!-- Applied promos will be added here -->
-                        </div>
-                    </div>
-                    
-                    <button class="request-ride-btn">Request UberX</button>
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h1>Welcome to Our Web Application</h1>
+                <p>A modern, responsive web application template to kickstart your projects.</p>
+                <div class="cta">
+                    <button class="btn primary">Get Started</button>
+                    <button class="btn secondary">Learn More</button>
                 </div>
             </div>
+        </section>
 
-            <!-- Driver Panel (Hidden initially) -->
-            <div class="driver-panel hidden" id="driverPanel">
-                <div class="driver-header">
-                    <div class="driver-eta">
-                        <h3>Your driver is arriving in 3 min</h3>
-                        <p>Meet at the pickup location</p>
+        <section class="features">
+            <div class="container">
+                <h2>Key Features</h2>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <i class="fas fa-mobile-alt"></i>
+                        <h3>Responsive Design</h3>
+                        <p>Looks great on all devices, from mobile to desktop.</p>
                     </div>
-                    <div class="trip-info">
-                        <div class="license-plate">ABC 123</div>
-                        <div class="car-model">Toyota Camry · Black</div>
+                    <div class="feature-card">
+                        <i class="fas fa-bolt"></i>
+                        <h3>Fast Performance</h3>
+                        <p>Optimized for speed and efficiency.</p>
                     </div>
-                </div>
-                <div class="driver-details">
-                    <img src="assets/driver.jpg" alt="Driver" class="driver-img">
-                    <div class="driver-info">
-                        <h4>Michael Johnson</h4>
-                        <div class="rating">
-                            <i class="fas fa-star"></i>
-                            <span>4.92</span>
-                        </div>
+                    <div class="feature-card">
+                        <i class="fas fa-palette"></i>
+                        <h3>Modern UI</h3>
+                        <p>Clean and intuitive user interface.</p>
                     </div>
-                    <div class="driver-actions">
-                        <button class="action-btn"><i class="fas fa-phone"></i></button>
-                        <button class="action-btn"><i class="fas fa-comment"></i></button>
+                    <div class="feature-card">
+                        <i class="fas fa-code"></i>
+                        <h3>Easy to Customize</h3>
+                        <p>Simple structure that's easy to modify and extend.</p>
                     </div>
-                </div>
-                <div class="trip-actions">
-                    <button class="cancel-trip-btn">Cancel Trip</button>
                 </div>
             </div>
-            
-            <!-- Trip History Panel (Hidden initially) -->
-            <div class="trip-history-panel hidden" id="tripHistoryPanel">
-                <div class="panel-header">
-                    <h2>Your Trips</h2>
-                    <button id="backToRide" class="back-btn"><i class="fas fa-arrow-left"></i></button>
-                </div>
-                <div class="trip-history-list" id="tripHistoryList">
-                    <!-- Trip history items will be added here -->
-                </div>
-            </div>
-            
-            <!-- Rating Panel (Hidden initially) -->
-            <div class="rating-panel hidden" id="ratingPanel">
-                <div class="rating-header">
-                    <h2>How was your trip?</h2>
-                </div>
-                <div class="rating-driver">
-                    <img src="assets/driver.jpg" alt="Driver" class="driver-img">
-                    <h3 id="ratingDriverName">Michael Johnson</h3>
-                </div>
-                <div class="rating-stars">
-                    <div class="rating-star"><i class="fas fa-star"></i></div>
-                    <div class="rating-star"><i class="fas fa-star"></i></div>
-                    <div class="rating-star"><i class="fas fa-star"></i></div>
-                    <div class="rating-star"><i class="fas fa-star"></i></div>
-                    <div class="rating-star"><i class="fas fa-star"></i></div>
-                </div>
-                <div class="rating-feedback">
-                    <textarea placeholder="Add comments (optional)"></textarea>
-                </div>
-                <button id="submitRating" class="submit-rating-btn">Submit</button>
-            </div>
-            
-            <!-- Schedule Ride Panel (Hidden initially) -->
-            <div class="schedule-panel hidden" id="schedulePanel">
-                <div class="panel-header">
-                    <h2>Schedule a Ride</h2>
-                    <button id="backToRide" class="back-btn"><i class="fas fa-arrow-left"></i></button>
-                </div>
-                <div class="schedule-form">
-                    <div class="form-group">
-                        <label for="scheduleDate">Date</label>
-                        <input type="date" id="scheduleDate">
-                    </div>
-                    <div class="form-group">
-                        <label for="scheduleTime">Time</label>
-                        <input type="time" id="scheduleTime">
-                    </div>
-                    <div class="form-group">
-                        <label>Pickup Location</label>
-                        <div class="location-display">
-                            <i class="fas fa-map-marker-alt"></i>
-                            <span id="schedulePickup">Current Location</span>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Destination</label>
-                        <div class="location-display">
-                            <i class="fas fa-map-marker-alt"></i>
-                            <span id="scheduleDestination">Enter destination</span>
-                        </div>
-                    </div>
-                </div>
-                <button id="confirmSchedule" class="confirm-schedule-btn">Confirm Scheduled Ride</button>
-            </div>
-            
-            <!-- Payment Methods Panel (Hidden initially) -->
-            <div class="payment-methods-panel hidden" id="paymentMethodsPanel">
-                <div class="panel-header">
-                    <h2>Payment Methods</h2>
-                    <button id="closePaymentPanel" class="close-btn"><i class="fas fa-times"></i></button>
-                </div>
-                <div class="payment-methods-list" id="paymentMethods">
-                    <!-- Payment methods will be added here -->
-                </div>
-                <button id="addPaymentMethod" class="add-payment-btn">
-                    <i class="fas fa-plus"></i> Add Payment Method
-                </button>
-            </div>
-        </main>
-    </div>
+        </section>
 
-    <script src="assets/toast.js"></script>
-    <script src="assets/mapbox-directions.js"></script>
-    <script src="assets/confetti.js"></script>
-    <script src="assets/weather.js"></script>
-    <script src="assets/live-tracking.js"></script>
-    <script src="assets/custom-ui.js"></script>
-    <script src="assets/theme-switcher.js"></script>
-    <script src="app.js"></script>
+        <section class="demo">
+            <div class="container">
+                <h2>Interactive Demo</h2>
+                <div class="demo-container">
+                    <div class="controls">
+                        <input type="text" id="demoInput" placeholder="Enter some text...">
+                        <button id="demoButton" class="btn primary">Submit</button>
+                    </div>
+                    <div id="message" class="message">
+                        Your message will appear here.
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2023 WebApp. All rights reserved.</p>
+            <div class="social-links">
+                <a href="#"><i class="fab fa-twitter"></i></a>
+                <a href="#"><i class="fab fa-facebook"></i></a>
+                <a href="#"><i class="fab fa-instagram"></i></a>
+                <a href="#"><i class="fab fa-github"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
 </body>
 </html>

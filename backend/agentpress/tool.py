@@ -13,6 +13,7 @@ from abc import ABC
 import json
 import inspect
 from enum import Enum
+from backend.utils.logger import logger
 
 class SchemaType(Enum):
     """Enumeration of supported schema types for tool definitions."""
@@ -62,6 +63,7 @@ class XMLTagSchema:
             node_type=node_type, 
             path=path
         ))
+        logger.debug(f"Added XML mapping for parameter '{param_name}' with type '{node_type}' at path '{path}'")
 
 @dataclass
 class ToolSchema:
@@ -105,6 +107,7 @@ class Tool(ABC):
     def __init__(self):
         """Initialize tool with empty schema registry."""
         self._schemas: Dict[str, List[ToolSchema]] = {}
+        logger.debug(f"Initializing tool class: {self.__class__.__name__}")
         self._register_schemas()
 
     def _register_schemas(self):
@@ -112,6 +115,7 @@ class Tool(ABC):
         for name, method in inspect.getmembers(self, predicate=inspect.ismethod):
             if hasattr(method, 'tool_schemas'):
                 self._schemas[name] = method.tool_schemas
+                logger.debug(f"Registered schemas for method '{name}' in {self.__class__.__name__}")
 
     def get_schemas(self) -> Dict[str, List[ToolSchema]]:
         """Get all registered tool schemas.
@@ -134,6 +138,7 @@ class Tool(ABC):
             text = data
         else:
             text = json.dumps(data, indent=2)
+        logger.debug(f"Created success response for {self.__class__.__name__}")
         return ToolResult(success=True, output=text)
 
     def fail_response(self, msg: str) -> ToolResult:
@@ -145,6 +150,7 @@ class Tool(ABC):
         Returns:
             ToolResult with success=False and error message
         """
+        logger.error(f"Tool {self.__class__.__name__} failed: {msg}")
         return ToolResult(success=False, output=msg)
 
 def _add_schema(func, schema: ToolSchema):
@@ -152,11 +158,13 @@ def _add_schema(func, schema: ToolSchema):
     if not hasattr(func, 'tool_schemas'):
         func.tool_schemas = []
     func.tool_schemas.append(schema)
+    logger.debug(f"Added {schema.schema_type.value} schema to function {func.__name__}")
     return func
 
 def openapi_schema(schema: Dict[str, Any]):
     """Decorator for OpenAPI schema tools."""
     def decorator(func):
+        logger.debug(f"Applying OpenAPI schema to function {func.__name__}")
         return _add_schema(func, ToolSchema(
             schema_type=SchemaType.OPENAPI,
             schema=schema
@@ -166,7 +174,7 @@ def openapi_schema(schema: Dict[str, Any]):
 def xml_schema(
     tag_name: str,
     mappings: List[Dict[str, str]] = None,
-    example: str = None  # Changed from description to example
+    example: str = None
 ):
     """
     Decorator for XML schema tools with improved node mapping.
@@ -196,6 +204,7 @@ def xml_schema(
         )
     """
     def decorator(func):
+        logger.debug(f"Applying XML schema with tag '{tag_name}' to function {func.__name__}")
         xml_schema = XMLTagSchema(tag_name=tag_name, example=example)
         
         # Add mappings
@@ -217,6 +226,7 @@ def xml_schema(
 def custom_schema(schema: Dict[str, Any]):
     """Decorator for custom schema tools."""
     def decorator(func):
+        logger.debug(f"Applying custom schema to function {func.__name__}")
         return _add_schema(func, ToolSchema(
             schema_type=SchemaType.CUSTOM,
             schema=schema
