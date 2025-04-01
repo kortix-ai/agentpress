@@ -61,6 +61,9 @@ export function SiteHeader() {
       
       if (!projectId) return
       
+      // Skip API call if we already have the project name for this project ID
+      if (projectId && projectName) return
+      
       try {
         const projectData = await getProject(projectId)
         setProjectName(projectData.name)
@@ -83,7 +86,7 @@ export function SiteHeader() {
       setProjectName(null)
       setThreadId(null)
     }
-  }, [pathname, params])
+  }, [pathname, params, projectName])
   
   // Determine what breadcrumbs to show based on current route
   const renderBreadcrumbs = () => {

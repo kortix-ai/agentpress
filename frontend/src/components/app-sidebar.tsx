@@ -6,7 +6,7 @@ import {
   IconChevronRight,
   IconChevronDown,
 } from "@tabler/icons-react"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
 import { useParams, usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
@@ -54,39 +54,35 @@ function useProjectsAndThreads(user: User | null) {
   const [threads, setThreads] = useState<Record<string, ApiThread[]>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [hasLoaded, setHasLoaded] = useState(false)
+  const projectsLoadedRef = useRef(false) // Track if projects were loaded
+  const loadingThreadsPerProjectRef = useRef<Record<string, boolean>>({}) // Track loading state per project
 
   const loadData = useCallback(async () => {
-    if (!user || hasLoaded) return
+    if (!user) return
+    
+    // Skip if we already loaded the data to avoid redundant API calls
+    if (projectsLoadedRef.current && hasLoaded) return
     
     try {
       setIsLoading(true)
-      const fetchedProjects = await getProjects() as unknown as ApiProject[]
       
-      // Map the API response to our Project type format
-      const mappedProjects = fetchedProjects.map(project => ({
-        id: project.project_id,
-        name: project.name,
-        description: project.description || '',
-        user_id: project.user_id,
-        created_at: project.created_at
-      }))
+      // Only fetch projects if not already loaded
+      if (!projectsLoadedRef.current) {
+        const fetchedProjects = await getProjects() as unknown as ApiProject[]
+        
+        // Map the API response to our Project type format
+        const mappedProjects = fetchedProjects.map(project => ({
+          id: project.project_id,
+          name: project.name,
+          description: project.description || '',
+          user_id: project.user_id,
+          created_at: project.created_at
+        }))
+        
+        setProjects(mappedProjects)
+        projectsLoadedRef.current = true // Mark projects as loaded
+      }
       
-      setProjects(mappedProjects)
-      
-      // Load threads for each project
-      const threadsMap: Record<string, ApiThread[]> = {}
-      await Promise.all(
-        mappedProjects.map(async (project) => {
-          try {
-            const projectThreads = await getThreads(project.id) as unknown as ApiThread[]
-            threadsMap[project.id] = projectThreads
-          } catch (error) {
-            console.error(`Failed to load threads for project ${project.id}:`, error)
-          }
-        })
-      )
-      
-      setThreads(threadsMap)
       setHasLoaded(true)
     } catch (error) {
       console.error('Failed to load projects:', error)
@@ -95,6 +91,29 @@ function useProjectsAndThreads(user: User | null) {
       setIsLoading(false)
     }
   }, [user, hasLoaded])
+
+  // Separate function to load threads for a specific project
+  const loadThreadsForProject = useCallback(async (projectId: string) => {
+    // Skip if already loading or loaded
+    if (loadingThreadsPerProjectRef.current[projectId]) return
+    
+    // Skip if threads are already loaded for this project
+    if (threads[projectId] && threads[projectId].length > 0) return
+    
+    try {
+      loadingThreadsPerProjectRef.current[projectId] = true
+      const projectThreads = await getThreads(projectId) as unknown as ApiThread[]
+      
+      setThreads(prev => ({
+        ...prev,
+        [projectId]: projectThreads
+      }))
+    } catch (error) {
+      console.error(`Failed to load threads for project ${projectId}:`, error)
+    } finally {
+      loadingThreadsPerProjectRef.current[projectId] = false
+    }
+  }, [threads])
 
   const addProject = useCallback((newProject: Project) => {
     setProjects((prevProjects: Project[]) => [...prevProjects, newProject])
@@ -111,8 +130,241 @@ function useProjectsAndThreads(user: User | null) {
     loadData()
   }, [loadData])
 
-  return { projects, threads, isLoading, addProject, addThread }
+  return { projects, threads, isLoading, addProject, addThread, loadThreadsForProject }
 }
+
+const ProjectItem = React.memo(({ 
+  project, 
+  isExpanded, 
+  onToggle, 
+  threads,
+  isCreatingThread,
+  onCreateThread,
+  currentProjectId
+}: { 
+  project: Project, 
+  isExpanded: boolean, 
+  onToggle: () => void, 
+  threads: ApiThread[] | undefined,
+  isCreatingThread: boolean,
+  onCreateThread: () => void,
+  currentProjectId: string | null
+}) => {
+  const pathname = usePathname();
+  const router = useRouter();
+  const isActive = currentProjectId === project.id;
+  
+  // Use path matching to determine if project is active
+  const projectItemVariants = {
+    initial: { opacity: 0, y: -5 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -5 },
+    transition: { duration: 0.2 }
+  };
+
+  // Thread list animation variants
+  const threadListVariants = {
+    hidden: { opacity: 0, height: 0 },
+    visible: { 
+      opacity: 1, 
+      height: "auto",
+      transition: { 
+        height: {
+          type: "spring",
+          stiffness: 500,
+          damping: 30
+        },
+        opacity: { duration: 0.2, delay: 0.05 }
+      }
+    },
+    exit: { 
+      opacity: 0, 
+      height: 0,
+      transition: {
+        height: { duration: 0.2 },
+        opacity: { duration: 0.1 }
+      }
+    }
+  };
+
+  return (
+    <motion.div
+      key={project.id}
+      variants={projectItemVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <li className="relative">
+        <motion.div 
+          className={`flex items-center justify-between px-2 py-1.5 text-sm rounded-md transition-all duration-200 cursor-pointer ${
+            isExpanded ? 'text-zinc-900 font-medium bg-zinc-50 hover:bg-zinc-100' 
+                      : 'text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
+          }`}
+          whileHover={{ 
+            scale: 1.01,
+            x: 1
+          }}
+          transition={{ duration: 0.15 }}
+          style={{
+            backgroundColor: isExpanded ? 'rgb(249 250 251)' : 'transparent'
+          }}
+          initial={false}
+          animate={{
+            backgroundColor: isExpanded 
+              ? 'rgb(249 250 251)' 
+              : 'transparent'
+          }}
+          whileTap={{ scale: 0.99 }}
+          onClick={(e) => {
+            // Either toggle expansion or navigate to project
+            if (isExpanded) {
+              router.push(`/projects/${project.id}`)
+            } else {
+              onToggle()
+            }
+          }}
+          role="button"
+          aria-expanded={isExpanded}
+        >
+          <div className="flex-1 truncate transition-colors duration-200">
+            {project.name}
+          </div>
+          <motion.div
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            className="cursor-pointer"
+          >
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className={`h-5 w-5 p-0 ml-1 rounded-full transition-all duration-200 cursor-pointer ${
+                isExpanded
+                  ? 'text-zinc-900 hover:bg-zinc-200 hover:text-zinc-950'
+                  : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200'
+              }`}
+              onClick={(e) => {
+                e.stopPropagation() // Prevent parent's onClick from firing
+                onToggle()
+              }}
+              aria-label={isExpanded ? "Collapse project" : "Expand project"}
+            >
+              {isExpanded ? (
+                <IconChevronDown className="size-3.5" />
+              ) : (
+                <IconChevronRight className="size-3.5" />
+              )}
+            </Button>
+          </motion.div>
+        </motion.div>
+      </li>
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.li
+            variants={threadListVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="overflow-hidden"
+          >
+            <ul className="pl-4 space-y-0.5 mt-0.5">
+              {!threads || threads.length === 0 ? (
+                <li className="px-2 py-1.5 text-xs text-zinc-500">
+                  No threads yet
+                </li>
+              ) : (
+                threads.map((thread) => (
+                  <ThreadItem 
+                    key={thread.thread_id} 
+                    thread={thread} 
+                    projectId={project.id} 
+                    pathname={pathname}
+                  />
+                ))
+              )}
+              <motion.li
+                whileHover={{ x: 2 }}
+                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                className="rounded-md hover:bg-zinc-50/70"
+              >
+                <motion.div
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full cursor-pointer"
+                >
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start px-2 py-1.5 text-sm text-zinc-700 hover:text-zinc-900 transition-all duration-200 cursor-pointer rounded-md"
+                    onClick={() => onCreateThread()}
+                    disabled={isCreatingThread}
+                  >
+                    {isCreatingThread ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-3 w-3 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
+                        <span>Creating...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <IconPlus className="size-3.5" />
+                        <span>New Conversation</span>
+                      </div>
+                    )}
+                  </Button>
+                </motion.div>
+              </motion.li>
+            </ul>
+          </motion.li>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+});
+
+const ThreadItem = React.memo(({ 
+  thread, 
+  projectId, 
+  pathname 
+}: { 
+  thread: ApiThread; 
+  projectId: string; 
+  pathname: string;
+}) => {
+  const threadPath = `/projects/${projectId}/threads/${thread.thread_id}`;
+  const isActive = pathname === threadPath;
+  
+  // Get first message content for thread title or use placeholder
+  const threadTitle = thread.messages && thread.messages.length > 0 
+    ? thread.messages[0].content 
+    : 'New Conversation';
+
+  return (
+    <motion.li 
+      key={thread.thread_id}
+      whileHover={{ 
+        x: 2,
+      }}
+      className={`rounded-md ${
+        isActive
+          ? 'bg-zinc-50 text-zinc-900 font-medium' 
+          : 'text-zinc-700 hover:bg-zinc-50/70 hover:text-zinc-900'
+      }`}
+      transition={{ 
+        type: "spring", 
+        stiffness: 400, 
+        damping: 25 
+      }}
+    >
+      <Link
+        href={threadPath}
+        className="block px-2 py-1.5 text-sm rounded-md transition-all duration-200 cursor-pointer w-full"
+      >
+        <span className="block truncate">
+          {threadTitle}
+        </span>
+      </Link>
+    </motion.li>
+  );
+});
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
@@ -124,17 +376,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const params = useParams()
   const currentProjectId = params?.id as string
   
-  const { projects, threads, isLoading, addProject, addThread } = useProjectsAndThreads(user)
+  const { projects, threads, isLoading, addProject, addThread, loadThreadsForProject } = useProjectsAndThreads(user)
 
   useEffect(() => {
     if (currentProjectId) {
       setExpandedProjectId(currentProjectId)
+      // Load threads for this project when expanded
+      loadThreadsForProject(currentProjectId)
     }
-  }, [currentProjectId])
+  }, [currentProjectId, loadThreadsForProject])
 
   const toggleProjectExpanded = useCallback((projectId: string) => {
-    setExpandedProjectId(prev => prev === projectId ? null : projectId)
-  }, [])
+    const newExpandedState = expandedProjectId === projectId ? null : projectId
+    setExpandedProjectId(newExpandedState)
+    
+    // Load threads when a project is expanded
+    if (newExpandedState) {
+      loadThreadsForProject(projectId)
+    }
+  }, [expandedProjectId, loadThreadsForProject])
 
   const handleProjectCreated = useCallback((newProject: Project) => {
     addProject(newProject)
@@ -172,36 +432,81 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }
 
-  const projectItemVariants = {
-    initial: { opacity: 0, y: -5 },
-    animate: { opacity: 1, y: 0 },
-    exit: { opacity: 0, y: -5 },
-    transition: { duration: 0.2 }
-  }
-
-  const threadListVariants = {
-    hidden: { opacity: 0, height: 0 },
-    visible: { 
-      opacity: 1, 
-      height: "auto",
-      transition: { 
-        height: {
-          type: "spring",
-          stiffness: 500,
-          damping: 30
-        },
-        opacity: { duration: 0.2, delay: 0.05 }
-      }
-    },
-    exit: { 
-      opacity: 0, 
-      height: 0,
-      transition: {
-        height: { duration: 0.2 },
-        opacity: { duration: 0.1 }
-      }
+  // Memoize the sidebar projects list to avoid unnecessary re-renders
+  const projectsList = React.useMemo(() => {
+    if (isLoading) {
+      return (
+        <div className="mb-4 space-y-2 px-4">
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-5 w-1/2" />
+          <Skeleton className="h-5 w-5/6" />
+        </div>
+      );
     }
-  }
+
+    if (projects.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+          <p className="mb-4 text-sm text-muted-foreground">No projects yet</p>
+          <Button
+            variant="outline"
+            onClick={() => setIsDialogOpen(true)}
+            className="mb-2"
+          >
+            Create Project
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="py-1 mt-2">
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <h3 className="text-xs uppercase tracking-wider text-zinc-500 font-medium">Projects</h3>
+          <TooltipProvider>
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="cursor-pointer"
+                >
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-md cursor-pointer transition-all duration-150"
+                    onClick={() => setIsDialogOpen(true)}
+                  >
+                    <IconPlus className="size-3.5" />
+                  </Button>
+                </motion.div>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                <p>New Project</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        
+        <ul className="space-y-0.5 mt-1">
+          <AnimatePresence initial={false}>
+            {projects.map((project) => (
+              <ProjectItem 
+                key={project.id}
+                project={project}
+                isExpanded={expandedProjectId === project.id}
+                onToggle={() => toggleProjectExpanded(project.id)}
+                threads={threads[project.id]}
+                isCreatingThread={!!isCreatingThread[project.id]}
+                onCreateThread={() => handleCreateThread(project.id)}
+                currentProjectId={currentProjectId}
+              />
+            ))}
+          </AnimatePresence>
+        </ul>
+      </div>
+    );
+  }, [projects, isLoading, expandedProjectId, threads, isCreatingThread, currentProjectId, toggleProjectExpanded, handleCreateThread, setIsDialogOpen]);
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -230,196 +535,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </Link>
       </SidebarHeader>
       <SidebarContent className="py-0 px-2">
-        {/* Projects List */}
-        <div className="py-1 mt-2">
-          <div className="flex items-center justify-between px-2 py-1.5">
-            <h3 className="text-xs uppercase tracking-wider text-zinc-500 font-medium">Projects</h3>
-            <TooltipProvider>
-              <Tooltip delayDuration={200}>
-                <TooltipTrigger asChild>
-                    <motion.div
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="cursor-pointer"
-                    >
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-6 w-6 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-md cursor-pointer transition-all duration-150"
-                        onClick={() => setIsDialogOpen(true)}
-                      >
-                        <IconPlus className="size-3.5" />
-                      </Button>
-                    </motion.div>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="text-xs">
-                  <p>New Project</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          
-          <ul className="space-y-0.5 mt-1">
-            {isLoading ? (
-              // Loading skeletons
-              Array(3).fill(0).map((_, i) => (
-                <li key={`skeleton-${i}`} className="px-2 py-1">
-                  <Skeleton className="h-4 w-full" />
-                </li>
-              ))
-            ) : projects.length === 0 ? (
-              <li className="px-2 py-1.5 text-xs text-zinc-500">
-                No projects yet
-              </li>
-            ) : (
-              projects.map((project) => (
-                <motion.div
-                  key={project.id}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  variants={projectItemVariants}
-                >
-                  <li className="relative">
-                    <motion.div 
-                      className={`flex items-center justify-between px-2 py-1.5 text-sm rounded-md transition-all duration-200 cursor-pointer ${
-                        expandedProjectId === project.id 
-                          ? 'text-zinc-900 font-medium bg-zinc-50 hover:bg-zinc-100' 
-                          : 'text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
-                      }`}
-                      whileHover={{ 
-                        scale: 1.01,
-                        x: 1
-                      }}
-                      transition={{ duration: 0.15 }}
-                      style={{
-                        backgroundColor: expandedProjectId === project.id ? 'rgb(249 250 251)' : 'transparent'
-                      }}
-                      initial={false}
-                      animate={{
-                        backgroundColor: expandedProjectId === project.id 
-                          ? 'rgb(249 250 251)' 
-                          : 'transparent'
-                      }}
-                      whileTap={{ scale: 0.99 }}
-                      onClick={(e) => {
-                        // Either toggle expansion or navigate to project
-                        if (expandedProjectId === project.id) {
-                          router.push(`/projects/${project.id}`)
-                        } else {
-                          toggleProjectExpanded(project.id)
-                        }
-                      }}
-                      role="button"
-                      aria-expanded={expandedProjectId === project.id}
-                    >
-                      <div className="flex-1 truncate transition-colors duration-200">
-                        {project.name}
-                      </div>
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        className="cursor-pointer"
-                      >
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className={`h-5 w-5 p-0 ml-1 rounded-full transition-all duration-200 cursor-pointer ${
-                            expandedProjectId === project.id
-                              ? 'text-zinc-900 hover:bg-zinc-200 hover:text-zinc-950'
-                              : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200'
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation() // Prevent parent's onClick from firing
-                            toggleProjectExpanded(project.id)
-                          }}
-                          aria-label={expandedProjectId === project.id ? "Collapse project" : "Expand project"}
-                        >
-                          {expandedProjectId === project.id ? (
-                            <IconChevronDown className="size-3.5" />
-                          ) : (
-                            <IconChevronRight className="size-3.5" />
-                          )}
-                        </Button>
-                      </motion.div>
-                    </motion.div>
-                  </li>
-                  <AnimatePresence>
-                    {expandedProjectId === project.id && (
-                      <motion.li
-                        variants={threadListVariants}
-                        initial="hidden"
-                        animate="visible"
-                        exit="exit"
-                        className="overflow-hidden"
-                      >
-                        <ul className="pl-4 space-y-0.5 mt-0.5">
-                          {threads[project.id]?.map((thread) => (
-                            <motion.li 
-                              key={thread.thread_id}
-                              whileHover={{ 
-                                x: 2,
-                              }}
-                              className={`rounded-md ${
-                                pathname?.includes(`/threads/${thread.thread_id}`)
-                                  ? 'bg-zinc-50 text-zinc-900 font-medium' 
-                                  : 'text-zinc-700 hover:bg-zinc-50/70 hover:text-zinc-900'
-                              }`}
-                              transition={{ 
-                                type: "spring", 
-                                stiffness: 400, 
-                                damping: 25 
-                              }}
-                            >
-                              <Link
-                                href={`/projects/${project.id}/threads/${thread.thread_id}`}
-                                className="block px-2 py-1.5 text-sm rounded-md transition-all duration-200 cursor-pointer w-full"
-                              >
-                                <span className="block truncate">
-                                  {thread.messages[0]?.content || 'New Conversation'}
-                                </span>
-                              </Link>
-                            </motion.li>
-                          ))}
-                          <motion.li
-                            whileHover={{ x: 2 }}
-                            transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                            className="rounded-md hover:bg-zinc-50/70"
-                          >
-                            <motion.div
-                              whileTap={{ scale: 0.98 }}
-                              className="w-full cursor-pointer"
-                            >
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="w-full justify-start px-2 py-1.5 text-sm text-zinc-700 hover:text-zinc-900 transition-all duration-200 cursor-pointer rounded-md"
-                                onClick={() => handleCreateThread(project.id)}
-                                disabled={isCreatingThread[project.id]}
-                              >
-                                {isCreatingThread[project.id] ? (
-                                  <div className="flex items-center gap-2">
-                                    <div className="h-3 w-3 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
-                                    <span>Creating...</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    <IconPlus className="size-3.5" />
-                                    <span>New Conversation</span>
-                                  </div>
-                                )}
-                              </Button>
-                            </motion.div>
-                          </motion.li>
-                        </ul>
-                      </motion.li>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              ))
-            )}
-          </ul>
-        </div>
+        {projectsList}
       </SidebarContent>
       <SidebarFooter className="border-t border-border/40">
         {user && (

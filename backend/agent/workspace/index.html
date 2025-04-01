@@ -3,52 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Development Demo</title>
+    <title>Hello World</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Welcome to My Web App</h1>
-            <p>This is a simple demonstration of web development capabilities.</p>
-        </header>
+        <h1>Hello World</h1>
+        <p class="subtitle">Welcome to my simple webpage</p>
         
-        <main>
-            <section class="card">
-                <h2>Interactive Demo</h2>
-                <p>Click the button below to see some magic happen!</p>
-                <button id="changeColorBtn">Change Colors</button>
-                <div id="colorDisplay" class="color-box"></div>
-            </section>
+        <div class="content">
+            <p>This is a demonstration of a styled HTML page with some interactive elements.</p>
+            <p>Click the button below to see something happen!</p>
             
-            <section class="card">
-                <h2>Counter Demo</h2>
-                <p>A simple counter implementation:</p>
-                <div class="counter-container">
-                    <button id="decrementBtn">-</button>
-                    <span id="counterValue">0</span>
-                    <button id="incrementBtn">+</button>
-                </div>
-            </section>
-
-            <section class="card">
-                <h2>To-Do List</h2>
-                <p>Add and manage your tasks:</p>
-                <div class="todo-container">
-                    <div class="todo-input-container">
-                        <input type="text" id="todoInput" placeholder="Enter a new task...">
-                        <button id="addTodoBtn">Add</button>
-                    </div>
-                    <ul id="todoList" class="todo-list"></ul>
-                </div>
-            </section>
-        </main>
+            <button id="colorButton">Change Colors</button>
+            
+            <div class="info-box">
+                <h3>About This Page</h3>
+                <p>This page was created as a simple demonstration of HTML, CSS, and JavaScript working together.</p>
+            </div>
+        </div>
         
         <footer>
-            <p>Created as a demonstration of web development capabilities</p>
+            <p>&copy; 2023 Simple Demo Page</p>
         </footer>
     </div>
-    
+
     <script src="script.js"></script>
 </body>
 </html>

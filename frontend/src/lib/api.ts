@@ -2,6 +2,78 @@ import { createClient } from '@/utils/supabase/client';
 
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 
+// Simple cache implementation
+const apiCache = {
+  projects: new Map(),
+  threads: new Map(),
+  threadMessages: new Map(),
+  agentRuns: new Map(),
+  
+  getProject: (projectId: string) => apiCache.projects.get(projectId),
+  setProject: (projectId: string, data: any) => apiCache.projects.set(projectId, data),
+  
+  getProjects: () => apiCache.projects.get('all'),
+  setProjects: (data: any) => apiCache.projects.set('all', data),
+  
+  getThreads: (projectId: string) => apiCache.threads.get(projectId || 'all'),
+  setThreads: (projectId: string, data: any) => apiCache.threads.set(projectId || 'all', data),
+  
+  getThreadMessages: (threadId: string) => apiCache.threadMessages.get(threadId),
+  setThreadMessages: (threadId: string, data: any) => apiCache.threadMessages.set(threadId, data),
+  
+  getAgentRuns: (threadId: string) => apiCache.agentRuns.get(threadId),
+  setAgentRuns: (threadId: string, data: any) => apiCache.agentRuns.set(threadId, data),
+  
+  // Helper to clear parts of the cache when data changes
+  invalidateThreadMessages: (threadId: string) => apiCache.threadMessages.delete(threadId),
+  invalidateAgentRuns: (threadId: string) => apiCache.agentRuns.delete(threadId),
+};
+
+// Add a fetch queue system to prevent multiple simultaneous requests
+const fetchQueue = {
+  agentRuns: new Map<string, Promise<any>>(),
+  threads: new Map<string, Promise<any>>(),
+  messages: new Map<string, Promise<any>>(),
+  projects: new Map<string, Promise<any>>(),
+  
+  getQueuedAgentRuns: (threadId: string) => fetchQueue.agentRuns.get(threadId),
+  setQueuedAgentRuns: (threadId: string, promise: Promise<any>) => {
+    fetchQueue.agentRuns.set(threadId, promise);
+    // Auto-clean the queue after the promise resolves
+    promise.finally(() => {
+      fetchQueue.agentRuns.delete(threadId);
+    });
+    return promise;
+  },
+  
+  getQueuedThreads: (projectId: string) => fetchQueue.threads.get(projectId || 'all'),
+  setQueuedThreads: (projectId: string, promise: Promise<any>) => {
+    fetchQueue.threads.set(projectId || 'all', promise);
+    promise.finally(() => {
+      fetchQueue.threads.delete(projectId || 'all');
+    });
+    return promise;
+  },
+  
+  getQueuedMessages: (threadId: string) => fetchQueue.messages.get(threadId),
+  setQueuedMessages: (threadId: string, promise: Promise<any>) => {
+    fetchQueue.messages.set(threadId, promise);
+    promise.finally(() => {
+      fetchQueue.messages.delete(threadId);
+    });
+    return promise;
+  },
+  
+  getQueuedProjects: () => fetchQueue.projects.get('all'),
+  setQueuedProjects: (promise: Promise<any>) => {
+    fetchQueue.projects.set('all', promise);
+    promise.finally(() => {
+      fetchQueue.projects.delete('all');
+    });
+    return promise;
+  }
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -40,16 +112,43 @@ export type ToolCall = {
 
 // Project APIs
 export const getProjects = async (): Promise<Project[]> => {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from('projects')
-    .select('*');
+  // Check if we already have a pending request
+  const pendingRequest = fetchQueue.getQueuedProjects();
+  if (pendingRequest) {
+    return pendingRequest;
+  }
   
-  if (error) throw error;
-  return data || [];
+  // Check cache first
+  const cached = apiCache.getProjects();
+  if (cached) {
+    return cached;
+  }
+  
+  // Create and queue the promise
+  const fetchPromise = (async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*');
+    
+    if (error) throw error;
+    
+    // Cache the result
+    apiCache.setProjects(data || []);
+    return data || [];
+  })();
+  
+  // Add to queue and return
+  return fetchQueue.setQueuedProjects(fetchPromise);
 };
 
 export const getProject = async (projectId: string): Promise<Project> => {
+  // Check cache first
+  const cached = apiCache.getProject(projectId);
+  if (cached) {
+    return cached;
+  }
+  
   const supabase = createClient();
   const { data, error } = await supabase
     .from('projects')
@@ -58,6 +157,9 @@ export const getProject = async (projectId: string): Promise<Project> => {
     .single();
   
   if (error) throw error;
+  
+  // Cache the result
+  apiCache.setProject(projectId, data);
   return data;
 };
 
@@ -115,22 +217,44 @@ export const deleteProject = async (projectId: string): Promise<void> => {
 
 // Thread APIs
 export const getThreads = async (projectId?: string): Promise<Thread[]> => {
-  const supabase = createClient();
-  let query = supabase.from('threads').select('*');
-  
-  if (projectId) {
-    query = query.eq('project_id', projectId);
+  // Check if we already have a pending request
+  const pendingRequest = fetchQueue.getQueuedThreads(projectId || 'all');
+  if (pendingRequest) {
+    return pendingRequest;
   }
   
-  const { data, error } = await query;
+  // Check cache first
+  const cached = apiCache.getThreads(projectId || 'all');
+  if (cached) {
+    return cached;
+  }
   
-  if (error) throw error;
+  // Create and queue the promise
+  const fetchPromise = (async () => {
+    const supabase = createClient();
+    let query = supabase.from('threads').select('*');
+    
+    if (projectId) {
+      query = query.eq('project_id', projectId);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    
+    // Parse messages from JSON string
+    const threads = (data || []).map(thread => ({
+      ...thread,
+      messages: thread.messages ? JSON.parse(thread.messages) : []
+    }));
+    
+    // Cache the result
+    apiCache.setThreads(projectId || 'all', threads);
+    return threads;
+  })();
   
-  // Parse messages from JSON string
-  return (data || []).map(thread => ({
-    ...thread,
-    messages: thread.messages ? JSON.parse(thread.messages) : []
-  }));
+  // Add to queue and return
+  return fetchQueue.setQueuedThreads(projectId || 'all', fetchPromise);
 };
 
 export const getThread = async (threadId: string): Promise<Thread> => {
@@ -212,30 +336,65 @@ export const addMessage = async (threadId: string, message: { role: string, cont
     console.error('Error updating thread messages:', updateError);
     throw new Error(`Error adding message: ${updateError.message}`);
   }
+  
+  // Invalidate the cache for this thread's messages
+  apiCache.invalidateThreadMessages(threadId);
 };
 
 export const getMessages = async (threadId: string, hideToolMsgs: boolean = false): Promise<Message[]> => {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from('threads')
-    .select('messages')
-    .eq('thread_id', threadId)
-    .single();
-  
-  if (error) {
-    console.error('Error fetching messages:', error);
-    throw new Error(`Error getting messages: ${error.message}`);
+  // Check if we already have a pending request
+  const pendingRequest = fetchQueue.getQueuedMessages(threadId);
+  if (pendingRequest) {
+    // Apply filter if needed when promise resolves
+    if (hideToolMsgs) {
+      return pendingRequest.then(messages => 
+        messages.filter((msg: Message) => msg.role !== 'tool')
+      );
+    }
+    return pendingRequest;
   }
   
-  // Parse messages from JSON string
-  const messages = data.messages ? JSON.parse(data.messages) : [];
+  // Check cache first
+  const cached = apiCache.getThreadMessages(threadId);
+  if (cached) {
+    // Apply filter if needed
+    return hideToolMsgs ? cached.filter((msg: Message) => msg.role !== 'tool') : cached;
+  }
   
-  // Filter out tool messages if requested
+  // Create and queue the promise
+  const fetchPromise = (async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('threads')
+      .select('messages')
+      .eq('thread_id', threadId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching messages:', error);
+      throw new Error(`Error getting messages: ${error.message}`);
+    }
+    
+    // Parse messages from JSON string
+    const messages = data.messages ? JSON.parse(data.messages) : [];
+    
+    // Cache the result
+    apiCache.setThreadMessages(threadId, messages);
+    
+    return messages;
+  })();
+  
+  // Add to queue
+  const queuedPromise = fetchQueue.setQueuedMessages(threadId, fetchPromise);
+  
+  // Apply filter if needed when promise resolves
   if (hideToolMsgs) {
-    return messages.filter((msg: Message) => msg.role !== 'tool');
+    return queuedPromise.then(messages => 
+      messages.filter((msg: Message) => msg.role !== 'tool')
+    );
   }
   
-  return messages;
+  return queuedPromise;
 };
 
 // Agent APIs
@@ -258,6 +417,10 @@ export const startAgent = async (threadId: string): Promise<{ agent_run_id: stri
   if (!response.ok) {
     throw new Error(`Error starting agent: ${response.statusText}`);
   }
+  
+  // Invalidate relevant caches
+  apiCache.invalidateAgentRuns(threadId);
+  apiCache.invalidateThreadMessages(threadId);
   
   return response.json();
 };
@@ -305,25 +468,47 @@ export const getAgentStatus = async (agentRunId: string): Promise<AgentRun> => {
 };
 
 export const getAgentRuns = async (threadId: string): Promise<AgentRun[]> => {
-  const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session?.access_token) {
-    throw new Error('No access token available');
+  // Check if we already have a pending request for this thread ID
+  const pendingRequest = fetchQueue.getQueuedAgentRuns(threadId);
+  if (pendingRequest) {
+    return pendingRequest;
   }
+  
+  // Check cache first
+  const cached = apiCache.getAgentRuns(threadId);
+  if (cached) {
+    return cached;
+  }
+  
+  // Create and queue the promise to prevent duplicate requests
+  const fetchPromise = (async () => {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
 
-  const response = await fetch(`${API_URL}/thread/${threadId}/agent-runs`, {
-    headers: {
-      'Authorization': `Bearer ${session.access_token}`,
-    },
-  });
+    const response = await fetch(`${API_URL}/thread/${threadId}/agent-runs`, {
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Error getting agent runs: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    const agentRuns = data.agent_runs || [];
+    
+    // Cache the result
+    apiCache.setAgentRuns(threadId, agentRuns);
+    return agentRuns;
+  })();
   
-  if (!response.ok) {
-    throw new Error(`Error getting agent runs: ${response.statusText}`);
-  }
-  
-  const data = await response.json();
-  return data.agent_runs || [];
+  // Add to queue and return
+  return fetchQueue.setQueuedAgentRuns(threadId, fetchPromise);
 };
 
 export const streamAgent = (agentRunId: string, callbacks: {

@@ -133,11 +133,20 @@ class LLMResponseProcessor:
                 if self.tool_calls_accumulated:
                     message["tool_calls"] = self.tool_calls_accumulated
 
-                await self.results_adder.update_response(
-                    self.thread_id,
-                    self.content_buffer,
-                    self.tool_calls_accumulated
-                )
+                if not hasattr(self, '_message_added'):
+                    await self.results_adder.add_initial_response(
+                        self.thread_id,
+                        self.content_buffer,
+                        self.tool_calls_accumulated
+                    )
+                    self._message_added = True
+                else:
+                    await self.results_adder.update_response(
+                        self.thread_id,
+                        self.content_buffer,
+                        self.tool_calls_accumulated
+                    )
+
 
                 # Handle stream completion
                 if chunk.choices[0].finish_reason:

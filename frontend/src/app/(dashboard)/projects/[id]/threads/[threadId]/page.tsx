@@ -54,6 +54,8 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
+  const messagesLoadedRef = useRef(false);
+  const agentRunsCheckedRef = useRef(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [buttonOpacity, setButtonOpacity] = useState(0);
   const [userHasScrolled, setUserHasScrolled] = useState(false);
@@ -206,23 +208,27 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
           throw new Error('Invalid project or thread ID');
         }
         
-        // Load messages
-        const messagesData = await getMessages(threadId) as unknown as ApiMessage[];
-        if (isMounted) {
-          setMessages(messagesData);
-          
-          // Only scroll to bottom on initial page load
-          if (!hasInitiallyScrolled.current) {
-            scrollToBottom('auto');
-            hasInitiallyScrolled.current = true;
+        // Load messages only if not already loaded
+        if (!messagesLoadedRef.current) {
+          const messagesData = await getMessages(threadId) as unknown as ApiMessage[];
+          if (isMounted) {
+            setMessages(messagesData);
+            messagesLoadedRef.current = true;
+            
+            // Only scroll to bottom on initial page load
+            if (!hasInitiallyScrolled.current) {
+              scrollToBottom('auto');
+              hasInitiallyScrolled.current = true;
+            }
           }
         }
 
-        // Check for active agent runs
-        const checkForActiveAgentRuns = async () => {
+        // Check for active agent runs only once per thread
+        if (!agentRunsCheckedRef.current) {
           try {
             // Get agent runs for this thread using the proper API function
             const agentRuns = await getAgentRuns(threadId) as unknown as ApiAgentRun[];
+            agentRunsCheckedRef.current = true;
             
             // Look for running agent runs
             const activeRuns = agentRuns.filter(run => run.status === 'running');
@@ -246,9 +252,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
           } catch (err) {
             console.error('Error checking for active runs:', err);
           }
-        };
-
-        await checkForActiveAgentRuns();
+        }
         
         // Mark that we've completed the initial load
         initialLoadCompleted.current = true;

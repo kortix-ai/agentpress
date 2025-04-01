@@ -71,6 +71,7 @@ class ThreadManager:
         
         try:
             # Handle cleanup of incomplete tool calls
+            '''
             if message_data['role'] == 'user':
                 logger.debug("Checking for incomplete tool calls")
                 messages = await self.get_messages(thread_id)
@@ -85,6 +86,7 @@ class ThreadManager:
                     if tool_call_count != tool_response_count:
                         logger.info(f"Found incomplete tool calls in thread {thread_id}. Cleaning up...")
                         await self.cleanup_incomplete_tool_calls(thread_id)
+            '''
 
             # Convert ToolResult instances to strings
             for key, value in message_data.items():
@@ -203,49 +205,49 @@ class ThreadManager:
             'messages': json.dumps(messages)
         }).eq('thread_id', thread_id).execute()
 
-    async def cleanup_incomplete_tool_calls(self, thread_id: str):
-        """Clean up incomplete tool calls in a thread."""
-        logger.info(f"Cleaning up incomplete tool calls in thread {thread_id}")
-        try:
-            messages = await self.get_messages(thread_id)
-            last_assistant_message = next((m for m in reversed(messages) 
-                if m['role'] == 'assistant' and 'tool_calls' in m), None)
+    # async def cleanup_incomplete_tool_calls(self, thread_id: str):
+    #     """Clean up incomplete tool calls in a thread."""
+    #     logger.info(f"Cleaning up incomplete tool calls in thread {thread_id}")
+    #     try:
+    #         messages = await self.get_messages(thread_id)
+    #         last_assistant_message = next((m for m in reversed(messages) 
+    #             if m['role'] == 'assistant' and 'tool_calls' in m), None)
 
-            if last_assistant_message:
-                tool_calls = last_assistant_message.get('tool_calls', [])
-                tool_responses = [m for m in messages[messages.index(last_assistant_message)+1:] 
-                                if m['role'] == 'tool']
+    #         if last_assistant_message:
+    #             tool_calls = last_assistant_message.get('tool_calls', [])
+    #             tool_responses = [m for m in messages[messages.index(last_assistant_message)+1:] 
+    #                             if m['role'] == 'tool']
 
-                logger.debug(f"Found {len(tool_calls)} tool calls and {len(tool_responses)} responses")
+    #             logger.debug(f"Found {len(tool_calls)} tool calls and {len(tool_responses)} responses")
 
-                if len(tool_calls) != len(tool_responses):
-                    failed_tool_results = []
-                    for tool_call in tool_calls[len(tool_responses):]:
-                        failed_tool_result = {
-                            "role": "tool",
-                            "tool_call_id": tool_call['id'],
-                            "name": tool_call['function']['name'],
-                            "content": "ToolResult(success=False, output='Execution interrupted. Session was stopped.')"
-                        }
-                        failed_tool_results.append(failed_tool_result)
+    #             if len(tool_calls) != len(tool_responses):
+    #                 failed_tool_results = []
+    #                 for tool_call in tool_calls[len(tool_responses):]:
+    #                     failed_tool_result = {
+    #                         "role": "tool",
+    #                         "tool_call_id": tool_call['id'],
+    #                         "name": tool_call['function']['name'],
+    #                         "content": "ToolResult(success=False, output='Execution interrupted. Session was stopped.')"
+    #                     }
+    #                     failed_tool_results.append(failed_tool_result)
 
-                    assistant_index = messages.index(last_assistant_message)
-                    messages[assistant_index+1:assistant_index+1] = failed_tool_results
+    #                 assistant_index = messages.index(last_assistant_message)
+    #                 messages[assistant_index+1:assistant_index+1] = failed_tool_results
 
-                    client = await self.db.client
-                    await client.table('threads').update({
-                        'messages': json.dumps(messages)
-                    }).eq('thread_id', thread_id).execute()
+    #                 client = await self.db.client
+    #                 await client.table('threads').update({
+    #                     'messages': json.dumps(messages)
+    #                 }).eq('thread_id', thread_id).execute()
                     
-                    logger.info(f"Successfully cleaned up {len(failed_tool_results)} incomplete tool calls")
-                    return True
-            else:
-                logger.debug("No assistant message with tool calls found")
-            return False
+    #                 logger.info(f"Successfully cleaned up {len(failed_tool_results)} incomplete tool calls")
+    #                 return True
+    #         else:
+    #             logger.debug("No assistant message with tool calls found")
+    #         return False
             
-        except Exception as e:
-            logger.error(f"Failed to cleanup incomplete tool calls: {str(e)}", exc_info=True)
-            raise
+    #     except Exception as e:
+    #         logger.error(f"Failed to cleanup incomplete tool calls: {str(e)}", exc_info=True)
+    #         raise
 
     async def run_thread(
         self,
