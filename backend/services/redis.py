@@ -2,6 +2,8 @@ import redis.asyncio as redis
 import os
 from dotenv import load_dotenv
 import asyncio
+import certifi
+import ssl
 
 # Redis client
 client = None
@@ -22,6 +24,7 @@ def initialize():
         port=int(os.getenv('REDIS_PORT', '6379')),
         password=os.getenv('REDIS_PASSWORD'),
         ssl=os.getenv('REDIS_SSL', 'True').lower() == 'true',
+        ssl_ca_certs=certifi.where(),
         decode_responses=True
     )
     

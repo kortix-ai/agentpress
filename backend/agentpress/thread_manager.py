@@ -20,6 +20,7 @@ from agentpress.tool_registry import ToolRegistry
 from agentpress.processor.llm_response_processor import LLMResponseProcessor
 from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
 from services.supabase import DBConnection
+from agentpress.logger import logger
 
 from agentpress.processor.xml.xml_tool_parser import XMLToolParser
 from agentpress.processor.xml.xml_tool_executor import XMLToolExecutor
@@ -46,27 +47,32 @@ class ThreadManager:
         self.tool_registry.register_tool(tool_class, function_names, **kwargs)
 
     async def create_thread(self) -> str:
-        """Create a new conversation thread.
-        
-        Returns:
-            str: The ID of the newly created thread
-        """
+        """Create a new conversation thread."""
+        logger.info("Creating new conversation thread")
         thread_id = str(uuid.uuid4())
-        client = await self.db.client
-        thread_data = {
-            'thread_id': thread_id,
-            'messages': json.dumps([])
-        }
-        await client.table('threads').insert(thread_data).execute()
-        return thread_id
+        try:
+            client = await self.db.client
+            thread_data = {
+                'thread_id': thread_id,
+                'messages': json.dumps([])
+            }
+            await client.table('threads').insert(thread_data).execute()
+            logger.info(f"Successfully created thread with ID: {thread_id}")
+            return thread_id
+        except Exception as e:
+            logger.error(f"Failed to create thread: {str(e)}", exc_info=True)
+            raise
 
     async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
         """Add a message to an existing thread."""
-        logging.info(f"Adding message to thread {thread_id} with images: {images}")
+        logger.info(f"Adding message to thread {thread_id}")
+        logger.debug(f"Message data: {message_data}")
+        logger.debug(f"Images: {images}")
         
         try:
             # Handle cleanup of incomplete tool calls
             if message_data['role'] == 'user':
+                logger.debug("Checking for incomplete tool calls")
                 messages = await self.get_messages(thread_id)
                 last_assistant_index = next((i for i in reversed(range(len(messages))) 
                     if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
@@ -77,6 +83,7 @@ class ThreadManager:
                                            if msg['role'] == 'tool')
                     
                     if tool_call_count != tool_response_count:
+                        logger.info(f"Found incomplete tool calls in thread {thread_id}. Cleaning up...")
                         await self.cleanup_incomplete_tool_calls(thread_id)
 
             # Convert ToolResult instances to strings
@@ -86,6 +93,7 @@ class ThreadManager:
 
             # Handle image attachments
             if images:
+                logger.debug(f"Processing {len(images)} image attachments")
                 if isinstance(message_data['content'], str):
                     message_data['content'] = [{"type": "text", "text": message_data['content']}]
                 elif not isinstance(message_data['content'], list):
@@ -106,6 +114,7 @@ class ThreadManager:
             thread = await client.table('threads').select('*').eq('thread_id', thread_id).single().execute()
             
             if not thread.data:
+                logger.error(f"Thread {thread_id} not found")
                 raise ValueError(f"Thread {thread_id} not found")
             
             messages = json.loads(thread.data['messages'])
@@ -116,11 +125,12 @@ class ThreadManager:
                 'messages': json.dumps(messages)
             }).eq('thread_id', thread_id).execute()
 
-            logging.info(f"Message added to thread {thread_id}: {message_data}")
+            logger.info(f"Successfully added message to thread {thread_id}")
+            logger.debug(f"Updated message count: {len(messages)}")
             
         except Exception as e:
-            logging.error(f"Failed to add message to thread {thread_id}: {e}")
-            raise e
+            logger.error(f"Failed to add message to thread {thread_id}: {str(e)}", exc_info=True)
+            raise
 
     async def get_messages(
         self, 
@@ -130,34 +140,48 @@ class ThreadManager:
         regular_list: bool = True
     ) -> List[Dict[str, Any]]:
         """Retrieve messages from a thread with optional filtering."""
-        client = await self.db.client
-        thread = await client.table('threads').select('*').eq('thread_id', thread_id).single().execute()
+        logger.debug(f"Retrieving messages for thread {thread_id}")
+        logger.debug(f"Filters: hide_tool_msgs={hide_tool_msgs}, only_latest_assistant={only_latest_assistant}, regular_list={regular_list}")
         
-        if not thread.data:
-            return []
-        
-        messages = json.loads(thread.data['messages'])
-        
-        if only_latest_assistant:
-            for msg in reversed(messages):
-                if msg.get('role') == 'assistant':
-                    return [msg]
-            return []
-        
-        if hide_tool_msgs:
-            messages = [
-                {k: v for k, v in msg.items() if k != 'tool_calls'}
-                for msg in messages
-                if msg.get('role') != 'tool'
-            ]
-        
-        if regular_list:
-            messages = [
-                msg for msg in messages
-                if msg.get('role') in ['system', 'assistant', 'tool', 'user']
-            ]
-        
-        return messages
+        try:
+            client = await self.db.client
+            thread = await client.table('threads').select('*').eq('thread_id', thread_id).single().execute()
+            
+            if not thread.data:
+                logger.warning(f"Thread {thread_id} not found")
+                return []
+            
+            messages = json.loads(thread.data['messages'])
+            logger.debug(f"Retrieved {len(messages)} messages")
+            
+            if only_latest_assistant:
+                for msg in reversed(messages):
+                    if msg.get('role') == 'assistant':
+                        logger.debug("Returning only latest assistant message")
+                        return [msg]
+                logger.debug("No assistant messages found")
+                return []
+            
+            if hide_tool_msgs:
+                messages = [
+                    {k: v for k, v in msg.items() if k != 'tool_calls'}
+                    for msg in messages
+                    if msg.get('role') != 'tool'
+                ]
+                logger.debug(f"Filtered out tool messages. Remaining: {len(messages)}")
+            
+            if regular_list:
+                messages = [
+                    msg for msg in messages
+                    if msg.get('role') in ['system', 'assistant', 'tool', 'user']
+                ]
+                logger.debug(f"Filtered to regular messages. Count: {len(messages)}")
+            
+            return messages
+            
+        except Exception as e:
+            logger.error(f"Failed to get messages for thread {thread_id}: {str(e)}", exc_info=True)
+            raise
 
     async def _update_message(self, thread_id: str, message: Dict[str, Any]):
         """Update an existing message in the thread."""
@@ -181,35 +205,47 @@ class ThreadManager:
 
     async def cleanup_incomplete_tool_calls(self, thread_id: str):
         """Clean up incomplete tool calls in a thread."""
-        messages = await self.get_messages(thread_id)
-        last_assistant_message = next((m for m in reversed(messages) 
-            if m['role'] == 'assistant' and 'tool_calls' in m), None)
+        logger.info(f"Cleaning up incomplete tool calls in thread {thread_id}")
+        try:
+            messages = await self.get_messages(thread_id)
+            last_assistant_message = next((m for m in reversed(messages) 
+                if m['role'] == 'assistant' and 'tool_calls' in m), None)
 
-        if last_assistant_message:
-            tool_calls = last_assistant_message.get('tool_calls', [])
-            tool_responses = [m for m in messages[messages.index(last_assistant_message)+1:] 
-                            if m['role'] == 'tool']
+            if last_assistant_message:
+                tool_calls = last_assistant_message.get('tool_calls', [])
+                tool_responses = [m for m in messages[messages.index(last_assistant_message)+1:] 
+                                if m['role'] == 'tool']
 
-            if len(tool_calls) != len(tool_responses):
-                failed_tool_results = []
-                for tool_call in tool_calls[len(tool_responses):]:
-                    failed_tool_result = {
-                        "role": "tool",
-                        "tool_call_id": tool_call['id'],
-                        "name": tool_call['function']['name'],
-                        "content": "ToolResult(success=False, output='Execution interrupted. Session was stopped.')"
-                    }
-                    failed_tool_results.append(failed_tool_result)
+                logger.debug(f"Found {len(tool_calls)} tool calls and {len(tool_responses)} responses")
 
-                assistant_index = messages.index(last_assistant_message)
-                messages[assistant_index+1:assistant_index+1] = failed_tool_results
+                if len(tool_calls) != len(tool_responses):
+                    failed_tool_results = []
+                    for tool_call in tool_calls[len(tool_responses):]:
+                        failed_tool_result = {
+                            "role": "tool",
+                            "tool_call_id": tool_call['id'],
+                            "name": tool_call['function']['name'],
+                            "content": "ToolResult(success=False, output='Execution interrupted. Session was stopped.')"
+                        }
+                        failed_tool_results.append(failed_tool_result)
 
-                client = await self.db.client
-                await client.table('threads').update({
-                    'messages': json.dumps(messages)
-                }).eq('thread_id', thread_id).execute()
-                return True
-        return False
+                    assistant_index = messages.index(last_assistant_message)
+                    messages[assistant_index+1:assistant_index+1] = failed_tool_results
+
+                    client = await self.db.client
+                    await client.table('threads').update({
+                        'messages': json.dumps(messages)
+                    }).eq('thread_id', thread_id).execute()
+                    
+                    logger.info(f"Successfully cleaned up {len(failed_tool_results)} incomplete tool calls")
+                    return True
+            else:
+                logger.debug("No assistant message with tool calls found")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Failed to cleanup incomplete tool calls: {str(e)}", exc_info=True)
+            raise
 
     async def run_thread(
         self,
@@ -230,66 +266,48 @@ class ThreadManager:
         tool_executor: Optional[ToolExecutorBase] = None,
         results_adder: Optional[ResultsAdderBase] = None
     ) -> Union[Dict[str, Any], AsyncGenerator]:
-        """Run a conversation thread with specified parameters.
+        """Run a conversation thread with specified parameters."""
+        logger.info(f"Starting thread execution for thread {thread_id}")
+        logger.debug(f"Parameters: model={model_name}, temperature={temperature}, stream={stream}")
         
-        Args:
-            thread_id: ID of the thread to run
-            system_message: System message for the conversation
-            model_name: Name of the LLM model to use
-            temperature: Model temperature (0-1)
-            max_tokens: Maximum tokens in response
-            tool_choice: Tool selection strategy ("auto" or "none")
-            temporary_message: Optional message to include temporarily
-            native_tool_calling: Whether to use native LLM function calling
-            xml_tool_calling: Whether to use XML-based tool calling
-            execute_tools: Whether to execute tool calls
-            stream: Whether to stream the response
-            execute_tools_on_stream: Whether to execute tools during streaming
-            parallel_tool_execution: Whether to execute tools in parallel
-            tool_parser: Custom tool parser implementation
-            tool_executor: Custom tool executor implementation
-            results_adder: Custom results adder implementation
-            
-        Returns:
-            Union[Dict[str, Any], AsyncGenerator]: Response or stream
-            
-        Raises:
-            ValueError: If incompatible tool calling options are specified
-            Exception: For other execution failures
-            
-        Notes:
-            - Cannot use both native and XML tool calling simultaneously
-            - Streaming responses include both content and tool results
-        """
-        # Validate tool calling configuration
-        if native_tool_calling and xml_tool_calling:
-            raise ValueError("Cannot use both native LLM tool calling and XML tool calling simultaneously")
-
-        # Initialize tool components if any tool calling is enabled
-        if native_tool_calling or xml_tool_calling:
-            if tool_parser is None:
-                tool_parser = XMLToolParser(tool_registry=self.tool_registry) if xml_tool_calling else StandardToolParser()
-            
-            if tool_executor is None:
-                tool_executor = XMLToolExecutor(parallel=parallel_tool_execution, tool_registry=self.tool_registry) if xml_tool_calling else StandardToolExecutor(parallel=parallel_tool_execution)
-            
-            if results_adder is None:
-                results_adder = XMLResultsAdder(self) if xml_tool_calling else StandardResultsAdder(self)
-
         try:
+            # Validate tool calling configuration
+            if native_tool_calling and xml_tool_calling:
+                logger.error("Invalid configuration: Cannot use both native and XML tool calling")
+                raise ValueError("Cannot use both native LLM tool calling and XML tool calling simultaneously")
+
+            # Initialize tool components if any tool calling is enabled
+            if native_tool_calling or xml_tool_calling:
+                logger.debug("Initializing tool components")
+                if tool_parser is None:
+                    tool_parser = XMLToolParser(tool_registry=self.tool_registry) if xml_tool_calling else StandardToolParser()
+                    logger.debug(f"Using {tool_parser.__class__.__name__} for tool parsing")
+                
+                if tool_executor is None:
+                    tool_executor = XMLToolExecutor(parallel=parallel_tool_execution, tool_registry=self.tool_registry) if xml_tool_calling else StandardToolExecutor(parallel=parallel_tool_execution)
+                    logger.debug(f"Using {tool_executor.__class__.__name__} for tool execution")
+                
+                if results_adder is None:
+                    results_adder = XMLResultsAdder(self) if xml_tool_calling else StandardResultsAdder(self)
+                    logger.debug(f"Using {results_adder.__class__.__name__} for results adding")
+
             messages = await self.get_messages(thread_id)
             prepared_messages = [system_message] + messages
             if temporary_message:
                 prepared_messages.append(temporary_message)
+                logger.debug("Added temporary message to prepared messages")
 
             openapi_tool_schemas = None
             if native_tool_calling:
                 openapi_tool_schemas = self.tool_registry.get_openapi_schemas()
                 available_functions = self.tool_registry.get_available_functions()
+                logger.debug(f"Retrieved {len(openapi_tool_schemas)} OpenAPI tool schemas")
             elif xml_tool_calling:
                 available_functions = self.tool_registry.get_available_functions()
+                logger.debug(f"Retrieved {len(available_functions)} available functions for XML tool calling")
             else:
                 available_functions = {}
+                logger.debug("No tool calling enabled")
 
             response_processor = LLMResponseProcessor(
                 thread_id=thread_id,
@@ -303,6 +321,7 @@ class ThreadManager:
                 results_adder=results_adder
             )
 
+            logger.info("Making LLM API call")
             llm_response = await self._run_thread_completion(
                 messages=prepared_messages,
                 model_name=model_name,
@@ -314,21 +333,24 @@ class ThreadManager:
             )
 
             if stream:
+                logger.info("Processing streaming response")
                 return response_processor.process_stream(
                     response_stream=llm_response,
                     execute_tools=execute_tools,
                     execute_tools_on_stream=execute_tools_on_stream
                 )
 
+            logger.info("Processing non-streaming response")
             await response_processor.process_response(
                 response=llm_response,
                 execute_tools=execute_tools
             )
 
+            logger.info("Thread execution completed successfully")
             return llm_response
 
         except Exception as e:
-            logging.error(f"Error in run_thread: {str(e)}")
+            logger.error(f"Error in run_thread: {str(e)}", exc_info=True)
             return {
                 "status": "error",
                 "message": str(e)
@@ -345,12 +367,19 @@ class ThreadManager:
         stream: bool
     ) -> Union[Any, AsyncGenerator]:
         """Get completion from LLM API."""
-        return await make_llm_api_call(
-            messages,
-            model_name,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            tools=tools,
-            tool_choice=tool_choice,
-            stream=stream
-        )
+        logger.debug(f"Making LLM API call with model {model_name}")
+        try:
+            response = await make_llm_api_call(
+                messages,
+                model_name,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                tools=tools,
+                tool_choice=tool_choice,
+                stream=stream
+            )
+            logger.debug("Successfully received LLM API response")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to make LLM API call: {str(e)}", exc_info=True)
+            raise
