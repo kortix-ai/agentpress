@@ -40,6 +40,10 @@ type SidebarContextProps = {
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
   toggleSidebar: () => void
+  isHovering: boolean
+  setIsHovering: (isHovering: boolean) => void
+  wasManuallyOpened: boolean
+  setWasManuallyOpened: (wasManuallyOpened: boolean) => void
 }
 
 const SidebarContext = React.createContext<SidebarContextProps | null>(null)
@@ -68,6 +72,9 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
+  const [isHovering, setIsHovering] = React.useState(false)
+  const [wasManuallyOpened, setWasManuallyOpened] = React.useState(defaultOpen)
+  const hoverTimerRef = React.useRef<NodeJS.Timeout | null>(null)
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -90,6 +97,8 @@ function SidebarProvider({
 
   // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {
+    // When toggling, set wasManuallyOpened to true
+    setWasManuallyOpened(true);
     return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open)
   }, [isMobile, setOpen, setOpenMobile])
 
@@ -109,6 +118,52 @@ function SidebarProvider({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [toggleSidebar])
 
+  // Handle mouse movement for auto-expansion/collapse
+  React.useEffect(() => {
+    if (isMobile) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      // If the sidebar is already open, respect manual vs. hover states
+      if (open) {
+        if (wasManuallyOpened) return; // If manually opened, don't auto-close
+        if (isHovering) return; // If hovering, stay open
+      }
+      
+      // Auto slide-out when mouse reaches left edge of screen
+      if (!open && event.clientX <= 5) {
+        setIsHovering(true);
+        setWasManuallyOpened(false); // Mark as opened by hover
+        setOpen(true);
+      }
+    };
+
+    const handleMouseLeave = () => {
+      // Clear any pending timer
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = null;
+      }
+
+      // Only auto-close if not manually opened
+      if (isHovering && !wasManuallyOpened) {
+        setIsHovering(false);
+        hoverTimerRef.current = setTimeout(() => {
+          setOpen(false);
+        }, 200); // Small delay to prevent flickering
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseleave", handleMouseLeave);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseleave", handleMouseLeave);
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current);
+      }
+    };
+  }, [isMobile, open, isHovering, wasManuallyOpened, setOpen]);
+
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed"
@@ -122,8 +177,12 @@ function SidebarProvider({
       openMobile,
       setOpenMobile,
       toggleSidebar,
+      isHovering,
+      setIsHovering,
+      wasManuallyOpened,
+      setWasManuallyOpened
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, isHovering, setIsHovering, wasManuallyOpened, setWasManuallyOpened]
   )
 
   return (
@@ -163,7 +222,18 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { isMobile, state, openMobile, setOpenMobile, setIsHovering, wasManuallyOpened, open, setOpen } = useSidebar()
+  const hoverTimerRef = React.useRef<NodeJS.Timeout | null>(null)
+  
+  React.useEffect(() => {
+    return () => {
+      // Clean up timer on unmount
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = null;
+      }
+    };
+  }, []);
 
   if (collapsible === "none") {
     return (
@@ -239,6 +309,17 @@ function Sidebar({
             : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
           className
         )}
+        onMouseEnter={() => setIsHovering(true)}
+        onMouseLeave={() => {
+          setIsHovering(false);
+          // Auto-collapse when mouse leaves, but only if not manually opened (pinned)
+          if (!wasManuallyOpened && open) {
+            // Add a small delay to prevent flickering
+            hoverTimerRef.current = setTimeout(() => {
+              setOpen(false);
+            }, 300);
+          }
+        }}
         {...props}
       >
         <div
@@ -258,40 +339,54 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, setWasManuallyOpened, open, wasManuallyOpened } = useSidebar()
 
   return (
     <Button
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
+      data-pinned={open && wasManuallyOpened ? "true" : "false"}
       variant="ghost"
       size="icon"
-      className={cn("size-7", className)}
+      className={cn(
+        "size-7", 
+        open && wasManuallyOpened ? "bg-sidebar-accent text-sidebar-accent-foreground" : "", 
+        className
+      )}
       onClick={(event) => {
         onClick?.(event)
+        // Ensure we mark this as a manual toggle (pinned or unpinned)
+        setWasManuallyOpened(true)
         toggleSidebar()
       }}
+      title={open && wasManuallyOpened ? "Unpin Sidebar" : "Pin Sidebar"}
       {...props}
     >
       <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">{open && wasManuallyOpened ? "Unpin" : "Pin"} Sidebar</span>
     </Button>
   )
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, setWasManuallyOpened, open } = useSidebar()
 
   return (
     <button
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
+      data-pinned={open ? "true" : "false"}
+      aria-label={open ? "Unpin Sidebar" : "Pin Sidebar"}
       tabIndex={-1}
-      onClick={toggleSidebar}
-      title="Toggle Sidebar"
+      onClick={() => {
+        // Mark this as a manual toggle (pinned or unpinned)
+        setWasManuallyOpened(true);
+        toggleSidebar();
+      }}
+      title={open ? "Unpin Sidebar" : "Pin Sidebar"}
       className={cn(
         "hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] sm:flex",
+        open && "after:bg-sidebar-accent after:opacity-70",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
         "hover:group-data-[collapsible=offcanvas]:bg-sidebar group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full",
