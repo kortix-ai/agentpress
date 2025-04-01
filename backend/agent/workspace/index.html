@@ -3,55 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brand Identity Business Card</title>
+    <title>Web Development Demo</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <div class="card-container">
-            <div class="card front">
-                <div class="logo">
-                    <div class="logo-symbol">A</div>
-                    <div class="logo-text">ACME</div>
-                </div>
-                <div class="tagline">Creative Solutions</div>
-                <div class="pattern"></div>
-            </div>
-            <div class="card back">
-                <div class="info">
-                    <h2 class="name">ALEX JOHNSON</h2>
-                    <p class="title">Creative Director</p>
-                    <div class="divider"></div>
-                    <div class="contact">
-                        <p><i class="fas fa-phone"></i> (555) 123-4567</p>
-                        <p><i class="fas fa-envelope"></i> alex@acmecreative.com</p>
-                        <p><i class="fas fa-map-marker-alt"></i> 123 Design Street, Creative City</p>
-                        <p><i class="fas fa-globe"></i> www.acmecreative.com</p>
-                    </div>
-                </div>
-                <div class="social-icons">
-                    <i class="fab fa-linkedin"></i>
-                    <i class="fab fa-twitter"></i>
-                    <i class="fab fa-instagram"></i>
-                    <i class="fab fa-behance"></i>
-                </div>
-            </div>
-        </div>
+        <header>
+            <h1>Welcome to My Web App</h1>
+            <p>This is a simple demonstration of web development capabilities.</p>
+        </header>
         
-        <div class="controls">
-            <button id="flip-btn">Flip Card</button>
-            <div class="color-options">
-                <div class="color-option" data-color="#1a237e" style="background-color: #1a237e;"></div>
-                <div class="color-option" data-color="#006064" style="background-color: #006064;"></div>
-                <div class="color-option" data-color="#4a148c" style="background-color: #4a148c;"></div>
-                <div class="color-option" data-color="#880e4f" style="background-color: #880e4f;"></div>
-                <div class="color-option" data-color="#bf360c" style="background-color: #bf360c;"></div>
-            </div>
-        </div>
-    </div>
+        <main>
+            <section class="card">
+                <h2>Interactive Demo</h2>
+                <p>Click the button below to see some magic happen!</p>
+                <button id="changeColorBtn">Change Colors</button>
+                <div id="colorDisplay" class="color-box"></div>
+            </section>
+            
+            <section class="card">
+                <h2>Counter Demo</h2>
+                <p>A simple counter implementation:</p>
+                <div class="counter-container">
+                    <button id="decrementBtn">-</button>
+                    <span id="counterValue">0</span>
+                    <button id="incrementBtn">+</button>
+                </div>
+            </section>
 
+            <section class="card">
+                <h2>To-Do List</h2>
+                <p>Add and manage your tasks:</p>
+                <div class="todo-container">
+                    <div class="todo-input-container">
+                        <input type="text" id="todoInput" placeholder="Enter a new task...">
+                        <button id="addTodoBtn">Add</button>
+                    </div>
+                    <ul id="todoList" class="todo-list"></ul>
+                </div>
+            </section>
+        </main>
+        
+        <footer>
+            <p>Created as a demonstration of web development capabilities</p>
+        </footer>
+    </div>
+    
     <script src="script.js"></script>
 </body>
 </html>

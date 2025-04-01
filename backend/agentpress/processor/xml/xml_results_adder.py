@@ -110,7 +110,7 @@ class XMLResultsAdder(ResultsAdderBase):
             # Fallback if we can't find the root tag
             result_message = {
                 "role": "user",
-                "content": f"<tool_result>>Result for {result['name']}:\n{result['content']}</<tool_result>>"
+                "content": f"<tool_result>Result for {result['name']}:\n{result['content']}</tool_result>"
             }
             await self.add_message(thread_id, result_message)
             

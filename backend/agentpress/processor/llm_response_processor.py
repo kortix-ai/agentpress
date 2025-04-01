@@ -180,7 +180,7 @@ class LLMResponseProcessor:
             if 'tool_calls' in response:
                 logger.debug(f"Found {len(response['tool_calls'])} tool calls in response")
                 if execute_tools:
-                    await self._execute_tool_calls(response)
+                    await self._process_tool_call(response)
                 else:
                     logger.info("Tool execution disabled, skipping tool calls")
             else:
@@ -190,7 +190,7 @@ class LLMResponseProcessor:
             logger.error(f"Error processing response: {str(e)}", exc_info=True)
             raise
 
-    async def _execute_tool_calls(self, response: Dict[str, Any]) -> None:
+    async def _process_tool_call(self, response: Dict[str, Any]) -> None:
         """Execute tool calls from the response."""
         logger.info(f"Executing tool calls for thread {self.thread_id}")
         try:
