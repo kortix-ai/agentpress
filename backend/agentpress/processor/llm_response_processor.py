@@ -15,7 +15,7 @@ from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBas
 from agentpress.processor.standard.standard_tool_parser import StandardToolParser
 from agentpress.processor.standard.standard_tool_executor import StandardToolExecutor
 from agentpress.processor.standard.standard_results_adder import StandardResultsAdder
-from backend.utils.logger import logger
+from utils.logger import logger
 
 class LLMResponseProcessor:
     """Handles LLM response processing and tool execution management.
