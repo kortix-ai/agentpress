@@ -292,6 +292,80 @@ function addTrafficToggle() {
   document.querySelector('.map-container').appendChild(trafficToggle);
 }
 
+// Add voice command functionality
+function addVoiceCommandButton() {
+  const voiceButton = document.createElement('div');
+  voiceButton.className = 'voice-command-button';
+  voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
+  voiceButton.style.position = 'absolute';
+  voiceButton.style.bottom = '170px';
+  voiceButton.style.right = '20px';
+  voiceButton.style.width = '48px';
+  voiceButton.style.height = '48px';
+  voiceButton.style.borderRadius = '50%';
+  voiceButton.style.backgroundColor = 'white';
+  voiceButton.style.color = '#276EF1';
+  voiceButton.style.display = 'flex';
+  voiceButton.style.alignItems = 'center';
+  voiceButton.style.justifyContent = 'center';
+  voiceButton.style.boxShadow = '0 2px 6px rgba(0,0,0,0.2)';
+  voiceButton.style.cursor = 'pointer';
+  voiceButton.style.zIndex = '100';
+  voiceButton.style.transition = 'transform 0.2s, background-color 0.2s';
+  
+  // Add hover effect
+  voiceButton.addEventListener('mouseenter', () => {
+    voiceButton.style.transform = 'scale(1.1)';
+  });
+  
+  voiceButton.addEventListener('mouseleave', () => {
+    voiceButton.style.transform = 'scale(1)';
+  });
+  
+  // Add click functionality
+  voiceButton.addEventListener('click', () => {
+    // Simulate voice recognition
+    voiceButton.style.backgroundColor = '#276EF1';
+    voiceButton.style.color = 'white';
+    voiceButton.innerHTML = '<i class="fas fa-microphone-alt"></i>';
+    
+    showToast('Listening for commands...');
+    
+    // Simulate processing
+    setTimeout(() => {
+      voiceButton.style.backgroundColor = 'white';
+      voiceButton.style.color = '#276EF1';
+      voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
+      
+      // Simulate a random command
+      const commands = [
+        'Take me home',
+        'Take me to work',
+        'Show my trip history',
+        'Schedule a ride'
+      ];
+      
+      const randomCommand = commands[Math.floor(Math.random() * commands.length)];
+      showToast(`Command recognized: "${randomCommand}"`);
+      
+      // Execute the simulated command
+      setTimeout(() => {
+        if (randomCommand === 'Take me home') {
+          selectSavedPlace('Home');
+        } else if (randomCommand === 'Take me to work') {
+          selectSavedPlace('Work');
+        } else if (randomCommand === 'Show my trip history') {
+          document.getElementById('tripHistoryBtn').click();
+        } else if (randomCommand === 'Schedule a ride') {
+          document.getElementById('scheduleRideBtn').click();
+        }
+      }, 500);
+    }, 2000);
+  });
+  
+  document.querySelector('.map-container').appendChild(voiceButton);
+}
+
 // Initialize enhanced UI
 function initEnhancedUI() {
   // Add with a slight delay to ensure the map is loaded
@@ -299,6 +373,7 @@ function initEnhancedUI() {
     addFloatingActionButton();
     addMapStyleSwitcher();
     addTrafficToggle();
+    addVoiceCommandButton();
   }, 1500);
 }
 
