@@ -539,17 +539,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       <SidebarFooter className="border-t border-border/40">
         {user && (
-          <motion.div
-            whileHover={{ y: -1 }}
-            transition={{ type: "spring", stiffness: 500 }}
-            className="cursor-pointer"
-          >
-            <NavUser user={{
-              name: user.email?.split('@')[0] || 'Guest',
-              email: user.email || '',
-              avatar: '/avatars/user.jpg',
-            }} />
-          </motion.div>
+          <NavUser user={{
+            name: user.email?.split('@')[0] || 'Guest',
+            email: user.email || '',
+            avatar: '/avatars/user.jpg',
+          }} />
         )}
       </SidebarFooter>
       <CreateProjectDialog
