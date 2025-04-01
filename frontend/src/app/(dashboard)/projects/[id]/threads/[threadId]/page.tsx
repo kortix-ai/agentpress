@@ -16,6 +16,9 @@ type ThreadParams = { id: string; threadId: string };
 interface ApiMessage {
   role: string;
   content: string;
+  type?: 'content' | 'tool_call';
+  name?: string;
+  arguments?: string;
 }
 
 interface ApiAgentRun {
@@ -71,14 +74,37 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     
     // Start streaming the agent's responses with improved implementation
     const cleanup = streamAgent(runId, {
-      onMessage: (content: string) => {
-        // Skip empty content chunks
-        if (!content.trim()) return;
-        
-        // Improved stream update with requestAnimationFrame for smoother UI updates
-        window.requestAnimationFrame(() => {
-          setStreamContent(prev => prev + content);
-        });
+      onMessage: (rawData: string) => {
+        try {
+          // Parse the outer data structure
+          const data = JSON.parse(rawData);
+          
+          // Handle the nested data structure
+          if (data.content?.startsWith('data: ')) {
+            try {
+              const innerJson = data.content.replace('data: ', '');
+              const innerData = JSON.parse(innerJson);
+              
+              // Skip empty messages
+              if (!innerData.content && !innerData.arguments) return;
+              
+              window.requestAnimationFrame(() => {
+                if (innerData.type === 'tool_call') {
+                  const toolContent = innerData.name 
+                    ? `Tool: ${innerData.name}\n${innerData.arguments || ''}`
+                    : innerData.arguments || '';
+                  setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
+                } else if (innerData.type === 'content' && innerData.content) {
+                  setStreamContent(prev => prev + innerData.content);
+                }
+              });
+            } catch (innerError) {
+              console.warn('[PAGE] Failed to parse inner data:', innerError);
+            }
+          }
+        } catch (error) {
+          console.warn('[PAGE] Failed to parse message:', error);
+        }
       },
       onToolCall: (name: string, args: Record<string, unknown>) => {
         console.log('[PAGE] Tool call received:', name, args);
@@ -564,7 +590,16 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                           : 'bg-muted'
                       }`}
                     >
-                      <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                      <div className="whitespace-pre-wrap break-words">
+                        {message.type === 'tool_call' ? (
+                          <div className="font-mono text-xs">
+                            <div className="text-muted-foreground">Tool: {message.name}</div>
+                            <div className="mt-1">{message.arguments}</div>
+                          </div>
+                        ) : (
+                          message.content
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

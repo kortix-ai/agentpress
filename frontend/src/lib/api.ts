@@ -372,51 +372,27 @@ export const streamAgent = (agentRunId: string, callbacks: {
           // Log raw data for debugging
           console.log(`[STREAM] Received data: ${rawData.substring(0, 100)}${rawData.length > 100 ? '...' : ''}`);
           
-          const data = JSON.parse(rawData);
+          // Pass the raw data directly to onMessage for handling in the component
+          callbacks.onMessage(rawData);
           
-          if (data.type === 'content' && data.content) {
-            if (data.content.startsWith('data: {')) {
-              try {
-                const innerData = JSON.parse(data.content.substring(6));
-                if (innerData.type === 'content' && innerData.content) {
-                  callbacks.onMessage(innerData.content);
-                } else if (innerData.type === 'tool_call') {
-                  callbacks.onToolCall(innerData.name, innerData.arguments);
-                }
-              } catch {
-                callbacks.onMessage(data.content);
-              }
-            } else {
-              callbacks.onMessage(data.content);
-            }
-          } else if (data.type === 'tool_call') {
-            callbacks.onToolCall(data.name, data.arguments);
-          } else if (data.type === 'error') {
-            console.error(`[STREAM] Error from server: ${data.message}`);
-            callbacks.onError(data.message instanceof Error ? data.message : new Error(data.message));
-          } else if (data.type === 'status') {
-            console.log(`[STREAM] Status update: ${data.status}`);
-            
-            if (data.status === 'completed') {
-              console.log(`[STREAM] Agent run completed - closing stream for ${agentRunId}`);
+          // Try to parse for tool calls
+          try {
+            const data = JSON.parse(rawData);
+            if (data.content?.startsWith('data: ')) {
+              const innerJson = data.content.replace('data: ', '');
+              const innerData = JSON.parse(innerJson);
               
-              // Close connection first before handling completion
-              if (eventSourceInstance) {
-                console.log(`[STREAM] Closing EventSource for ${agentRunId}`);
-                eventSourceInstance.close();
-                eventSourceInstance = null;
-              }
-              
-              // Then notify completion (once)
-              if (!isClosing) {
-                console.log(`[STREAM] Calling onClose for ${agentRunId}`);
-                isClosing = true;
-                callbacks.onClose();
+              if (innerData.type === 'tool_call') {
+                callbacks.onToolCall(innerData.name || '', innerData.arguments || '');
               }
             }
+          } catch (parseError) {
+            // Ignore parsing errors for tool calls
+            console.debug('[STREAM] Could not parse tool call data:', parseError);
           }
+          
         } catch (error) {
-          console.error(`[STREAM] Error parsing message:`, error);
+          console.error(`[STREAM] Error handling message:`, error);
           callbacks.onError(error instanceof Error ? error : String(error));
         }
       };
