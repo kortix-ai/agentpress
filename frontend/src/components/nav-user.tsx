@@ -80,8 +80,8 @@ export function NavUser({
                   {user.email}
                 </span>
               </div>
-              <div className="ml-auto p-0.5 rounded-full transition-all duration-200 group-hover:bg-zinc-100 group-active:bg-zinc-200">
-                <IconDotsVertical className="size-3.5 text-zinc-400 transition-all duration-200 group-hover:text-zinc-600 group-active:text-zinc-700" />
+              <div className="ml-auto p-0.5 rounded-full transition-all duration-200 group-hover:bg-zinc-100">
+                <IconDotsVertical className="size-3.5 text-zinc-400 transition-all duration-200 group-hover:text-zinc-600" />
               </div>
             </SidebarMenuButton>
           </DropdownMenuTrigger>
