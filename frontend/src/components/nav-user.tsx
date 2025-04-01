@@ -58,6 +58,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useTheme } from "next-themes"
 
 // Define the settings navigation items
 const settingsNavItems = [
@@ -87,7 +88,7 @@ export function NavUser({
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [activeSettingsTab, setActiveSettingsTab] = useState('general')
-  const [themeValue, setThemeValue] = useState("system")
+  const { theme, setTheme } = useTheme()
   const [languageValue, setLanguageValue] = useState("auto")
   const [showCodeToggle, setShowCodeToggle] = useState(false)
   const [showSuggestionsToggle, setShowSuggestionsToggle] = useState(true)
@@ -247,8 +248,8 @@ export function NavUser({
                       <div className="flex items-center justify-between">
                         <div className="text-sm font-medium">Theme</div>
                         <Select
-                          value={themeValue}
-                          onValueChange={setThemeValue}
+                          value={theme}
+                          onValueChange={setTheme}
                         >
                           <SelectTrigger className="w-[130px]">
                             <SelectValue placeholder="Select theme" />
