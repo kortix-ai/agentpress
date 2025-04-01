@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import asyncio
 import certifi
 import ssl
-from backend.utils.logger import logger
+from utils.logger import logger
 
 # Redis client
 client = None

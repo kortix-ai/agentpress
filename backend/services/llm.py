@@ -16,7 +16,7 @@ import json
 import asyncio
 from openai import OpenAIError
 import litellm
-from backend.utils.logger import logger
+from utils.logger import logger
 
 # Constants
 MAX_RETRIES = 3

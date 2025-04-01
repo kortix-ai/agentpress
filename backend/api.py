@@ -9,7 +9,7 @@ from services.supabase import DBConnection
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 import asyncio
-from backend.utils.logger import logger
+from utils.logger import logger
 
 # Import the agent API module
 from agent import api as agent_api

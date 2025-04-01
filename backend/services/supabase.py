@@ -5,7 +5,7 @@ Centralized database connection management for AgentPress using Supabase.
 import os
 from typing import Optional
 from supabase import create_async_client, AsyncClient
-from backend.utils.logger import logger
+from utils.logger import logger
 
 class DBConnection:
     """Singleton database connection manager using Supabase."""

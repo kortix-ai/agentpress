@@ -12,8 +12,8 @@ from agentpress.thread_manager import ThreadManager
 from services.supabase import DBConnection
 from services import redis
 from agent.run import run_agent
-from backend.utils.auth_utils import get_current_user_id, get_user_id_from_stream_auth, verify_thread_access, verify_agent_run_access
-from backend.utils.logger import logger
+from utils.auth_utils import get_current_user_id, get_user_id_from_stream_auth, verify_thread_access, verify_agent_run_access
+from utils.logger import logger
 
 # Initialize shared resources
 router = APIRouter()

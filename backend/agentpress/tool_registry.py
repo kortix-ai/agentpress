@@ -1,6 +1,6 @@
 from typing import Dict, Type, Any, List, Optional, Callable
 from agentpress.tool import Tool, SchemaType, ToolSchema
-from backend.utils.logger import logger
+from utils.logger import logger
 
 
 class ToolRegistry:
