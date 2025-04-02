@@ -33,13 +33,18 @@ class LLMRetryError(LLMError):
 
 def setup_api_keys() -> None:
     """Set up API keys from environment variables."""
-    providers = ['OPENAI', 'ANTHROPIC', 'GROQ']
+    providers = ['OPENAI', 'ANTHROPIC', 'GROQ', 'OPENROUTER']
     for provider in providers:
         key = os.environ.get(f'{provider}_API_KEY')
         if key:
             logger.debug(f"API key set for provider: {provider}")
         else:
             logger.warning(f"No API key found for provider: {provider}")
+    
+    # Set up OpenRouter API base if not already set
+    if os.environ.get('OPENROUTER_API_KEY') and not os.environ.get('OPENROUTER_API_BASE'):
+        os.environ['OPENROUTER_API_BASE'] = 'https://openrouter.ai/api/v1'
+        logger.debug("Set default OPENROUTER_API_BASE to https://openrouter.ai/api/v1")
 
 async def handle_error(error: Exception, attempt: int, max_attempts: int) -> None:
     """Handle API errors with appropriate delays and logging."""
@@ -95,6 +100,22 @@ def prepare_params(
             "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
         }
         logger.debug("Added Claude-specific headers")
+    
+    # Add OpenRouter-specific parameters
+    if model_name.startswith("openrouter/"):
+        logger.debug(f"Preparing OpenRouter parameters for model: {model_name}")
+        
+        # Add optional site URL and app name if set in environment
+        site_url = os.environ.get("OR_SITE_URL")
+        app_name = os.environ.get("OR_APP_NAME")
+        if site_url or app_name:
+            extra_headers = params.get("extra_headers", {})
+            if site_url:
+                extra_headers["HTTP-Referer"] = site_url
+            if app_name:
+                extra_headers["X-Title"] = app_name
+            params["extra_headers"] = extra_headers
+            logger.debug(f"Added OpenRouter site URL and app name to headers")
 
     return params
 
@@ -116,7 +137,7 @@ async def make_llm_api_call(
     
     Args:
         messages: List of message dictionaries for the conversation
-        model_name: Name of the model to use (e.g., "gpt-4", "claude-3")
+        model_name: Name of the model to use (e.g., "gpt-4", "claude-3", "openrouter/openai/gpt-4")
         response_format: Desired format for the response
         temperature: Sampling temperature (0-1)
         max_tokens: Maximum tokens in the response
@@ -176,4 +197,60 @@ async def make_llm_api_call(
 
 # Initialize API keys on module import
 setup_api_keys()
+
+# Test code for OpenRouter integration
+async def test_openrouter():
+    """Test the OpenRouter integration with a simple query."""
+    test_messages = [
+        {"role": "user", "content": "Hello, can you give me a quick test response?"}
+    ]
+    
+    try:
+        # Test with standard OpenRouter model
+        print("\n--- Testing standard OpenRouter model ---")
+        response = await make_llm_api_call(
+            model_name="openrouter/openai/gpt-3.5-turbo",
+            messages=test_messages,
+            temperature=0.7,
+            max_tokens=100
+        )
+        print(f"Response: {response.choices[0].message.content}")
+        
+        # Test with deepseek model
+        print("\n--- Testing deepseek model ---")
+        response = await make_llm_api_call(
+            model_name="openrouter/deepseek/deepseek-r1-distill-llama-70b",
+            messages=test_messages,
+            temperature=0.7,
+            max_tokens=100
+        )
+        print(f"Response: {response.choices[0].message.content}")
+        print(f"Model used: {response.model}")
+        
+        # Test with Mistral model
+        print("\n--- Testing Mistral model ---")
+        response = await make_llm_api_call(
+            model_name="openrouter/mistralai/mixtral-8x7b-instruct",
+            messages=test_messages,
+            temperature=0.7,
+            max_tokens=100
+        )
+        print(f"Response: {response.choices[0].message.content}")
+        print(f"Model used: {response.model}")
+        
+        return True
+    except Exception as e:
+        print(f"Error testing OpenRouter: {str(e)}")
+        return False
+
+if __name__ == "__main__":
+    import asyncio
+    
+    print("Testing OpenRouter integration...")
+    success = asyncio.run(test_openrouter())
+    
+    if success:
+        print("\n✅ OpenRouter integration test completed successfully!")
+    else:
+        print("\n❌ OpenRouter integration test failed!")
 

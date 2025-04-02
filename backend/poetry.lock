@@ -2049,6 +2049,30 @@ files = [
 ]
 
 [[package]]
+name = "python-ripgrep"
+version = "0.0.6"
+description = "A Python wrapper for ripgrep"
+optional = false
+python-versions = "<4.0,>=3.8"
+files = [
+    {file = "python_ripgrep-0.0.6-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:1af17c0472f29d036668e8cf1f38bed2c0738693781a27499b0e45a3a2d03d1b"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:6ecf2b7f2b3612bb90d6cf298db84e617905f20aa2073f4a015f3be3e032d10f"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:5fe2ae787b93449fa705a3ccc7fa45a64a25f7e18b3ad560185dafa65f1638b1"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:35e2d4fe7f7c7cdbcd84dbccac58e0a2306c478cf5a1066aa7e72e03a6fa115f"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:71dc6823d743ecf5d2c5b80e8e24e0e4fcdcfb74134238c6bfd3460535977d78"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:e75466a2a2d799f9284fcfbdd27b3b96adeb5da9525da32496c12ef7cae8232c"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:2351360ea9987804071097bcd27ab9f0817a201fa0c2918a5d871e8aa1d59369"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a2024e4cb16654b09a37f4e3ab0e4add24bd4c86e528f438c4e1a7ea801ad911"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:7d5b00e954c8a052e7ecfa577f52dc836ea2fa72060aba90780235c36635e8aa"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:b4c45a40c584daf2ccd1a0396dcf46201e38f56208c0498daff41fa037edea3a"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-musllinux_1_2_i686.whl", hash = "sha256:fc72b9f96634bed3534a253707fcbe5beaf8e403c823893edc4bd7f459c5018f"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:1fdc9b5dcd107c0c36888b0956ec40e4b7c08398106b998186f5537cd7332d96"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-win32.whl", hash = "sha256:3e1b9d776a07ea452d9910448925c253d5df331ee179276a7cf9ef584a8e8acb"},
+    {file = "python_ripgrep-0.0.6-cp38-abi3-win_amd64.whl", hash = "sha256:db74c753d560236d2579b54c1593eb688349a7166aa7c54718ae6e16be68e351"},
+    {file = "python_ripgrep-0.0.6.tar.gz", hash = "sha256:87d7bf4ab07cc9767febeaffcf661b5170eb75a3c5fa55c6f86c8e40f028d006"},
+]
+
+[[package]]
 name = "pytz"
 version = "2024.2"
 description = "World timezone definitions, modern and historical"
@@ -3258,4 +3282,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "5ac53072673796d7839f98ffa660d2d0f274d3e0ab998ff05f2a5aae51edebf4"
+content-hash = "38d3041d337a6e754ab28e791deb9633b515eeeaff7dc8de67120c467ff066e4"

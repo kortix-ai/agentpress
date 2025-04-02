@@ -261,6 +261,14 @@ class XMLToolParser(ToolParserBase):
                             params[mapping.param_name] = content.strip()
                             logging.info(f"Found element {mapping.path} -> {mapping.param_name}")
                     
+                    elif mapping.node_type == "text":
+                        if mapping.path == ".":
+                            # Extract root content
+                            content, _ = self._extract_tag_content(remaining_chunk, tag_name)
+                            if content is not None:
+                                params[mapping.param_name] = content.strip()
+                                logging.info(f"Found text content for {mapping.param_name}")
+                    
                     elif mapping.node_type == "content":
                         if mapping.path == ".":
                             # Extract root content
