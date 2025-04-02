@@ -62,12 +62,11 @@ function DeleteFileView({ filePath }: DeleteFileViewProps) {
 }
 
 // Truncated content component with expand button
-function TruncatedContent({ content, toolType, fileName, args, state }: { 
+function TruncatedContent({ content, toolType, fileName, args }: { 
   content: string; 
   toolType: string;
   fileName?: string;
-  args?: Record<string, string>;
-  state?: 'processing' | 'complete';
+  args?: Record<string, string>; 
 }) {
   // Always define useState at the top level
   const [expanded, setExpanded] = useState(false);
@@ -75,11 +74,7 @@ function TruncatedContent({ content, toolType, fileName, args, state }: {
   
   // Render the appropriate component based on tool type
   if (toolType === 'code') {
-    return <CodePreview 
-      content={content} 
-      fileName={fileName} 
-      status={state}
-    />;
+    return <CodePreview content={content} fileName={fileName} />;
   }
   
   if (toolType === 'terminal') {
@@ -88,13 +83,7 @@ function TruncatedContent({ content, toolType, fileName, args, state }: {
     const command = commandLines[0] || '';
     const output = commandLines.length > 1 ? commandLines.slice(1).join('\n') : undefined;
     
-    return <TerminalView 
-      command={command} 
-      output={output} 
-      status={state}
-      showHeader={false}
-      fileName={fileName}
-    />;
+    return <TerminalView command={command} output={output} />;
   }
   
   if (toolType === 'str-replace' && args) {
@@ -117,24 +106,21 @@ function TruncatedContent({ content, toolType, fileName, args, state }: {
     : content;
 
   return (
-    <div className="relative border border-neutral-200 dark:border-neutral-800 rounded-md overflow-hidden">
-      <div className="flex justify-end h-9 px-4 bg-neutral-50 dark:bg-neutral-900">
-        {/* Empty div to act as spacer - could add title here later if needed */}
-        <div></div>
-      </div>
-      <pre className="p-4 whitespace-pre-wrap break-words overflow-auto max-h-[400px] overflow-y-auto bg-neutral-50 dark:bg-neutral-900">
+    <div className="relative">
+      <pre className="p-2 rounded bg-background whitespace-pre-wrap break-words overflow-auto max-h-[400px] overflow-y-auto">
         {displayContent}
       </pre>
       
       {isLongContent && !expanded && (
-        <div className="absolute bottom-0 left-0 right-0 flex justify-center bg-neutral-100/50 dark:bg-neutral-800/50 py-1 backdrop-blur-sm">
+        <div className="flex justify-center py-2 border-t">
           <Button 
             variant="ghost" 
             size="sm" 
-            className="h-5 w-5 rounded-full p-0 flex items-center justify-center"
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
             onClick={() => setExpanded(true)}
           >
             <ChevronDown className="h-3 w-3" />
+            <span>Show more</span>
           </Button>
         </div>
       )}
@@ -142,7 +128,12 @@ function TruncatedContent({ content, toolType, fileName, args, state }: {
   );
 }
 
-export function ToolCall({ name, arguments: args, content, state = 'complete' }: ToolCallProps) {
+export function SimplifiedToolCall({ name, arguments: args, content, state = 'complete' }: ToolCallProps) {
+  // Format the attributes for display
+  const formattedArgs = args 
+    ? Object.entries(args).map(([key, value]) => `${key}="${value}"`).join(' ')
+    : '';
+    
   // Get filename from args if it exists
   const fileName = args?.file_path || args?.filename || args?.path || '';
   
@@ -221,45 +212,19 @@ export function ToolCall({ name, arguments: args, content, state = 'complete' }:
     
     const toolType = getToolType();
     
-    return <TruncatedContent 
-      content={content} 
-      toolType={toolType} 
-      fileName={fileName} 
-      args={args} 
-      state={state}
-    />;
-  };
-
-  // Render a loading placeholder when processing
-  const renderLoadingPlaceholder = () => {
-    const toolType = getToolType();
-    
-    return (
-      <div className="flex flex-col border border-neutral-200 dark:border-neutral-800 rounded-md overflow-hidden">
-        <div className="flex items-center gap-3 p-3 bg-white dark:bg-black">
-          <div className="h-3 w-3 border-2 border-t-transparent border-zinc-500 rounded-full animate-spin"></div>
-          <span className="animate-shimmer font-normal text-xs">
-            {fileName || name}
-          </span>
-          {toolType !== 'code' && (
-            <span className="text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
-              {toolType === 'terminal' ? 'Running command...' : 'Processing...'}
-            </span>
-          )}
-        </div>
-      </div>
-    );
+    return <TruncatedContent content={content} toolType={toolType} fileName={fileName} args={args} />;
   };
   
   return (
     <div className="w-full my-3">
-      {/* Show loading placeholder or actual content based on state */}
-      <div>
-        {state === 'processing' && fileName ? (
-          renderLoadingPlaceholder()
-        ) : (
-          (content || name === 'delete-file') && renderContent()
-        )}
+      <div className="flex items-center mb-1">
+        <span className={`inline-block h-2 w-2 rounded-full mr-2 ${state === 'processing' ? 'bg-amber-400' : 'bg-emerald-500'}`}></span>
+        <code className="font-mono text-xs text-neutral-600 dark:text-neutral-400">
+          &lt;{name}{formattedArgs ? ' ' + formattedArgs : ''}&gt;
+        </code>
+      </div>
+      <div className="mt-2">
+        {(content || name === 'delete-file') && renderContent()}
       </div>
     </div>
   );

@@ -11,6 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChatInput } from '@/components/chat-input';
 import { parseStreamContent, ParsedPart } from '@/lib/parser';
 import { StreamContent } from '@/components/stream-content';
+import { useTheme } from 'next-themes';
+import Image from 'next/image';
 
 // Define a type for the params to make React.use() work properly
 type ThreadParams = { id: string; threadId: string };
@@ -20,7 +22,7 @@ interface ApiMessage {
   content: string;
   type?: 'content' | 'tool_call';
   name?: string;
-  arguments?: string;
+  arguments?: string | Record<string, string>;
   parsedContent?: ParsedPart[];
 }
 
@@ -38,6 +40,9 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const unwrappedParams = React.use(params);
   const projectId = unwrappedParams.id;
   const threadId = unwrappedParams.threadId;
+  
+  const { theme } = useTheme();
+  const logoInverted = theme === 'dark';
   
   const { user, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
@@ -728,10 +733,24 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                       ) : message.type === 'tool_call' ? (
                         <div className="font-mono text-xs">
                           <div className="text-muted-foreground">Tool: {message.name}</div>
-                          <div className="mt-1">{message.arguments}</div>
+                          <div className="mt-1">
+                            {typeof message.arguments === 'string' 
+                              ? message.arguments 
+                              : message.arguments && JSON.stringify(message.arguments, null, 2)
+                            }
+                          </div>
                         </div>
                       ) : (
                         <div className="whitespace-pre-wrap break-words">
+                          <div className="flex items-center mb-2">
+                            <Image 
+                              src="/kortix-logo.svg" 
+                              alt="Kortix" 
+                              width={80} 
+                              height={15} 
+                              className={logoInverted ? "invert" : ""}
+                            />
+                          </div>
                           {message.content}
                         </div>
                       )}
