@@ -64,6 +64,11 @@ export function CodePreview({
   const [expanded, setExpanded] = useState(false);
   const codeContainerRef = useRef<HTMLDivElement>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [isHeaderSticky, setIsHeaderSticky] = useState(false);
+  const componentRef = useRef<HTMLDivElement>(null);
+  // Add state for page-level sticky header
+  const [isPageSticky, setIsPageSticky] = useState(false);
   
   // Check if content overflows and needs a "show more" button
   useEffect(() => {
@@ -71,6 +76,108 @@ export function CodePreview({
       setIsOverflowing(codeContainerRef.current.scrollHeight > maxHeight);
     }
   }, [content, maxHeight]);
+  
+  // Track when component top or bottom reaches top of viewport
+  useEffect(() => {
+    const component = componentRef.current;
+    if (!component) return;
+    
+    console.log('🔍 TRACKING INITIALIZED FOR CODE PREVIEW', { fileName });
+    
+    // State variables to track if positions have been logged
+    let topHasHitViewportTop = false;
+    let bottomHasHitViewportTop = false;
+    
+    // Function to run on scroll
+    const handleScroll = () => {
+      if (!component) return;
+      
+      const rect = component.getBoundingClientRect();
+      const headerHeight = 36; // height of header (h-9 = 36px)
+      
+      // Debug every few pixels of movement
+      if (Math.floor(rect.top) % 50 === 0) {
+        console.log(`Component position: top=${Math.floor(rect.top)}, bottom=${Math.floor(rect.bottom)}`);
+      }
+      
+      // Check if top of component hits position below header
+      if (rect.top <= 70 && rect.top >= 50 && !topHasHitViewportTop) {
+        console.log('🔴 TOP OF CODE PREVIEW HIT POSITION BELOW HEADER', {
+          exactTopPosition: rect.top,
+          timestamp: new Date().toISOString(),
+          fileName
+        });
+        topHasHitViewportTop = true;
+        // Enable page sticky header
+        setIsPageSticky(true);
+      } else if (rect.top < 30 || rect.top > 90) {
+        topHasHitViewportTop = false;
+      }
+      
+      // Check if bottom of component hits position below header
+      if (rect.bottom <= 70 && rect.bottom >= 50 && !bottomHasHitViewportTop) {
+        console.log('🔵 BOTTOM OF CODE PREVIEW HIT POSITION BELOW HEADER', {
+          exactBottomPosition: rect.bottom,
+          timestamp: new Date().toISOString(),
+          fileName
+        });
+        bottomHasHitViewportTop = true;
+        // Disable page sticky header when bottom crosses
+        setIsPageSticky(false);
+      } else if (rect.bottom < 30 || rect.bottom > 90) {
+        bottomHasHitViewportTop = false;
+      }
+      
+      // Additional dynamic sticky state management
+      // Header should be sticky when the component is partially visible
+      if (rect.top <= 60 && rect.bottom >= 60 + headerHeight) {
+        setIsPageSticky(true);
+      } else {
+        setIsPageSticky(false);
+      }
+    };
+    
+    // Use RAF for smoother tracking
+    let rafId: number | null = null;
+    
+    const smoothScrollHandler = () => {
+      handleScroll();
+      rafId = window.requestAnimationFrame(smoothScrollHandler);
+    };
+    
+    // Start tracking
+    rafId = window.requestAnimationFrame(smoothScrollHandler);
+    
+    // Also listen to regular scroll events as backup
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    
+    return () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      window.removeEventListener('scroll', handleScroll);
+      console.log('🛑 TRACKING STOPPED FOR CODE PREVIEW', { fileName });
+    };
+  }, [fileName]);
+  
+  // Add scroll event listener to handle sticky header behavior
+  useEffect(() => {
+    const codeContainer = codeContainerRef.current;
+    if (!codeContainer) return;
+    
+    const handleScroll = () => {
+      if (codeContainer.scrollTop > 0) {
+        setIsHeaderSticky(true);
+      } else {
+        setIsHeaderSticky(false);
+      }
+    };
+    
+    codeContainer.addEventListener('scroll', handleScroll);
+    return () => {
+      codeContainer.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
   
   // Determine language from filename if not provided
   const getLanguageFromFileName = (filename?: string): SupportedLanguage => {
@@ -99,7 +206,7 @@ export function CodePreview({
   };
   
   return (
-    <div className="flex flex-col border border-neutral-200 dark:border-neutral-800 rounded-md overflow-hidden">
+    <div ref={componentRef} className="flex flex-col border border-neutral-200/40 dark:border-neutral-800/40 rounded-md overflow-hidden">
       {/* Code content with syntax highlighting */}
       <div className="overflow-hidden relative">
         <div 
@@ -107,7 +214,18 @@ export function CodePreview({
           className="overflow-auto transition-all bg-neutral-50 dark:bg-neutral-900" 
           style={{ maxHeight: expanded ? 'none' : maxHeight }}
         >
-          <div className="flex items-center justify-between h-9 px-4 bg-white dark:bg-black border-b border-neutral-200 dark:border-neutral-800">
+          <div 
+            ref={headerRef}
+            className={`flex items-center justify-between h-9 px-4 bg-neutral-100/50 dark:bg-neutral-900/100 border-b border-neutral-200/40 dark:border-neutral-800/40 transition-all duration-100 ${
+              isHeaderSticky ? 'sticky top-0 z-10 bg-neutral-100/100 dark:bg-neutral-900/100' : ''
+            } ${
+              isPageSticky ? 'fixed z-20 bg-neutral-100/100 dark:bg-neutral-900/100 border border-neutral-200/40 dark:border-neutral-800/40 rounded-t-md' : ''
+            }`}
+            style={isPageSticky ? {
+              top: '55px',
+              left: componentRef.current?.getBoundingClientRect().left + 'px',
+              width: componentRef.current?.offsetWidth + 'px'            } : {}}
+          >
             <div className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300">
               {fileName && getFileIcon(fileName)}
               {fileName && <span className="font-normal text-xs">{fileName}</span>}
@@ -149,14 +267,14 @@ export function CodePreview({
         </div>
         
         {isOverflowing && !expanded && (
-          <div className="absolute bottom-0 left-0 right-0 flex justify-center bg-neutral-100/50 dark:bg-neutral-800/50 py-[0.5px] backdrop-blur-sm">
+          <div className="absolute bottom-0 left-0 right-0 flex justify-center bg-neutral-100/50 dark:bg-neutral-900/50 py-[0.5px]">
             <Button 
               onClick={() => setExpanded(true)} 
               variant="ghost" 
               size="sm" 
               className="h-5 w-5 rounded-full p-0 flex items-center justify-center"
             >
-              <ChevronDown className="h-3 w-3" />
+              <ChevronDown className="h-3 w-3 text-neutral-500 dark:text-neutral-400" />
             </Button>
           </div>
         )}

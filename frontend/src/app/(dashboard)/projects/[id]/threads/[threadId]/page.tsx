@@ -716,7 +716,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                     <div 
                       className={`${
                         message.role === 'user' 
-                          ? 'max-w-[85%] rounded-lg px-4 py-3 bg-primary text-primary-foreground' 
+                          ? 'max-w-[85%] rounded-lg px-4 py-3 bg-secondary dark:bg-secondary text-secondary-foreground dark:text-secondary-foreground' 
                           : 'w-full text-left'
                       } text-sm`}
                     >
