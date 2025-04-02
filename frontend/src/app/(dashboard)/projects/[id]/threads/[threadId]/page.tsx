@@ -585,14 +585,14 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                   <div 
                     key={index} 
                     ref={index === messages.length - 1 && message.role === 'assistant' ? latestMessageRef : null}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-center w-full'}`}
                   >
                     <div 
-                      className={`max-w-[85%] rounded-lg px-4 py-3 text-sm ${
+                      className={`${
                         message.role === 'user' 
-                          ? 'bg-primary text-primary-foreground' 
-                          : 'bg-muted'
-                      }`}
+                          ? 'max-w-[85%] rounded-lg px-4 py-3 bg-primary text-primary-foreground' 
+                          : 'w-full text-left'
+                      } text-sm`}
                     >
                       <div className="whitespace-pre-wrap break-words">
                         {message.type === 'tool_call' ? (
@@ -611,9 +611,9 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                 {streamContent && (
                   <div 
                     ref={latestMessageRef}
-                    className="flex justify-start"
+                    className="flex justify-center w-full"
                   >
-                    <div className="max-w-[85%] rounded-lg bg-muted px-4 py-3 text-sm">
+                    <div className="w-full text-sm text-left">
                       <div className="whitespace-pre-wrap break-words">
                         {streamContent}
                         {isStreaming && (
@@ -639,8 +639,8 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                 )}
                 
                 {agentStatus === 'running' && !streamContent && (
-                  <div className="flex justify-start">
-                    <div className="flex items-center gap-1.5 rounded-lg bg-muted px-4 py-3">
+                  <div className="flex justify-center">
+                    <div className="flex items-center gap-1.5">
                       <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse" />
                       <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-150" />
                       <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-300" />

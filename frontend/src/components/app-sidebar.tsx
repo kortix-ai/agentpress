@@ -139,20 +139,17 @@ const ProjectItem = React.memo(({
   onToggle, 
   threads,
   isCreatingThread,
-  onCreateThread,
-  currentProjectId
+  onCreateThread
 }: { 
   project: Project, 
   isExpanded: boolean, 
   onToggle: () => void, 
   threads: ApiThread[] | undefined,
   isCreatingThread: boolean,
-  onCreateThread: () => void,
-  currentProjectId: string | null
+  onCreateThread: () => void
 }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const isActive = currentProjectId === project.id;
   
   // Use path matching to determine if project is active
   const projectItemVariants = {
@@ -198,7 +195,7 @@ const ProjectItem = React.memo(({
       <li className="relative">
         <motion.div 
           className={`flex items-center justify-between px-2 py-1.5 text-sm rounded-md transition-all duration-200 cursor-pointer ${
-            isExpanded ? 'text-zinc-900 font-medium bg-zinc-50 hover:bg-zinc-100' 
+            isExpanded ? 'text-zinc-900 font-medium bg-zinc-50 dark:bg-sidebar-foreground hover:bg-zinc-100' 
                       : 'text-zinc-700 hover:bg-zinc-50 hover:text-zinc-900'
           }`}
           whileHover={{ 
@@ -207,22 +204,17 @@ const ProjectItem = React.memo(({
           }}
           transition={{ duration: 0.15 }}
           style={{
-            backgroundColor: isExpanded ? 'rgb(249 250 251)' : 'transparent'
+            backgroundColor: isExpanded ? 'transparent' : 'transparent'
           }}
           initial={false}
           animate={{
             backgroundColor: isExpanded 
-              ? 'rgb(249 250 251)' 
+              ? 'transparent' 
               : 'transparent'
           }}
           whileTap={{ scale: 0.99 }}
-          onClick={(e) => {
-            // Either toggle expansion or navigate to project
-            if (isExpanded) {
-              router.push(`/projects/${project.id}`)
-            } else {
-              onToggle()
-            }
+          onClick={() => {
+            onToggle()
           }}
           role="button"
           aria-expanded={isExpanded}
@@ -245,9 +237,9 @@ const ProjectItem = React.memo(({
               }`}
               onClick={(e) => {
                 e.stopPropagation() // Prevent parent's onClick from firing
-                onToggle()
+                router.push(`/projects/${project.id}`)
               }}
-              aria-label={isExpanded ? "Collapse project" : "Expand project"}
+              aria-label={isExpanded ? "Go to project" : "Go to project"}
             >
               {isExpanded ? (
                 <IconChevronDown className="size-3.5" />
@@ -294,7 +286,7 @@ const ProjectItem = React.memo(({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="w-full justify-start px-2 py-1.5 text-sm text-zinc-700 hover:text-zinc-900 transition-all duration-200 cursor-pointer rounded-md"
+                    className="w-full justify-start px-2 py-1.5 text-sm text-zinc-700 hover:text-zinc-900 bg-zinc-100 transition-all duration-200 cursor-pointer rounded-md"
                     onClick={() => onCreateThread()}
                     disabled={isCreatingThread}
                   >
@@ -319,6 +311,7 @@ const ProjectItem = React.memo(({
     </motion.div>
   );
 });
+ProjectItem.displayName = "ProjectItem";
 
 const ThreadItem = React.memo(({ 
   thread, 
@@ -343,9 +336,9 @@ const ThreadItem = React.memo(({
       whileHover={{ 
         x: 2,
       }}
-      className={`rounded-md ${
+      className={`rounded-sm ${
         isActive
-          ? 'bg-zinc-50 text-zinc-900 font-medium' 
+          ? 'text-zinc-900 dark:text-zinc-50 font-normal' 
           : 'text-zinc-700 hover:bg-zinc-50/70 hover:text-zinc-900'
       }`}
       transition={{ 
@@ -358,13 +351,19 @@ const ThreadItem = React.memo(({
         href={threadPath}
         className="block px-2 py-1.5 text-sm rounded-md transition-all duration-200 cursor-pointer w-full"
       >
-        <span className="block truncate">
-          {threadTitle}
-        </span>
+        <div className="flex items-center relative">
+          {isActive && (
+            <div className="absolute -left-4.5 w-1.5 h-1.5 rounded-[1px] bg-zinc-900 dark:bg-zinc-50" />
+          )}
+          <span className={`block truncate ${isActive ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+            {threadTitle}
+          </span>
+        </div>
       </Link>
     </motion.li>
   );
 });
+ThreadItem.displayName = "ThreadItem";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
@@ -372,7 +371,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCreatingThread, setIsCreatingThread] = useState<Record<string, boolean>>({})
-  const pathname = usePathname()
   const params = useParams()
   const currentProjectId = params?.id as string
   
@@ -499,14 +497,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 threads={threads[project.id]}
                 isCreatingThread={!!isCreatingThread[project.id]}
                 onCreateThread={() => handleCreateThread(project.id)}
-                currentProjectId={currentProjectId}
               />
             ))}
           </AnimatePresence>
         </ul>
       </div>
     );
-  }, [projects, isLoading, expandedProjectId, threads, isCreatingThread, currentProjectId, toggleProjectExpanded, handleCreateThread, setIsDialogOpen]);
+  }, [projects, isLoading, expandedProjectId, threads, isCreatingThread, toggleProjectExpanded, handleCreateThread, setIsDialogOpen]);
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
