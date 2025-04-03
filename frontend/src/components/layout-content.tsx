@@ -10,6 +10,11 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { SecondaryPanel } from "@/components/secondary-panel"
 import { useState, useEffect } from 'react';
 import { parseStreamContent, ParsedPart } from '@/lib/parser';
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle
+} from "@/components/ui/resizable"
 
 export interface SelectedTool {
   index: number;
@@ -18,7 +23,7 @@ export interface SelectedTool {
 export function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isLoading: isAuthLoading } = useAuth();
-  const { isDualView } = useView();
+  const { isDualView, toggleViewMode } = useView();
   const [parsedContent, setParsedContent] = useState<ParsedPart[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [selectedTool, setSelectedTool] = useState<number | null>(null);
@@ -52,6 +57,14 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
   
   // Only show MainNav on marketing pages, not in dashboard routes
   const showMainNav = !isDashboardRoute;
+  
+  // Function to handle panel resize and collapse
+  const handlePanelResize = (sizes: number[]) => {
+    // If the secondary panel is collapsed below a threshold (e.g. 10%), switch to single view
+    if (sizes[1] < 10) {
+      toggleViewMode(); // This will set isDualView to false
+    }
+  };
 
   // Show loading state while checking auth
   if (isAuthLoading) {
@@ -85,18 +98,22 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
             <AppSidebar variant="inset" />
             <SidebarInset className="flex-1 overflow-hidden">
               <SiteHeader />
-              <div className="flex overflow-hidden h-[calc(100vh-3.5rem)]">
-                <div className="w-3/5 overflow-auto border-r border-border/100">
+              <ResizablePanelGroup
+                direction="horizontal"
+                className="overflow-hidden h-[calc(100vh-3.5rem)]"
+                onLayout={handlePanelResize}
+              >
+                <ResizablePanel defaultSize={60} minSize={30} className="overflow-auto">
                   {children}
-                </div>
-                <div className="w-2/5 overflow-auto border-border/40 bg-zinc-50/50 dark:bg-zinc-900/50">
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={40} minSize={5} className="overflow-auto border-border/40 bg-zinc-50/50 dark:bg-zinc-900/50">
                   <SecondaryPanel 
                     parsedContent={parsedContent} 
-                    isStreaming={isStreaming}
                     selectedToolIndex={selectedTool}
                   />
-                </div>
-              </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
             </SidebarInset>
           </SidebarProvider>
         </div>

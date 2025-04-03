@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Send, Square, Loader2 } from "lucide-react";
+import { ArrowUp, Square, Loader2, Plus } from "lucide-react";
 
 interface ChatInputProps {
   onSubmit: (message: string) => void;
@@ -15,6 +15,7 @@ interface ChatInputProps {
   autoFocus?: boolean;
   value?: string;
   onChange?: (value: string) => void;
+  onFileUpload?: (file: File) => void;
 }
 
 export function ChatInput({
@@ -26,10 +27,12 @@ export function ChatInput({
   onStopAgent,
   autoFocus = true,
   value,
-  onChange
+  onChange,
+  onFileUpload
 }: ChatInputProps) {
   const [inputValue, setInputValue] = useState(value || "");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   // Allow controlled or uncontrolled usage
   const isControlled = value !== undefined && onChange !== undefined;
@@ -100,8 +103,22 @@ export function ChatInput({
     }
   };
 
+  const handleFileButtonClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0 && onFileUpload) {
+      onFileUpload(files[0]);
+      e.target.value = ''; // Reset the input
+    }
+  };
+
   return (
-    <div className="w-full">
+    <div className="w-full relative">
       <form onSubmit={handleSubmit} className="relative">
         <Textarea
           ref={textareaRef}
@@ -113,9 +130,31 @@ export function ChatInput({
               ? "Agent is thinking..." 
               : placeholder
           }
-          className="min-h-[50px] max-h-[200px] pr-12 resize-none"
+          className="min-h-[70px] max-h-[200px] pr-12 pt-3 pb-2 resize-none"
           disabled={loading || (disabled && !isAgentRunning)}
           rows={1}
+        />
+        
+        {/* File upload button - moved to bottom left */}
+        <Button 
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="absolute left-2 bottom-2 h-6 w-6 rounded-full text-zinc-400 hover:text-zinc-500 hover:bg-transparent opacity-70"
+          onClick={handleFileButtonClick}
+          disabled={loading || (disabled && !isAgentRunning)}
+          aria-label="Upload file"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </Button>
+        
+        {/* Hidden file input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+          disabled={loading || (disabled && !isAgentRunning)}
         />
         
         <Button 
@@ -132,7 +171,7 @@ export function ChatInput({
           ) : isAgentRunning ? (
             <Square className="h-4 w-4" />
           ) : (
-            <Send className="h-4 w-4" />
+            <ArrowUp className="h-4 w-4" />
           )}
         </Button>
       </form>

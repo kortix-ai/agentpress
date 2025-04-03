@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ParsedPart, ParsedToolCall } from '@/lib/parser';
 import { ToolCall } from '@/components/tool-call';
-import { ChevronLeft, ChevronRight, Maximize2, Monitor } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 interface SecondaryPanelProps {
   parsedContent: ParsedPart[];
@@ -39,6 +44,8 @@ export function SecondaryPanel({ parsedContent, selectedToolIndex }: Omit<Second
   
   // Use debounce to avoid excessive updates
   const debouncedSliderValue = useDebounce(sliderValue, 10);
+  
+  const [viewMode, setViewMode] = useState<'diff' | 'original' | 'modified'>('diff');
   
   // Extract tool calls from parsed content
   useEffect(() => {
@@ -206,19 +213,32 @@ export function SecondaryPanel({ parsedContent, selectedToolIndex }: Omit<Second
 
   const fileName = getDisplayFileName();
 
+  // Check if the current tool is a file edit
+  const isFileEdit = () => {
+    if (!selectedTool) return false;
+    const toolName = selectedTool.name.toLowerCase();
+    return toolName.includes('edit') || toolName.includes('create') || toolName.includes('write');
+  };
+
   return (
     <div className="h-full flex flex-col p-4 bg-background">
       <div className="h-full flex flex-col rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-sidebar">
         {/* Header with title and action status */}
         <div className="p-4 border-b border-neutral-200 dark:border-neutral-800">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-medium">Manus&apos;s Computer</h2>
-            <Button variant="ghost" size="icon" className="h-7 w-7">
-              <Maximize2 className="h-4 w-4" />
-            </Button>
+            <h2 className="text-base font-medium">Kortix&apos;s Computer</h2>
+            {isFileEdit() ? (
+              <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'diff' | 'original' | 'modified')} className="h-7">
+                <TabsList className="h-7 grid grid-cols-3 w-[180px]">
+                  <TabsTrigger value="diff" className="text-xs h-6">Diff</TabsTrigger>
+                  <TabsTrigger value="original" className="text-xs h-6">Original</TabsTrigger>
+                  <TabsTrigger value="modified" className="text-xs h-6">Modified</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            ) : null}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Manus is using {action.type}
+            Kortix is using {action.type}
           </p>
           {selectedTool && (
             <div className="flex items-center mt-2">
@@ -245,7 +265,7 @@ export function SecondaryPanel({ parsedContent, selectedToolIndex }: Omit<Second
           <div className="flex flex-col flex-1 overflow-hidden">
             {/* Content container with proper light/dark styling */}
             <div className="flex-1 mx-4 mb-4 mt-4 border border-border rounded-md overflow-hidden bg-neutral-100 dark:bg-neutral-900 relative p-0">
-              {/* Tool content area with proper light/dark styling */}
+              {/* Tool content area with proper light/dark styling and custom scrollbar */}
               {selectedTool ? (
                 <div className="flex-1 overflow-auto custom-scrollbar p-0 m-0 -mt-3 min-h-[700px]">
                   <ToolCall 
@@ -253,6 +273,7 @@ export function SecondaryPanel({ parsedContent, selectedToolIndex }: Omit<Second
                     arguments={selectedTool.arguments}
                     content={selectedTool.content}
                     status={selectedTool.state}
+                    viewMode={isFileEdit() ? viewMode : undefined}
                   />
                 </div>
               ) : (

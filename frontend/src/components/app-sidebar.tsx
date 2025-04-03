@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
 import { useParams, usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
+import { cn } from "@/lib/utils"
 
 import { NavUser } from "@/components/nav-user"
 import {
@@ -531,7 +532,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </motion.div>
         </Link>
       </SidebarHeader>
-      <SidebarContent className="py-0 px-2">
+      <SidebarContent className="py-0 px-2 custom-scrollbar">
         {projectsList}
       </SidebarContent>
       <SidebarFooter className="border-t border-border/40">

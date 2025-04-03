@@ -49,6 +49,7 @@
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.55.0",
     "react-markdown": "^10.1.0",
+    "react-resizable-panels": "^2.1.7",
     "recharts": "^2.15.1",
     "rehype-raw": "^7.0.0",
     "rehype-sanitize": "^6.0.0",

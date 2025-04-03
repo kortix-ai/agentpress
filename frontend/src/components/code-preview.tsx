@@ -14,6 +14,7 @@ interface CodePreviewProps {
   lineNumbersBg?: string;
   textSize?: 'xs' | 'sm' | 'base';
   isSecondaryView?: boolean;
+  viewMode?: 'diff' | 'original' | 'modified';
 }
 
 type SupportedLanguage = Language | 'plaintext';
@@ -60,7 +61,8 @@ export function CodePreview({
   lineNumbersClassName = "text-neutral-500 opacity-50",
   lineNumbersBg = "",
   textSize = "xs",
-  isSecondaryView = false
+  isSecondaryView = false,
+  viewMode
 }: CodePreviewProps) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -221,7 +223,7 @@ export function CodePreview({
       <div className="overflow-hidden relative">
         <div 
           ref={codeContainerRef} 
-          className={`overflow-auto transition-all bg-neutral-50 dark:bg-neutral-900 ${isSecondaryView ? 'mt-0 pt-0' : ''}`}
+          className={`overflow-auto transition-all bg-neutral-50 dark:bg-neutral-900 custom-scrollbar ${isSecondaryView ? 'mt-0 pt-0' : ''}`}
           style={{ 
             maxHeight: expanded ? 'none' : effectiveMaxHeight,
             height: isSecondaryView ? '100%' : 'auto'
@@ -248,6 +250,11 @@ export function CodePreview({
               {fileName && <span className="font-normal text-xs">{fileName}</span>}
               {status && (
                 <span className={`inline-block h-1 w-1 rounded-full ${status === 'processing' ? 'bg-amber-400' : 'bg-green-500'}`}></span>
+              )}
+              {viewMode && (
+                <span className="text-xs ml-2 px-2 py-0.5 bg-neutral-200/50 dark:bg-neutral-800/50 rounded">
+                  {viewMode === 'diff' ? 'Diff View' : viewMode === 'original' ? 'Original' : 'Modified'}
+                </span>
               )}
             </div>
             <button 

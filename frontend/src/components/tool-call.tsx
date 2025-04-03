@@ -10,6 +10,7 @@ interface ToolCallProps {
   content?: string;
   type?: 'content' | 'tool_call';
   status?: 'processing' | 'complete';
+  viewMode?: 'diff' | 'original' | 'modified';
 }
 
 // New component for string replacement visualization
@@ -62,12 +63,13 @@ function DeleteFileView({ filePath }: DeleteFileViewProps) {
 }
 
 // Truncated content component with expand button
-function TruncatedContent({ content, toolType, fileName, args, status }: { 
+function TruncatedContent({ content, toolType, fileName, args, status, viewMode }: { 
   content: string; 
   toolType: string;
   fileName?: string;
   args?: Record<string, string>;
   status?: 'processing' | 'complete';
+  viewMode?: 'diff' | 'original' | 'modified';
 }) {
   // Always define useState at the top level
   const [expanded, setExpanded] = useState(false);
@@ -80,6 +82,7 @@ function TruncatedContent({ content, toolType, fileName, args, status }: {
       fileName={fileName} 
       status={status}
       isSecondaryView={true}
+      viewMode={viewMode}
     />;
   }
   
@@ -143,7 +146,7 @@ function TruncatedContent({ content, toolType, fileName, args, status }: {
   );
 }
 
-export function ToolCall({ name, arguments: args, content, status = 'complete' }: ToolCallProps) {
+export function ToolCall({ name, arguments: args, content, status = 'complete', viewMode }: ToolCallProps) {
   // Get filename from args if it exists
   const fileName = args?.file_path || args?.filename || args?.path || '';
   
@@ -229,6 +232,7 @@ export function ToolCall({ name, arguments: args, content, status = 'complete' }
         fileName={fileName} 
         status={status}
         isSecondaryView={true}
+        viewMode={viewMode}
       />;
     }
     
@@ -238,6 +242,7 @@ export function ToolCall({ name, arguments: args, content, status = 'complete' }
       fileName={fileName} 
       args={args} 
       status={status}
+      viewMode={viewMode}
     />;
   };
 

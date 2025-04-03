@@ -302,15 +302,15 @@
   display: none; /* Chrome, Safari and Opera */
 }
 
-/* Custom aesthetic scrollbar */
+/* Custom aesthetic scrollbar with improved light/dark mode blending */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: oklch(0.45 0.1 0) transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.05) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -319,19 +319,23 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: oklch(0.45 0.1 0 / 0.3);
+  background-color: rgba(0, 0, 0, 0.04);
   border-radius: 10px;
   transition: background-color 0.3s ease;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: oklch(0.45 0.1 0 / 0.5);
+  background-color: rgba(0, 0, 0, 0.15);
+}
+
+.dark .custom-scrollbar {
+  scrollbar-color: rgba(255, 255, 255, 0.05) transparent;
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: oklch(0.85 0 0 / 0.2);
+  background-color: rgba(255, 255, 255, 0.04);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: oklch(0.85 0 0 / 0.3);
+  background-color: rgba(255, 255, 255, 0.15);
 }
