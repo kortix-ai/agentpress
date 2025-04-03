@@ -235,7 +235,7 @@ export function CodePreview({
             } ${
               isPageSticky ? 'fixed z-20 bg-neutral-100/100 dark:bg-neutral-900/100 border border-neutral-200/40 dark:border-neutral-800/40 rounded-t-md' : ''
             } ${
-              isSecondaryView ? 'border-0 border-b border-neutral-800/40 mt-0 pt-0 rounded-t-md' : 'border-b border-neutral-200/40 dark:border-neutral-800/40'
+              isSecondaryView ? 'border-0 border-b border-neutral-200/40 dark:border-neutral-800/40 mt-0 pt-0 rounded-t-md' : 'border-b border-neutral-200/40 dark:border-neutral-800/40'
             }`}
             style={isPageSticky ? {
               top: '55px',

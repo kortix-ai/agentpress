@@ -208,9 +208,9 @@ export function SecondaryPanel({ parsedContent, selectedToolIndex }: Omit<Second
 
   return (
     <div className="h-full flex flex-col p-4 bg-background">
-      <div className="h-full flex flex-col rounded-lg border border-border bg-sidebar">
+      <div className="h-full flex flex-col rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-sidebar">
         {/* Header with title and action status */}
-        <div className="p-4 border-b border-border">
+        <div className="p-4 border-b border-neutral-200 dark:border-neutral-800">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-medium">Manus&apos;s Computer</h2>
             <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -243,9 +243,9 @@ export function SecondaryPanel({ parsedContent, selectedToolIndex }: Omit<Second
           
           {/* Combined tool content and footer area */}
           <div className="flex flex-col flex-1 overflow-hidden">
-            {/* Content container - remove any padding and ensure flush edges */}
-            <div className="flex-1 mx-4 mb-4 mt-4 border border-border rounded-md overflow-hidden bg-neutral-900 relative p-0">
-              {/* Tool content area - set negative margin-top to compensate for code preview padding */}
+            {/* Content container with proper light/dark styling */}
+            <div className="flex-1 mx-4 mb-4 mt-4 border border-border rounded-md overflow-hidden bg-neutral-100 dark:bg-neutral-900 relative p-0">
+              {/* Tool content area with proper light/dark styling */}
               {selectedTool ? (
                 <div className="flex-1 overflow-auto custom-scrollbar p-0 m-0 -mt-3 min-h-[700px]">
                   <ToolCall 
@@ -263,15 +263,15 @@ export function SecondaryPanel({ parsedContent, selectedToolIndex }: Omit<Second
                 </div>
               )}
               
-              {/* Slider footer - ensure it's flush with the content */}
-              <div className="absolute bottom-0 left-0 right-0 py-2 px-4 bg-neutral-900 border-t border-border z-10">
+              {/* Slider footer with proper light/dark styling */}
+              <div className="absolute bottom-0 left-0 right-0 py-2 px-4 bg-neutral-100 dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800 z-10">
                 {toolCalls.length > 0 && (
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1">
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="h-7 w-7 transition-all duration-200 hover:bg-muted/50"
+                        className="h-7 w-7 transition-all duration-200 hover:bg-neutral-200 dark:hover:bg-neutral-800"
                         onClick={() => navigateTool('prev')}
                         disabled={selectedIndex === 0 || selectedIndex === null}
                       >
@@ -280,7 +280,7 @@ export function SecondaryPanel({ parsedContent, selectedToolIndex }: Omit<Second
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="h-7 w-7 transition-all duration-200 hover:bg-muted/50"
+                        className="h-7 w-7 transition-all duration-200 hover:bg-neutral-200 dark:hover:bg-neutral-800"
                         onClick={() => navigateTool('next')}
                         disabled={selectedIndex === toolCalls.length - 1 || selectedIndex === null}
                       >
@@ -300,7 +300,7 @@ export function SecondaryPanel({ parsedContent, selectedToolIndex }: Omit<Second
                       />
                     </div>
                     
-                    <span className="text-xs text-muted-foreground min-w-[3rem] text-center">
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400 min-w-[3rem] text-center">
                       {toolCalls.length === 0 ? '0/0' : 
                        `${selectedIndex !== null ? selectedIndex + 1 : 0}/${toolCalls.length}`}
                     </span>
