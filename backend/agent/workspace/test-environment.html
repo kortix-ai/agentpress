@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Environment Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .success {
+            color: #2ecc71;
+            font-weight: bold;
+        }
+        .container {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        h1 {
+            color: #3498db;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #result {
+            margin-top: 15px;
+            padding: 10px;
+            border-left: 4px solid #3498db;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <h1>Web Development Environment Test</h1>
+    <p>This page confirms that the development environment is working correctly.</p>
+    
+    <div class="container">
+        <h2>Environment Status: <span class="success">✓ Working</span></h2>
+        <p>The file creation tool has successfully created this HTML file.</p>
+        
+        <h3>JavaScript Test</h3>
+        <button id="testButton">Test JavaScript</button>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const testButton = document.getElementById('testButton');
+            const result = document.getElementById('result');
+            
+            testButton.addEventListener('click', () => {
+                result.innerHTML = `
+                    <p><strong>JavaScript is working!</strong></p>
+                    <p>Current time: ${new Date().toLocaleTimeString()}</p>
+                    <p>Browser: ${navigator.userAgent}</p>
+                `;
+            });
+            
+            // Auto-run the test after 1 second
+            setTimeout(() => {
+                testButton.click();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

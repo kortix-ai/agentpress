@@ -14,8 +14,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full" suppressHydrationWarning>
-      <body className={`${inter.className} h-full`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.className} antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -24,9 +24,13 @@ export default function RootLayout({
         >
           <AuthProvider>
             <ViewProvider>
-              <LayoutContent>
-                {children}
-              </LayoutContent>
+              <div className="flex min-h-screen flex-col">
+                <main className="flex-1 overflow-y-auto">
+                  <LayoutContent>
+                    {children}
+                  </LayoutContent>
+                </main>
+              </div>
               <Toaster position="top-right" />
             </ViewProvider>
           </AuthProvider>

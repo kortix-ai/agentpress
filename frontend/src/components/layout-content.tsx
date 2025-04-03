@@ -22,7 +22,7 @@ export interface SelectedTool {
 
 export function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { isLoading: isAuthLoading } = useAuth();
+  const { isLoading: isAuthLoading, user } = useAuth();
   const { isDualView, toggleViewMode } = useView();
   const [parsedContent, setParsedContent] = useState<ParsedPart[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -55,8 +55,8 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
   const isDashboardRoute = pathname.startsWith('/dashboard') || 
                            pathname.startsWith('/projects');
   
-  // Only show MainNav on marketing pages, not in dashboard routes
-  const showMainNav = !isDashboardRoute;
+  // Only show MainNav on marketing pages when user is logged in
+  const showMainNav = !isDashboardRoute && !!user;
   
   // Function to handle panel resize and collapse
   const handlePanelResize = (sizes: number[]) => {

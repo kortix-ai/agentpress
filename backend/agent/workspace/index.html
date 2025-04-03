@@ -244,12 +244,28 @@
             font-size: 24px;
             cursor: pointer;
         }
+        
+        .clear-btn {
+            padding: 5px 10px;
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+        
+        .clear-btn:hover {
+            background-color: #ff8e8e;
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body>
     <button class="theme-toggle" id="theme-toggle">🌙</button>
     <div class="container">
-        <h1>✨ Fun Todo List ✨</h1>
+        <h1>✨ Super Fun Todo List ✨</h1>
         
         <div class="input-group">
             <input type="text" id="todo-input" placeholder="Add something fun to do...">
@@ -287,6 +303,7 @@
             <div id="total-tasks">Total: 0</div>
             <div id="completed-tasks">Completed: 0</div>
             <div id="remaining-tasks">Remaining: 0</div>
+            <button id="clear-completed" class="clear-btn">Clear Completed</button>
         </div>
     </div>
 
@@ -361,6 +378,21 @@
                     priorityOptions.forEach(opt => opt.style.fontWeight = 'normal');
                     option.style.fontWeight = 'bold';
                 });
+            });
+            
+            // Clear completed tasks
+            const clearCompletedBtn = document.getElementById('clear-completed');
+            clearCompletedBtn.addEventListener('click', () => {
+                todos = todos.filter(todo => !todo.completed);
+                saveTodos();
+                renderTodos();
+                updateStats();
+                
+                // Add a little bounce to the container
+                container.style.animation = 'celebrate 0.5s';
+                setTimeout(() => {
+                    container.style.animation = '';
+                }, 500);
             });
             
             function addTodo() {

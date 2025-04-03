@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import {
@@ -43,19 +44,14 @@ export function MainNav() {
       <div className="max-w-6xl mx-auto px-6 flex h-16 items-center justify-between">
         <div className="flex items-center space-x-8">
           <Link href="/" className="flex items-center group">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mr-2 h-5 w-5 text-black transition-transform duration-200 group-hover:scale-110"
-            >
-              <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
-            </svg>
-            <span className="text-base font-medium tracking-tight">AgentPress</span>
+            <Image
+              src="/kortix-logo.svg"
+              alt="Kortix Logo"
+              width={160}
+              height={29}
+              priority
+              className="transition-transform duration-200 group-hover:scale-105"
+            />
           </Link>
           {user && (
             <div className="hidden md:flex items-center space-x-6">
@@ -118,7 +114,7 @@ export function MainNav() {
                 </Button>
               </Link>
               <Link href="/auth/signup">
-                <Button size="sm" className="bg-zinc-900 text-white hover:bg-black transition-colors">
+                <Button variant="ghost" size="sm" className="text-zinc-700 hover:text-black hover:bg-zinc-50 border border-zinc-200">
                   Sign up
                 </Button>
               </Link>

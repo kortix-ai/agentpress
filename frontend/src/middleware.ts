@@ -46,14 +46,17 @@ export async function middleware(request: NextRequest) {
     '/auth/reset-password',
   ];
 
-  // Check if the current path is a public route
+  // Check if the current path is a public route or an image
   const isPublicRoute = publicRoutes.some(route => 
     request.nextUrl.pathname === route || 
     request.nextUrl.pathname.startsWith('/api/')
   );
 
+  // Check if the path is for an image file
+  const isImageFile = request.nextUrl.pathname.match(/\.(svg|png|jpg|jpeg|gif|webp)$/i);
+
   // If the user is not authenticated and trying to access a protected route
-  if (!session && !isPublicRoute) {
+  if (!session && !isPublicRoute && !isImageFile) {
     const redirectUrl = new URL('/auth/login', request.url);
     redirectUrl.searchParams.set('redirectedFrom', request.nextUrl.pathname);
     return NextResponse.redirect(redirectUrl);
@@ -76,6 +79,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * - public folder
      */
-    '/((?!_next/static|_next/image|favicon.ico|public/).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }; 
