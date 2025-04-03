@@ -7,8 +7,9 @@ import { useState, useEffect } from "react"
 import { getProject } from "@/lib/api"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Copy } from "lucide-react"
+import { Copy, Columns, LayoutIcon } from "lucide-react"
 import { toast } from "sonner"
+import { useView } from "@/context/view-context"
 import {
   Tooltip,
   TooltipContent,
@@ -27,6 +28,7 @@ export function SiteHeader() {
   const params = useParams()
   const [projectName, setProjectName] = useState<string | null>(null)
   const [threadId, setThreadId] = useState<string | null>(null)
+  const { isDualView, toggleViewMode } = useView()
   
   const copyUrl = () => {
     navigator.clipboard.writeText(window.location.href)
@@ -185,7 +187,7 @@ export function SiteHeader() {
   }
   
   return (
-    <header className="flex h-14 shrink-0 items-center">
+    <header className="flex h-14 shrink-0 items-center border-b border-border">
       <div className="flex w-full items-center justify-between px-4">
         <div className="flex items-center gap-1">
           <SidebarTrigger className="h-8 w-8 rounded-md hover:bg-zinc-50" />
@@ -195,23 +197,45 @@ export function SiteHeader() {
           />
           {renderBreadcrumbs()}
         </div>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={copyUrl}
-                className="h-8 w-8"
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Copy link</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <div className="flex items-center gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleViewMode}
+                  className="h-8 w-8"
+                >
+                  {isDualView ? 
+                    <LayoutIcon className="h-4 w-4" /> : 
+                    <Columns className="h-4 w-4" />
+                  }
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isDualView ? "Single view" : "Dual view"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={copyUrl}
+                  className="h-8 w-8"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Copy link</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
     </header>
   )

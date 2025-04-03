@@ -9,7 +9,7 @@ interface ToolCallProps {
   arguments?: Record<string, string>;
   content?: string;
   type?: 'content' | 'tool_call';
-  state?: 'processing' | 'complete';
+  status?: 'processing' | 'complete';
 }
 
 // New component for string replacement visualization
@@ -62,12 +62,12 @@ function DeleteFileView({ filePath }: DeleteFileViewProps) {
 }
 
 // Truncated content component with expand button
-function TruncatedContent({ content, toolType, fileName, args, state }: { 
+function TruncatedContent({ content, toolType, fileName, args, status }: { 
   content: string; 
   toolType: string;
   fileName?: string;
   args?: Record<string, string>;
-  state?: 'processing' | 'complete';
+  status?: 'processing' | 'complete';
 }) {
   // Always define useState at the top level
   const [expanded, setExpanded] = useState(false);
@@ -78,7 +78,8 @@ function TruncatedContent({ content, toolType, fileName, args, state }: {
     return <CodePreview 
       content={content} 
       fileName={fileName} 
-      status={state}
+      status={status}
+      isSecondaryView={true}
     />;
   }
   
@@ -91,7 +92,7 @@ function TruncatedContent({ content, toolType, fileName, args, state }: {
     return <TerminalView 
       command={command} 
       output={output} 
-      status={state}
+      status={status}
       showHeader={false}
       fileName={fileName}
     />;
@@ -142,7 +143,7 @@ function TruncatedContent({ content, toolType, fileName, args, state }: {
   );
 }
 
-export function ToolCall({ name, arguments: args, content, state = 'complete' }: ToolCallProps) {
+export function ToolCall({ name, arguments: args, content, status = 'complete' }: ToolCallProps) {
   // Get filename from args if it exists
   const fileName = args?.file_path || args?.filename || args?.path || '';
   
@@ -221,12 +222,22 @@ export function ToolCall({ name, arguments: args, content, state = 'complete' }:
     
     const toolType = getToolType();
     
+    // For code files, pass isSecondaryView=true and adjust styling
+    if (toolType === 'code') {
+      return <CodePreview 
+        content={content} 
+        fileName={fileName} 
+        status={status}
+        isSecondaryView={true}
+      />;
+    }
+    
     return <TruncatedContent 
       content={content} 
       toolType={toolType} 
       fileName={fileName} 
       args={args} 
-      state={state}
+      status={status}
     />;
   };
 
@@ -255,7 +266,7 @@ export function ToolCall({ name, arguments: args, content, state = 'complete' }:
     <div className="w-full my-3">
       {/* Show loading placeholder or actual content based on state */}
       <div>
-        {state === 'processing' && fileName ? (
+        {status === 'processing' && fileName ? (
           renderLoadingPlaceholder()
         ) : (
           (content || name === 'delete-file') && renderContent()

@@ -1,6 +1,7 @@
 import './globals.css';
 import { Inter } from 'next/font/google';
 import { AuthProvider } from '@/context/auth-context';
+import { ViewProvider } from '@/context/view-context';
 import { Toaster } from 'sonner';
 import { LayoutContent } from '@/components/layout-content';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -22,10 +23,12 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <LayoutContent>
-              {children}
-            </LayoutContent>
-            <Toaster position="top-right" />
+            <ViewProvider>
+              <LayoutContent>
+                {children}
+              </LayoutContent>
+              <Toaster position="top-right" />
+            </ViewProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

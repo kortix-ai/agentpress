@@ -13,6 +13,7 @@ interface CodePreviewProps {
   lineNumbersClassName?: string;
   lineNumbersBg?: string;
   textSize?: 'xs' | 'sm' | 'base';
+  isSecondaryView?: boolean;
 }
 
 type SupportedLanguage = Language | 'plaintext';
@@ -58,7 +59,8 @@ export function CodePreview({
   theme = themes.nightOwl,
   lineNumbersClassName = "text-neutral-500 opacity-50",
   lineNumbersBg = "",
-  textSize = "xs"
+  textSize = "xs",
+  isSecondaryView = false
 }: CodePreviewProps) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -67,15 +69,18 @@ export function CodePreview({
   const headerRef = useRef<HTMLDivElement>(null);
   const [isHeaderSticky, setIsHeaderSticky] = useState(false);
   const componentRef = useRef<HTMLDivElement>(null);
-  // Add state for page-level sticky header
   const [isPageSticky, setIsPageSticky] = useState(false);
+  
+  // Use a different default height when in secondary view
+  const effectiveMaxHeight = isSecondaryView ? 2000 : maxHeight;
   
   // Check if content overflows and needs a "show more" button
   useEffect(() => {
     if (codeContainerRef.current) {
-      setIsOverflowing(codeContainerRef.current.scrollHeight > maxHeight);
+      // When in secondary view, we still want to check for overflow but against a larger threshold
+      setIsOverflowing(codeContainerRef.current.scrollHeight > effectiveMaxHeight);
     }
-  }, [content, maxHeight]);
+  }, [content, effectiveMaxHeight]);
   
   // Track when component top or bottom reaches top of viewport
   useEffect(() => {
@@ -206,25 +211,37 @@ export function CodePreview({
   };
   
   return (
-    <div ref={componentRef} className="flex flex-col border border-neutral-200/40 dark:border-neutral-800/40 rounded-md overflow-hidden">
+    <div 
+      ref={componentRef} 
+      className={`flex flex-col overflow-hidden ${isSecondaryView 
+        ? 'border-0 rounded-t-md' 
+        : 'border border-neutral-200/40 dark:border-neutral-800/40 rounded-md'}`}
+    >
       {/* Code content with syntax highlighting */}
       <div className="overflow-hidden relative">
         <div 
           ref={codeContainerRef} 
-          className="overflow-auto transition-all bg-neutral-50 dark:bg-neutral-900" 
-          style={{ maxHeight: expanded ? 'none' : maxHeight }}
+          className={`overflow-auto transition-all bg-neutral-50 dark:bg-neutral-900 ${isSecondaryView ? 'mt-0 pt-0' : ''}`}
+          style={{ 
+            maxHeight: expanded ? 'none' : effectiveMaxHeight,
+            height: isSecondaryView ? '100%' : 'auto'
+          }}
         >
           <div 
             ref={headerRef}
-            className={`flex items-center justify-between h-9 px-4 bg-neutral-100/50 dark:bg-neutral-900/100 border-b border-neutral-200/40 dark:border-neutral-800/40 transition-all duration-100 ${
-              isHeaderSticky ? 'sticky top-0 z-10 bg-neutral-100/100 dark:bg-neutral-900/100' : ''
+            className={`flex items-center justify-between h-9 px-4 transition-all duration-100 ${
+              isHeaderSticky ? 'sticky top-0 z-10 bg-neutral-100/100 dark:bg-neutral-900/100' : 
+                               'bg-neutral-100/50 dark:bg-neutral-900/100'
             } ${
               isPageSticky ? 'fixed z-20 bg-neutral-100/100 dark:bg-neutral-900/100 border border-neutral-200/40 dark:border-neutral-800/40 rounded-t-md' : ''
+            } ${
+              isSecondaryView ? 'border-0 border-b border-neutral-800/40 mt-0 pt-0 rounded-t-md' : 'border-b border-neutral-200/40 dark:border-neutral-800/40'
             }`}
             style={isPageSticky ? {
               top: '55px',
               left: componentRef.current?.getBoundingClientRect().left + 'px',
-              width: componentRef.current?.offsetWidth + 'px'            } : {}}
+              width: componentRef.current?.offsetWidth + 'px'
+            } : {}}
           >
             <div className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300">
               {fileName && getFileIcon(fileName)}
