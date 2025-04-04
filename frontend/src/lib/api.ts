@@ -467,24 +467,39 @@ export const stopAgent = async (agentRunId: string): Promise<void> => {
 };
 
 export const getAgentStatus = async (agentRunId: string): Promise<AgentRun> => {
-  const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  console.log(`[API] ⚠️ Requesting agent status for ${agentRunId}`);
   
-  if (!session?.access_token) {
-    throw new Error('No access token available');
-  }
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      console.error('[API] ❌ No access token available for getAgentStatus');
+      throw new Error('No access token available');
+    }
 
-  const response = await fetch(`${API_URL}/agent-run/${agentRunId}`, {
-    headers: {
-      'Authorization': `Bearer ${session.access_token}`,
-    },
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Error getting agent status: ${response.statusText}`);
+    const url = `${API_URL}/agent-run/${agentRunId}`;
+    console.log(`[API] 🔍 Fetching from: ${url}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'No error details available');
+      console.error(`[API] ❌ Error getting agent status: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Error getting agent status: ${response.statusText} (${response.status})`);
+    }
+    
+    const data = await response.json();
+    console.log(`[API] ✅ Successfully got agent status:`, data);
+    return data;
+  } catch (error) {
+    console.error('[API] ❌ Failed to get agent status:', error);
+    throw error;
   }
-  
-  return response.json();
 };
 
 export const getAgentRuns = async (threadId: string): Promise<AgentRun[]> => {
@@ -582,6 +597,36 @@ export const streamAgent = (agentRunId: string, callbacks: {
             return;
           }
           
+          // Check if this is a status completion message
+          if (rawData.includes('"type":"status"') && rawData.includes('"status":"completed"')) {
+            console.log(`[STREAM] ⚠️ Detected completion status message: ${rawData}`);
+            
+            try {
+              // Explicitly call onMessage before closing the stream to ensure the message is processed
+              callbacks.onMessage(rawData);
+              
+              // Explicitly close the EventSource connection when we receive a completion message
+              if (eventSourceInstance && !isClosing) {
+                console.log(`[STREAM] ⚠️ Closing EventSource due to completion message for ${agentRunId}`);
+                isClosing = true;
+                eventSourceInstance.close();
+                eventSourceInstance = null;
+                
+                // Explicitly call onClose here to ensure the client knows the stream is closed
+                setTimeout(() => {
+                  console.log(`[STREAM] 🚨 Explicitly calling onClose after completion for ${agentRunId}`);
+                  callbacks.onClose();
+                }, 0);
+              }
+              
+              // Exit early to prevent duplicate message processing
+              return;
+            } catch (closeError) {
+              console.error(`[STREAM] ❌ Error while closing stream on completion: ${closeError}`);
+              // Continue with normal processing if there's an error during closure
+            }
+          }
+          
           // Pass the raw data directly to onMessage for handling in the component
           callbacks.onMessage(rawData);
         } catch (error) {
@@ -590,7 +635,10 @@ export const streamAgent = (agentRunId: string, callbacks: {
         }
       };
       
-      eventSourceInstance.onerror = () => {
+      eventSourceInstance.onerror = (event) => {
+        // Add detailed event logging
+        console.log(`[STREAM] 🔍 EventSource onerror triggered for ${agentRunId}`, event);
+        
         // EventSource errors are often just connection closures
         // For clean closures (manual or completed), we don't need to log an error
         if (isClosing) {

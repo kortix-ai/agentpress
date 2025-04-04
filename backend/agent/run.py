@@ -1,15 +1,14 @@
 import os
 import json
-from agentpress.thread_manager import ThreadManager
+from agentpress.thread_manager import ThreadManager, ToolChoice
 from agent.tools.files_tool import FilesTool
 from agent.tools.terminal_tool import TerminalTool
 from agent.tools.wait_tool import WaitTool
 # from agent.tools.search_tool import CodeSearchTool
 from typing import AsyncGenerator, Optional, Union, Dict, Any
 from agent.test_prompt import get_system_prompt
-from dotenv import load_dotenv
-
 from agentpress.response_processor import ProcessorConfig
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
@@ -55,12 +54,11 @@ Current development environment workspace state:
         llm_model=model_name,
         llm_temperature=0.1,
         llm_max_tokens=8000,
-        llm_native_tool_calling_choice="auto",
         processor_config=ProcessorConfig(
             xml_tool_calling=True,
             native_tool_calling=False,
             execute_tools=True,
-            execute_on_stream=False,
+            execute_on_stream=True,
             tool_execution_strategy="sequential",
             xml_adding_strategy="assistant_message"
         )

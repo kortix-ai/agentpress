@@ -23,21 +23,41 @@ from utils.logger import logger
 # Type alias for XML result adding strategy
 XmlAddingStrategy = Literal["user_message", "assistant_message", "inline_edit"]
 
+# Type alias for tool execution strategy
+ToolExecutionStrategy = Literal["sequential", "parallel"]
+
 @dataclass
 class ProcessorConfig:
-    """Simplified configuration for the ResponseProcessor."""
-    execute_tools: bool = True
-
-    # Tool parsing configuration
-    xml_tool_calling: bool = True
+    """Configuration for response processing and tool execution.
+    
+    This class controls how the LLM's responses are processed, including how tool calls
+    are detected, executed, and their results handled.
+    
+    Attributes:
+        xml_tool_calling: Enable XML-based tool call detection (<tool>...</tool>)
+        native_tool_calling: Enable OpenAI-style function calling format
+        execute_tools: Whether to automatically execute detected tool calls
+        execute_on_stream: For streaming, execute tools as they appear vs. at the end
+        tool_execution_strategy: How to execute multiple tools ("sequential" or "parallel")
+        xml_adding_strategy: How to add XML tool results to the conversation
+    """
+    # Tool detection
+    xml_tool_calling: bool = True  
     native_tool_calling: bool = False
     
-    # Tool execution configuration
+    # Tool execution
+    execute_tools: bool = True
     execute_on_stream: bool = False
-    tool_execution_strategy: str = "sequential"  # "sequential" or "parallel"
-    
-    # Tool result handling
+    tool_execution_strategy: ToolExecutionStrategy = "sequential"
     xml_adding_strategy: XmlAddingStrategy = "assistant_message"
+    
+    def __post_init__(self):
+        """Validate configuration after initialization."""
+        if self.xml_tool_calling is False and self.native_tool_calling is False and self.execute_tools:
+            raise ValueError("At least one tool calling format (XML or native) must be enabled if execute_tools is True")
+            
+        if self.xml_adding_strategy not in ["user_message", "assistant_message", "inline_edit"]:
+            raise ValueError("xml_adding_strategy must be 'user_message', 'assistant_message', or 'inline_edit'")
 
 class ResponseProcessor:
     """Processes LLM responses, extracting and executing tool calls."""
@@ -213,17 +233,12 @@ class ResponseProcessor:
                 
                 # Now add all buffered tool results AFTER the assistant message
                 for tool_call, result in tool_results_buffer:
-                    # Determine if this is an XML tool
-                    is_xml_tool = False
-                    if hasattr(self.tool_registry, 'xml_tools'):
-                        is_xml_tool = tool_call["name"] in self.tool_registry.xml_tools
-                    
                     # Add result based on tool type
                     await self._add_tool_result(
                         thread_id, 
                         tool_call, 
                         result, 
-                        config.xml_adding_strategy if is_xml_tool else "assistant_message"  # Always use user or assistant message
+                        config.xml_adding_strategy
                     )
                 
                 # Execute any remaining tool calls if not done during streaming
@@ -258,17 +273,12 @@ class ResponseProcessor:
                         )
                         
                         for tool_call, result in tool_results:
-                            # Determine if this is an XML tool
-                            is_xml_tool = False
-                            if hasattr(self.tool_registry, 'xml_tools'):
-                                is_xml_tool = tool_call["name"] in self.tool_registry.xml_tools
-                            
                             # Add result based on tool type
                             await self._add_tool_result(
                                 thread_id, 
                                 tool_call, 
                                 result, 
-                                config.xml_adding_strategy if is_xml_tool else "user_message"  # Always use user or assistant message
+                                config.xml_adding_strategy
                             )
                             
                             # Yield tool execution result
@@ -358,17 +368,12 @@ class ResponseProcessor:
                 )
                 
                 for tool_call, result in tool_results:
-                    # Determine if this is an XML tool
-                    is_xml_tool = False
-                    if hasattr(self.tool_registry, 'xml_tools'):
-                        is_xml_tool = tool_call["name"] in self.tool_registry.xml_tools
-                    
                     # Add result based on tool type
                     await self._add_tool_result(
                         thread_id, 
                         tool_call, 
                         result, 
-                        config.xml_adding_strategy if is_xml_tool else "user_message"  # Always use user or assistant message
+                        config.xml_adding_strategy
                     )
                     
                     # Yield tool execution result
@@ -654,7 +659,7 @@ class ResponseProcessor:
     async def _execute_tools(
         self, 
         tool_calls: List[Dict[str, Any]], 
-        execution_strategy: str = "sequential"
+        execution_strategy: ToolExecutionStrategy = "sequential"
     ) -> List[Tuple[Dict[str, Any], ToolResult]]:
         """Execute tool calls with the specified strategy.
         

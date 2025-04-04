@@ -50,10 +50,11 @@ async def test_direct_execution():
     
     print(f"Sequential execution completed in {sequential_time:.2f} seconds")
     
-    # Validate sequential results
+    # Validate sequential results - results are a list of tuples (tool_call, tool_result)
     assert len(sequential_results) == expected_tool_count, f"❌ Expected {expected_tool_count} tool results, got {len(sequential_results)} in sequential execution"
-    assert all(isinstance(result, ToolResult) for result in sequential_results), "❌ Not all sequential results are ToolResult instances"
-    assert all(result.success for result in sequential_results), "❌ Not all sequential tool executions were successful"
+    assert all(isinstance(result_tuple, tuple) and len(result_tuple) == 2 for result_tuple in sequential_results), "❌ Not all sequential results are tuples of (tool_call, result)"
+    assert all(isinstance(result_tuple[1], ToolResult) for result_tuple in sequential_results), "❌ Not all sequential result values are ToolResult instances"
+    assert all(result_tuple[1].success for result_tuple in sequential_results), "❌ Not all sequential tool executions were successful"
     print("✅ PASS: Sequential execution completed all tool calls successfully")
     print()
     
@@ -70,10 +71,11 @@ async def test_direct_execution():
     
     print(f"Parallel execution completed in {parallel_time:.2f} seconds")
     
-    # Validate parallel results
+    # Validate parallel results - results are a list of tuples (tool_call, tool_result)
     assert len(parallel_results) == expected_tool_count, f"❌ Expected {expected_tool_count} tool results, got {len(parallel_results)} in parallel execution"
-    assert all(isinstance(result, ToolResult) for result in parallel_results), "❌ Not all parallel results are ToolResult instances"
-    assert all(result.success for result in parallel_results), "❌ Not all parallel tool executions were successful"
+    assert all(isinstance(result_tuple, tuple) and len(result_tuple) == 2 for result_tuple in parallel_results), "❌ Not all parallel results are tuples of (tool_call, result)"
+    assert all(isinstance(result_tuple[1], ToolResult) for result_tuple in parallel_results), "❌ Not all parallel result values are ToolResult instances"
+    assert all(result_tuple[1].success for result_tuple in parallel_results), "❌ Not all parallel tool executions were successful"
     print("✅ PASS: Parallel execution completed all tool calls successfully")
     print()
     

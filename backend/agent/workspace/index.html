@@ -3,27 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enhanced Minimal HTML</title>
+    <title>GrowthPro - Marketing Solutions</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Welcome to My Enhanced HTML Page</h1>
-        <p>This is a simple, clean HTML5 document with enhanced styling and interactivity.</p>
-        
-        <button onclick="toggleContent()">Show/Hide Content</button>
-        
-        <div id="hiddenContent" class="hidden">
-            <h2>Hidden Content</h2>
-            <p>This content can be toggled with the button above!</p>
+    <nav class="navbar">
+        <div class="nav-content">
+            <a href="#" class="logo"><i class="fas fa-chart-line"></i> GrowthPro</a>
+            <ul class="nav-links">
+                <li><a href="#services">Services</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
         </div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content">
+            <h1>Transform Your Business Growth</h1>
+            <p class="subtitle">Innovative marketing solutions that drive results</p>
+            <button class="cta-button">Get Started <i class="fas fa-arrow-right"></i></button>
+        </div>
+    </header>
+
+    <div class="container">
+        <section id="services" class="services">
+            <h2>Our Services</h2>
+            <div class="service-grid">
+                <div class="service-card">
+                    <i class="fas fa-bullseye"></i>
+                    <h3>Digital Strategy</h3>
+                    <p>Data-driven approaches to reach your target audience</p>
+                </div>
+                <div class="service-card">
+                    <i class="fas fa-search"></i>
+                    <h3>SEO Optimization</h3>
+                    <p>Boost your online visibility and rankings</p>
+                </div>
+                <div class="service-card">
+                    <i class="fas fa-ad"></i>
+                    <h3>PPC Campaigns</h3>
+                    <p>Targeted advertising that converts</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="stats">
+            <div class="stat-item">
+                <span class="stat-number">500+</span>
+                <span class="stat-label">Clients Served</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">95%</span>
+                <span class="stat-label">Success Rate</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">10M+</span>
+                <span class="stat-label">Revenue Generated</span>
+            </div>
+        </section>
+
+        <section id="about" class="about">
+            <h2>Why Choose Us</h2>
+            <div class="features">
+                <div class="feature">
+                    <i class="fas fa-check-circle"></i>
+                    <h3>Expert Team</h3>
+                    <p>Industry professionals with proven track record</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-rocket"></i>
+                    <h3>Fast Results</h3>
+                    <p>See improvements within the first month</p>
+                </div>
+                <div class="feature">
+                    <i class="fas fa-clock"></i>
+                    <h3>24/7 Support</h3>
+                    <p>Always here when you need us</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="contact" class="contact">
+            <h2>Ready to Grow?</h2>
+            <p>Get your free consultation today</p>
+            <form class="contact-form">
+                <input type="text" placeholder="Your Name" required>
+                <input type="email" placeholder="Email Address" required>
+                <textarea placeholder="Tell us about your goals"></textarea>
+                <button type="submit" class="submit-btn">Send Message</button>
+            </form>
+        </section>
     </div>
 
-    <script>
-        function toggleContent() {
-            const content = document.getElementById('hiddenContent');
-            content.classList.toggle('hidden');
-        }
-    </script>
+    <footer>
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>GrowthPro</h3>
+                <p>Your partner in digital success</p>
+            </div>
+            <div class="footer-section">
+                <h3>Contact</h3>
+                <p>Email: info@growthpro.com</p>
+                <p>Phone: (555) 123-4567</p>
+            </div>
+            <div class="footer-section">
+                <h3>Follow Us</h3>
+                <div class="social-links">
+                    <a href="#"><i class="fab fa-facebook"></i></a>
+                    <a href="#"><i class="fab fa-twitter"></i></a>
+                    <a href="#"><i class="fab fa-linkedin"></i></a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2024 GrowthPro. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+<script src="marketing-tests.js"></script>
 </body>
 </html>

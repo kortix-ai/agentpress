@@ -14,17 +14,21 @@ import logging
 import asyncio
 import uuid
 import re
-from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator, Tuple, Callable
+from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator, Tuple, Callable, Literal
 from services.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
 from agentpress.response_processor import (
     ResponseProcessor, 
     ProcessorConfig,
-    XmlAddingStrategy
+    XmlAddingStrategy,
+    ToolExecutionStrategy
 )
 from services.supabase import DBConnection
 from utils.logger import logger
+
+# Type alias for tool choice
+ToolChoice = Literal["auto", "required", "none"]
 
 class ThreadManager:
     """Manages conversation threads with LLM models and tool execution.
@@ -254,19 +258,13 @@ class ThreadManager:
         self,
         thread_id: str,
         system_prompt: Dict[str, Any],
-        stream: bool = False,
+        stream: bool = True,
         temporary_message: Optional[Dict[str, Any]] = None,
         llm_model: str = "gpt-4o",
         llm_temperature: float = 0,
         llm_max_tokens: Optional[int] = None,
-        llm_native_tool_calling_choice: str = "auto",
-        native_tool_calling: bool = False,
-        xml_tool_calling: bool = True,
-        execute_tools: bool = True,
-        execute_on_stream: bool = False,
-        tool_execution_strategy: str = "sequential",
-        xml_adding_strategy: XmlAddingStrategy = "assistant_message",
         processor_config: Optional[ProcessorConfig] = None,
+        tool_choice: ToolChoice = "auto",
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Run a conversation thread with LLM integration and tool execution.
         
@@ -278,14 +276,8 @@ class ThreadManager:
             llm_model: The name of the LLM model to use
             llm_temperature: Temperature parameter for response randomness (0-1)
             llm_max_tokens: Maximum tokens in the LLM response
-            llm_native_tool_calling_choice: Tool choice preference ("auto", "required", "none")
-            native_tool_calling: Enable native function calling format (legacy, use processor_config)
-            xml_tool_calling: Enable XML-based tool calling format (legacy, use processor_config)
-            execute_tools: Whether to execute detected tool calls (legacy, use processor_config)
-            execute_on_stream: Execute tools as they appear in stream (legacy, use processor_config)
-            tool_execution_strategy: Strategy for executing tools (legacy, use processor_config)
-            xml_adding_strategy: Strategy for adding XML tool results (legacy, use processor_config)
-            processor_config: Complete configuration for the response processor (preferred)
+            processor_config: Configuration for the response processor
+            tool_choice: Tool choice preference ("auto", "required", "none")
             
         Returns:
             An async generator yielding response chunks or error dict
@@ -321,20 +313,7 @@ class ThreadManager:
 
             # 3. Create or use processor config
             if processor_config is None:
-                # Create config from individual parameters (legacy mode)
-                # Validate tool configuration - cannot have both native and XML tools enabled
-                if native_tool_calling and xml_tool_calling:
-                    logger.warning("Both native and XML tool formats cannot be enabled simultaneously. Defaulting to XML tools.")
-                    native_tool_calling = False
-                    
-                processor_config = ProcessorConfig(
-                    xml_tool_calling=xml_tool_calling,
-                    native_tool_calling=native_tool_calling,
-                    execute_tools=execute_tools,
-                    execute_on_stream=execute_on_stream,
-                    xml_adding_strategy=xml_adding_strategy,
-                    tool_execution_strategy=tool_execution_strategy
-                )
+                processor_config = ProcessorConfig()
             
             logger.debug(f"Processor config: XML={processor_config.xml_tool_calling}, Native={processor_config.native_tool_calling}, " 
                    f"Execute tools={processor_config.execute_tools}, Strategy={processor_config.tool_execution_strategy}")
@@ -354,7 +333,7 @@ class ThreadManager:
                     temperature=llm_temperature,
                     max_tokens=llm_max_tokens,
                     tools=openapi_tool_schemas,
-                    tool_choice=llm_native_tool_calling_choice if processor_config.native_tool_calling else None,
+                    tool_choice=tool_choice if processor_config.native_tool_calling else None,
                     stream=stream
                 )
                 logger.debug("Successfully received LLM API response")
