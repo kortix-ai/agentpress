@@ -6,7 +6,6 @@ import certifi
 import ssl
 from utils.logger import logger
 import random
-import time
 from functools import wraps
 
 # Redis client
@@ -25,6 +24,7 @@ async def with_retry(func, *args, **kwargs):
     """Execute a Redis operation with exponential backoff retry."""
     retries = 0
     last_exception = None
+    func_name = getattr(func, "__name__", str(func))
     
     while retries < MAX_RETRIES:
         try:
@@ -34,7 +34,7 @@ async def with_retry(func, *args, **kwargs):
             last_exception = e
             
             if retries >= MAX_RETRIES:
-                logger.error(f"Redis operation failed after {MAX_RETRIES} retries: {str(e)}")
+                logger.error(f"Redis operation {func_name} failed after {MAX_RETRIES} retries: {str(e)}")
                 raise
             
             # Calculate backoff with jitter
@@ -42,13 +42,13 @@ async def with_retry(func, *args, **kwargs):
             jitter = delay * RETRY_JITTER * random.uniform(-1, 1)
             wait_time = delay + jitter
             
-            logger.warning(f"Redis connection error (attempt {retries}/{MAX_RETRIES}): {str(e)}. Retrying in {wait_time:.2f}s")
+            logger.warning(f"Redis {func_name} error (attempt {retries}/{MAX_RETRIES}): {str(e)}. Retrying in {wait_time:.2f}s")
             await asyncio.sleep(wait_time)
             
             # Try to reconnect if needed
             if client and hasattr(client, 'connection_pool'):
                 try:
-                    logger.debug("Trying to reconnect to Redis...")
+                    logger.debug(f"Trying to reconnect to Redis before retry {retries}...")
                     await client.ping()
                     logger.debug("Redis reconnection successful")
                 except Exception as reconnect_error:
@@ -56,6 +56,10 @@ async def with_retry(func, *args, **kwargs):
                     # Force reinitialization on next attempt
                     global _initialized
                     _initialized = False
+                    
+    # This should never be reached due to the raise above, but just in case
+    logger.error(f"Redis operation {func_name} failed with unhandled condition")
+    raise last_exception if last_exception else RuntimeError("Redis operation failed without specific error")
 
 def initialize():
     """Initialize Redis connection using environment variables (synchronous)."""
@@ -107,8 +111,10 @@ async def initialize_async(test_connection: bool = False):
                             client = None
                             raise e
                         wait_time = BASE_RETRY_DELAY * (2 ** (retry_count - 1))
-                        logger.warning(f"Redis connection attempt {retry_count} failed: {e}. Retrying in {wait_time:.2f}s...")
-                        await asyncio.sleep(wait_time)
+                        jitter = wait_time * RETRY_JITTER * random.uniform(-1, 1)
+                        total_wait = wait_time + jitter
+                        logger.warning(f"Redis connection attempt {retry_count} failed: {e}. Retrying in {total_wait:.2f}s...")
+                        await asyncio.sleep(total_wait)
             
             _initialized = True
             logger.info("Redis connection initialized successfully")
@@ -130,62 +136,38 @@ async def get_client():
     global client, _initialized
     if client is None or not _initialized:
         logger.debug("Redis client not initialized, initializing now")
-        await initialize_async()
+        await initialize_async(test_connection=True)
     return client
 
-class RedisFallbackHandler:
-    """Provides fallback behavior when Redis operations fail."""
-    
-    @staticmethod
-    async def set(key, value, ex=None, fallback_value=None):
-        """Try to set a value in Redis with fallback behavior."""
-        try:
-            redis_client = await get_client()
-            await with_retry(redis_client.set, key, value, ex=ex)
-            return True
-        except Exception as e:
-            logger.warning(f"Redis set operation failed for key {key}: {str(e)}")
-            return False
-    
-    @staticmethod
-    async def get(key, default=None):
-        """Try to get a value from Redis with fallback."""
-        try:
-            redis_client = await get_client()
-            result = await with_retry(redis_client.get, key)
-            return result if result is not None else default
-        except Exception as e:
-            logger.warning(f"Redis get operation failed for key {key}: {str(e)}")
-            return default
-    
-    @staticmethod
-    async def delete(key):
-        """Try to delete a key from Redis with fallback."""
-        try:
-            redis_client = await get_client()
-            await with_retry(redis_client.delete, key)
-            return True
-        except Exception as e:
-            logger.warning(f"Redis delete operation failed for key {key}: {str(e)}")
-            return False
-    
-    @staticmethod
-    async def publish(channel, message):
-        """Try to publish a message with fallback."""
-        try:
-            redis_client = await get_client()
-            await with_retry(redis_client.publish, channel, message)
-            return True
-        except Exception as e:
-            logger.warning(f"Redis publish operation failed for channel {channel}: {str(e)}")
-            return False
-    
-    @staticmethod
-    async def keys(pattern):
-        """Try to get keys matching pattern with fallback."""
-        try:
-            redis_client = await get_client()
-            return await with_retry(redis_client.keys, pattern)
-        except Exception as e:
-            logger.warning(f"Redis keys operation failed for pattern {pattern}: {str(e)}")
-            return [] 
+# Centralized Redis operation functions with built-in retry logic
+
+async def set(key, value, ex=None):
+    """Set a Redis key with automatic retry."""
+    redis_client = await get_client()
+    return await with_retry(redis_client.set, key, value, ex=ex)
+
+async def get(key, default=None):
+    """Get a Redis key with automatic retry."""
+    redis_client = await get_client()
+    result = await with_retry(redis_client.get, key)
+    return result if result is not None else default
+
+async def delete(key):
+    """Delete a Redis key with automatic retry."""
+    redis_client = await get_client()
+    return await with_retry(redis_client.delete, key)
+
+async def publish(channel, message):
+    """Publish a message to a Redis channel with automatic retry."""
+    redis_client = await get_client()
+    return await with_retry(redis_client.publish, channel, message)
+
+async def keys(pattern):
+    """Get keys matching a pattern with automatic retry."""
+    redis_client = await get_client()
+    return await with_retry(redis_client.keys, pattern)
+
+async def create_pubsub():
+    """Create a Redis pubsub object."""
+    redis_client = await get_client()
+    return redis_client.pubsub() 

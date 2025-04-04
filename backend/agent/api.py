@@ -5,7 +5,7 @@ import json
 import traceback
 from datetime import datetime, timezone
 import uuid
-from typing import Optional
+from typing import Optional, List
 import jwt
 
 from agentpress.thread_manager import ThreadManager
@@ -39,16 +39,17 @@ def initialize(
 async def cleanup():
     """Clean up resources and stop running agents on shutdown."""
     logger.info("Starting cleanup of agent API resources")
-    # Get Redis client
-    redis_client = await redis.get_client()
     
     # Use the instance_id to find and clean up this instance's keys
-    running_keys = await redis_client.keys(f"active_run:{instance_id}:*")
-    logger.info(f"Found {len(running_keys)} running agent runs to clean up")
-    
-    for key in running_keys:
-        agent_run_id = key.split(":")[-1]
-        await stop_agent_run(agent_run_id)
+    try:
+        running_keys = await redis.keys(f"active_run:{instance_id}:*")
+        logger.info(f"Found {len(running_keys)} running agent runs to clean up")
+        
+        for key in running_keys:
+            agent_run_id = key.split(":")[-1]
+            await stop_agent_run(agent_run_id)
+    except Exception as e:
+        logger.error(f"Failed to clean up running agent runs: {str(e)}")
     
     # Close Redis connection
     await redis.close()
@@ -58,28 +59,54 @@ async def stop_agent_run(agent_run_id: str):
     """Update database and publish stop signal to Redis."""
     logger.info(f"Stopping agent run: {agent_run_id}")
     client = await db.client
-    redis_client = await redis.get_client()
     
     # Update the agent run status to stopped
-    try:
-        await client.table('agent_runs').update({
-            "status": "stopped",
-            "completed_at": datetime.now(timezone.utc).isoformat()
-        }).eq("id", agent_run_id).execute()
-        logger.debug(f"Updated database status for agent run {agent_run_id} to 'stopped'")
-    except Exception as e:
-        logger.error(f"Failed to update agent run status in database: {str(e)}")
+    completion_timestamp = datetime.now(timezone.utc).isoformat()
+    update_successful = False
+    
+    # Retry up to 3 times to ensure the status is updated
+    for retry in range(3):
+        try:
+            update_result = await client.table('agent_runs').update({
+                "status": "stopped",
+                "completed_at": completion_timestamp
+            }).eq("id", agent_run_id).execute()
+            
+            if hasattr(update_result, 'data') and update_result.data:
+                logger.info(f"Successfully updated agent run status to 'stopped' (retry {retry}): {agent_run_id}")
+                update_successful = True
+                
+                # Verify the update was successful
+                verify_result = await client.table('agent_runs').select('status', 'completed_at').eq("id", agent_run_id).execute()
+                if verify_result.data:
+                    status = verify_result.data[0].get('status')
+                    completed_at = verify_result.data[0].get('completed_at')
+                    logger.info(f"Verified agent run stop update: status={status}, completed_at={completed_at}")
+                break
+            else:
+                logger.warning(f"Database update returned no data on retry {retry}: {update_result}")
+                if retry == 2:  # Last retry
+                    logger.error(f"Failed to update agent run status to stopped after all retries: {agent_run_id}")
+        except Exception as e:
+            logger.error(f"Database error on retry {retry} updating stop status: {str(e)}")
+            if retry < 2:  # Not the last retry yet
+                await asyncio.sleep(0.5 * (2 ** retry))  # Exponential backoff
+            else:
+                logger.error(f"Failed to update agent run status to stopped after all retries: {agent_run_id}", exc_info=True)
+    
+    if not update_successful:
+        logger.error(f"Could not update agent run status to stopped: {agent_run_id}")
     
     # Send stop signal to global channel
     try:
-        await redis_client.publish(f"agent_run:{agent_run_id}:control", "STOP")
+        await redis.publish(f"agent_run:{agent_run_id}:control", "STOP")
         logger.debug(f"Published STOP signal to global channel for agent run {agent_run_id}")
     except Exception as e:
         logger.error(f"Failed to publish STOP signal to global channel: {str(e)}")
     
     # Find all instances handling this agent run
     try:
-        instance_keys = await redis_client.keys(f"active_run:*:{agent_run_id}")
+        instance_keys = await redis.keys(f"active_run:*:{agent_run_id}")
         logger.debug(f"Found {len(instance_keys)} active instances for agent run {agent_run_id}")
         
         for key in instance_keys:
@@ -89,7 +116,7 @@ async def stop_agent_run(agent_run_id: str):
                 instance_id = parts[1]
                 try:
                     # Send stop signal to instance-specific channel
-                    await redis_client.publish(f"agent_run:{agent_run_id}:control:{instance_id}", "STOP")
+                    await redis.publish(f"agent_run:{agent_run_id}:control:{instance_id}", "STOP")
                     logger.debug(f"Published STOP signal to instance {instance_id} for agent run {agent_run_id}")
                 except Exception as e:
                     logger.warning(f"Failed to publish STOP signal to instance {instance_id}: {str(e)}")
@@ -142,7 +169,6 @@ async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id
     """Start an agent for a specific thread in the background."""
     logger.info(f"Starting new agent for thread: {thread_id}")
     client = await db.client
-    redis_client = await redis.get_client()
     
     # Verify user has access to this thread
     await verify_thread_access(client, thread_id, user_id)
@@ -173,11 +199,14 @@ async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id
     logger.info(f"Created new agent run: {agent_run_id}")
     
     # Register this run in Redis with TTL
-    await redis_client.set(
-        f"active_run:{instance_id}:{agent_run_id}", 
-        "running", 
-        ex=redis.REDIS_KEY_TTL
-    )
+    try:
+        await redis.set(
+            f"active_run:{instance_id}:{agent_run_id}", 
+            "running", 
+            ex=redis.REDIS_KEY_TTL
+        )
+    except Exception as e:
+        logger.warning(f"Failed to register agent run in Redis, continuing without Redis tracking: {str(e)}")
     
     # Run the agent in the background
     task = asyncio.create_task(
@@ -197,8 +226,7 @@ async def _cleanup_agent_run(agent_run_id: str):
     """Clean up Redis keys when an agent run is done."""
     logger.debug(f"Cleaning up Redis keys for agent run: {agent_run_id}")
     try:
-        redis_client = await redis.get_client()
-        await redis_client.delete(f"active_run:{instance_id}:{agent_run_id}")
+        await redis.delete(f"active_run:{instance_id}:{agent_run_id}")
         logger.debug(f"Successfully cleaned up Redis keys for agent run: {agent_run_id}")
     except Exception as e:
         logger.warning(f"Failed to clean up Redis keys for agent run {agent_run_id}: {str(e)}")
@@ -315,7 +343,6 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
     """Run the agent in the background and handle status updates."""
     logger.info(f"Starting background agent run: {agent_run_id} for thread: {thread_id} (instance: {instance_id})")
     client = await db.client
-    redis_client = await redis.get_client()
     
     # Tracking variables
     total_responses = 0
@@ -324,24 +351,51 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
     # Create a pubsub to listen for control messages
     pubsub = None
     try:
-        pubsub = redis_client.pubsub()
+        pubsub = await redis.create_pubsub()
+        
         # Use instance-specific control channel to avoid cross-talk between instances
         control_channel = f"agent_run:{agent_run_id}:control:{instance_id}"
-        await pubsub.subscribe(control_channel)
-        logger.debug(f"Subscribed to control channel: {control_channel}")
+        # Use backoff retry pattern for pubsub connection
+        retry_count = 0
+        while retry_count < 3:
+            try:
+                await pubsub.subscribe(control_channel)
+                logger.debug(f"Subscribed to control channel: {control_channel}")
+                break
+            except Exception as e:
+                retry_count += 1
+                if retry_count >= 3:
+                    logger.error(f"Failed to subscribe to control channel after 3 attempts: {str(e)}")
+                    raise
+                wait_time = 0.5 * (2 ** (retry_count - 1))
+                logger.warning(f"Failed to subscribe to control channel (attempt {retry_count}/3): {str(e)}. Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
         
         # Also subscribe to the global control channel for cross-instance control
         global_control_channel = f"agent_run:{agent_run_id}:control"
-        await pubsub.subscribe(global_control_channel)
-        logger.debug(f"Subscribed to global control channel: {global_control_channel}")
+        retry_count = 0
+        while retry_count < 3:
+            try:
+                await pubsub.subscribe(global_control_channel)
+                logger.debug(f"Subscribed to global control channel: {global_control_channel}")
+                break
+            except Exception as e:
+                retry_count += 1
+                if retry_count >= 3:
+                    logger.error(f"Failed to subscribe to global control channel after 3 attempts: {str(e)}")
+                    # We can continue with just the instance-specific channel
+                    break
+                wait_time = 0.5 * (2 ** (retry_count - 1))
+                logger.warning(f"Failed to subscribe to global control channel (attempt {retry_count}/3): {str(e)}. Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
     except Exception as e:
-        logger.error(f"Failed to subscribe to Redis control channels: {str(e)}")
+        logger.error(f"Failed to initialize Redis pubsub: {str(e)}")
         pubsub = None
     
     # Keep Redis key up-to-date with TTL refresh
     try:
         # Extend TTL on the active run key to prevent expiration during long runs
-        await redis_client.set(
+        await redis.set(
             f"active_run:{instance_id}:{agent_run_id}", 
             "running", 
             ex=redis.REDIS_KEY_TTL
@@ -381,7 +435,7 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
                 # Periodically refresh the active run key's TTL
                 try:
                     if total_responses % 100 == 0:
-                        await redis_client.set(
+                        await redis.set(
                             f"active_run:{instance_id}:{agent_run_id}", 
                             "running", 
                             ex=redis.REDIS_KEY_TTL
@@ -427,23 +481,46 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             logger.info(f"Agent run completed successfully: {agent_run_id} (duration: {duration:.2f}s, total responses: {total_responses}, instance: {instance_id})")
             
-            try:
-                await client.table('agent_runs').update({
-                    "status": "completed",
-                    "completed_at": datetime.now(timezone.utc).isoformat()
-                }).eq("id", agent_run_id).execute()
-            except Exception as db_error:
-                logger.error(f"Failed to update completion status in database: {str(db_error)}")
+            # Update the agent run status in the database
+            completion_timestamp = datetime.now(timezone.utc).isoformat()
+            
+            # Retry up to 3 times to ensure the completion status is updated
+            for retry in range(3):
+                try:
+                    update_result = await client.table('agent_runs').update({
+                        "status": "completed",
+                        "completed_at": completion_timestamp
+                    }).eq("id", agent_run_id).execute()
+                    
+                    if hasattr(update_result, 'data') and update_result.data:
+                        logger.info(f"Successfully updated agent run status to 'completed' (retry {retry}): {agent_run_id}")
+                        # Verify the update was successful
+                        verify_result = await client.table('agent_runs').select('status', 'completed_at').eq("id", agent_run_id).execute()
+                        if verify_result.data:
+                            status = verify_result.data[0].get('status')
+                            completed_at = verify_result.data[0].get('completed_at')
+                            logger.info(f"Verified agent run update: status={status}, completed_at={completed_at}")
+                        break
+                    else:
+                        logger.warning(f"Database update returned no data on retry {retry}: {update_result}")
+                        if retry == 2:  # Last retry
+                            logger.error(f"Failed to update agent run completion status after all retries: {agent_run_id}")
+                except Exception as db_error:
+                    logger.error(f"Database error on retry {retry} updating completion status: {str(db_error)}")
+                    if retry < 2:  # Not the last retry yet
+                        await asyncio.sleep(0.5 * (2 ** retry))  # Exponential backoff
+                    else:
+                        logger.error(f"Failed to update agent run completion status after all retries: {agent_run_id}", exc_info=True)
             
             # Notify any clients monitoring the control channels that we're done
             try:
                 if pubsub:
                     # Publish to both instance-specific and global channels
-                    await redis_client.publish(
+                    await redis.publish(
                         f"agent_run:{agent_run_id}:control:{instance_id}", 
                         "END_STREAM"
                     )
-                    await redis_client.publish(
+                    await redis.publish(
                         f"agent_run:{agent_run_id}:control", 
                         "END_STREAM"
                     )
@@ -458,25 +535,40 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
         duration = (datetime.now(timezone.utc) - start_time).total_seconds()
         logger.error(f"Error in agent run {agent_run_id} after {duration:.2f}s: {error_message}\n{traceback_str} (instance: {instance_id})")
         
-        # Update the agent run with the error
-        try:
-            await client.table('agent_runs').update({
-                "status": "failed",
-                "error": f"{error_message}\n{traceback_str}",
-                "completed_at": datetime.now(timezone.utc).isoformat()
-            }).eq("id", agent_run_id).execute()
-        except Exception as db_error:
-            logger.error(f"Failed to update error status in database: {str(db_error)}")
+        # Update the agent run with the error - with retry
+        completion_timestamp = datetime.now(timezone.utc).isoformat()
+        
+        for retry in range(3):
+            try:
+                update_result = await client.table('agent_runs').update({
+                    "status": "failed",
+                    "error": f"{error_message}\n{traceback_str}",
+                    "completed_at": completion_timestamp
+                }).eq("id", agent_run_id).execute()
+                
+                if hasattr(update_result, 'data') and update_result.data:
+                    logger.info(f"Successfully updated agent run status to 'failed' (retry {retry}): {agent_run_id}")
+                    break
+                else:
+                    logger.warning(f"Failed status update returned no data on retry {retry}: {update_result}")
+                    if retry == 2:  # Last retry
+                        logger.error(f"Failed to update agent run error status after all retries: {agent_run_id}")
+            except Exception as db_error:
+                logger.error(f"Database error on retry {retry} updating error status: {str(db_error)}")
+                if retry < 2:  # Not the last retry yet
+                    await asyncio.sleep(0.5 * (2 ** retry))  # Exponential backoff
+                else:
+                    logger.error(f"Failed to update agent run error status after all retries: {agent_run_id}", exc_info=True)
         
         # Notify any clients of the error
         try:
             if pubsub:
                 # Publish to both instance-specific and global channels
-                await redis_client.publish(
+                await redis.publish(
                     f"agent_run:{agent_run_id}:control:{instance_id}", 
                     "ERROR"
                 )
-                await redis_client.publish(
+                await redis.publish(
                     f"agent_run:{agent_run_id}:control", 
                     "ERROR"
                 )
@@ -500,9 +592,9 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
             except Exception as e:
                 logger.warning(f"Error unsubscribing from pubsub: {str(e)}")
         
-        # Clean up the Redis key        
+        # Clean up the Redis key
         try:
-            await redis_client.delete(f"active_run:{instance_id}:{agent_run_id}")
+            await redis.delete(f"active_run:{instance_id}:{agent_run_id}")
             logger.debug(f"Deleted active run key for agent run: {agent_run_id} (instance: {instance_id})")
         except Exception as e:
             logger.warning(f"Error deleting active run key: {str(e)}")

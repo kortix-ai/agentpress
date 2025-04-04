@@ -399,30 +399,50 @@ export const getMessages = async (threadId: string, hideToolMsgs: boolean = fals
 
 // Agent APIs
 export const startAgent = async (threadId: string): Promise<{ agent_run_id: string }> => {
-  const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session?.access_token) {
-    throw new Error('No access token available');
-  }
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
 
-  const response = await fetch(`${API_URL}/thread/${threadId}/agent/start`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`,
-    },
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Error starting agent: ${response.statusText}`);
+    // Check if backend URL is configured
+    if (!API_URL) {
+      throw new Error('Backend URL is not configured. Set NEXT_PUBLIC_BACKEND_URL in your environment.');
+    }
+
+    console.log(`[API] Starting agent for thread ${threadId} using ${API_URL}/thread/${threadId}/agent/start`);
+    
+    const response = await fetch(`${API_URL}/thread/${threadId}/agent/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'No error details available');
+      console.error(`[API] Error starting agent: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Error starting agent: ${response.statusText} (${response.status})`);
+    }
+    
+    // Invalidate relevant caches
+    apiCache.invalidateAgentRuns(threadId);
+    apiCache.invalidateThreadMessages(threadId);
+    
+    return response.json();
+  } catch (error) {
+    console.error('[API] Failed to start agent:', error);
+    
+    // Provide clearer error message for network errors
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      throw new Error(`Cannot connect to backend server. Please check your internet connection and make sure the backend is running.`);
+    }
+    
+    throw error;
   }
-  
-  // Invalidate relevant caches
-  apiCache.invalidateAgentRuns(threadId);
-  apiCache.invalidateThreadMessages(threadId);
-  
-  return response.json();
 };
 
 export const stopAgent = async (agentRunId: string): Promise<void> => {

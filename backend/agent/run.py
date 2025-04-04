@@ -34,7 +34,7 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
 #         """
 #     }
 
-    model_name = "anthropic/claude-3-7-sonnet-latest" #anthropic/claude-3-7-sonnet-latest
+    model_name = "groq/deepseek-r1-distill-llama-70b" #anthropic/claude-3-7-sonnet-latest
 
     response = await thread_manager.run_thread(
         thread_id=thread_id,

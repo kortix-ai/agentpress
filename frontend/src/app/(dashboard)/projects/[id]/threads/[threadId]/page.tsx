@@ -76,13 +76,27 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     
     // Start streaming the agent's responses with improved implementation
     const cleanup = streamAgent(runId, {
-      onMessage: (rawData: string) => {
+      onMessage: async (rawData: string) => {
         try {
           // Log the raw data first for debugging
           console.log(`[PAGE] Raw message data:`, rawData);
           
           // Try to parse the raw data as JSON
           const parsedData = JSON.parse(rawData);
+          
+          // Handle status messages specially
+          if (parsedData.type === 'status') {
+            console.log(`[PAGE] Received status update: ${parsedData.status}`);
+            
+            if (parsedData.status === 'completed') {
+              // Record that we received a completion message
+              console.log('[PAGE] Received completed status message');
+              // No UI updates here - let the onClose handler manage completion state
+            }
+            
+            // Don't process status messages further
+            return;
+          }
           
           // Skip empty messages
           if (!parsedData.content && !parsedData.arguments) return;

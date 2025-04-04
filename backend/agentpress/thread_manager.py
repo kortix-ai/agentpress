@@ -338,6 +338,7 @@ class ThreadManager:
                                                     "name": function_name,
                                                     "arguments": arguments
                                                 }
+                    
                     except Exception as e:
                         logger.error(f"Error processing stream: {str(e)}", exc_info=True)
                         # Yield an error response
