@@ -5,14 +5,14 @@ import json
 import traceback
 from datetime import datetime, timezone
 import uuid
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import jwt
 
 from agentpress.thread_manager import ThreadManager
 from services.supabase import DBConnection
 from services import redis
 from agent.run import run_agent
-from utils.auth_utils import get_current_user_id, get_user_id_from_stream_auth, verify_thread_access, verify_agent_run_access
+from utils.auth_utils import get_current_user_id, get_user_id_from_stream_auth, verify_thread_access
 from utils.logger import logger
 
 # Initialize shared resources
@@ -20,6 +20,9 @@ router = APIRouter()
 thread_manager = None
 db = None 
 instance_id = None
+
+# In-memory storage for active agent runs and their responses
+active_agent_runs: Dict[str, List[Any]] = {}
 
 def initialize(
     _thread_manager: ThreadManager,
@@ -164,6 +167,44 @@ async def check_for_active_project_agent_run(client, project_id: str):
     
     return None
 
+async def get_agent_run_with_access_check(client, agent_run_id: str, user_id: str):
+    """
+    Get an agent run's data after verifying the user has access to it.
+    
+    Args:
+        client: The Supabase client
+        agent_run_id: The agent run ID to check access for
+        user_id: The user ID to check permissions for
+        
+    Returns:
+        dict: The agent run data if access is granted
+        
+    Raises:
+        HTTPException: If the user doesn't have access or the agent run doesn't exist
+    """
+    agent_run = await client.table('agent_runs').select('*').eq('id', agent_run_id).execute()
+    
+    if not agent_run.data or len(agent_run.data) == 0:
+        raise HTTPException(status_code=404, detail="Agent run not found")
+        
+    agent_run_data = agent_run.data[0]
+    thread_id = agent_run_data['thread_id']
+    
+    # Verify user has access to this thread
+    await verify_thread_access(client, thread_id, user_id)
+    
+    return agent_run_data 
+
+async def _cleanup_agent_run(agent_run_id: str):
+    """Clean up Redis keys when an agent run is done."""
+    logger.debug(f"Cleaning up Redis keys for agent run: {agent_run_id}")
+    try:
+        await redis.delete(f"active_run:{instance_id}:{agent_run_id}")
+        logger.debug(f"Successfully cleaned up Redis keys for agent run: {agent_run_id}")
+    except Exception as e:
+        logger.warning(f"Failed to clean up Redis keys for agent run {agent_run_id}: {str(e)}")
+        # Non-fatal error, can continue
+
 @router.post("/thread/{thread_id}/agent/start")
 async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id)):
     """Start an agent for a specific thread in the background."""
@@ -198,6 +239,9 @@ async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id
     agent_run_id = agent_run.data[0]['id']
     logger.info(f"Created new agent run: {agent_run_id}")
     
+    # Initialize in-memory storage for this agent run
+    active_agent_runs[agent_run_id] = []
+    
     # Register this run in Redis with TTL
     try:
         await redis.set(
@@ -222,16 +266,6 @@ async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id
     
     return {"agent_run_id": agent_run_id, "status": "running"}
 
-async def _cleanup_agent_run(agent_run_id: str):
-    """Clean up Redis keys when an agent run is done."""
-    logger.debug(f"Cleaning up Redis keys for agent run: {agent_run_id}")
-    try:
-        await redis.delete(f"active_run:{instance_id}:{agent_run_id}")
-        logger.debug(f"Successfully cleaned up Redis keys for agent run: {agent_run_id}")
-    except Exception as e:
-        logger.warning(f"Failed to clean up Redis keys for agent run {agent_run_id}: {str(e)}")
-        # Non-fatal error, can continue
-
 @router.post("/agent-run/{agent_run_id}/stop")
 async def stop_agent(agent_run_id: str, user_id: str = Depends(get_current_user_id)):
     """Stop a running agent."""
@@ -239,68 +273,12 @@ async def stop_agent(agent_run_id: str, user_id: str = Depends(get_current_user_
     client = await db.client
     
     # Verify user has access to the agent run
-    await verify_agent_run_access(client, agent_run_id, user_id)
+    await get_agent_run_with_access_check(client, agent_run_id, user_id)
     
     # Stop the agent run
     await stop_agent_run(agent_run_id)
     
     return {"status": "stopped"}
-
-@router.get("/agent-run/{agent_run_id}/stream")
-async def stream_agent_run(
-    agent_run_id: str, 
-    token: Optional[str] = None,
-    request: Request = None
-):
-    """Stream the responses of an agent run directly from the LLM."""
-    logger.info(f"Starting direct LLM stream for agent run: {agent_run_id}")
-    client = await db.client
-    
-    # Get user ID using the streaming auth function
-    user_id = await get_user_id_from_stream_auth(request, token)
-    
-    # Verify user has access to the agent run and get run data
-    agent_run_data = await verify_agent_run_access(client, agent_run_id, user_id)
-    thread_id = agent_run_data['thread_id']
-    
-    # Define a very simple streaming generator that connects directly to the LLM
-    async def direct_stream_generator():
-        logger.info(f"Direct LLM streaming starting for thread: {thread_id}")
-        try:
-            # Create a new agent generator directly - this makes a fresh LLM API call
-            direct_agent_gen = run_agent(thread_id, stream=True, thread_manager=thread_manager)
-            
-            # Stream every response directly to the client
-            async for response in direct_agent_gen:
-                # Log what we're sending
-                response_type = response.get('type', 'unknown')
-                logger.debug(f"STREAMING: {response_type} - {str(response)[:100]}...")
-                
-                # Send the response directly to the client
-                yield f"data: {json.dumps(response)}\n\n"
-        
-        except Exception as e:
-            # Log and send any errors
-            logger.error(f"Error in direct LLM streaming: {str(e)}", exc_info=True)
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
-        
-        finally:
-            # Always send a completion status at the end
-            yield f"data: {json.dumps({'type': 'status', 'status': 'completed'})}\n\n"
-            logger.info(f"Direct LLM streaming complete for thread: {thread_id}")
-    
-    # Return a streaming response
-    return StreamingResponse(
-        direct_stream_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "Connection": "keep-alive", 
-            "X-Accel-Buffering": "no",
-            "Content-Type": "text/event-stream",
-            "Access-Control-Allow-Origin": "*"
-        }
-    )
 
 @router.get("/thread/{thread_id}/agent-runs")
 async def get_agent_runs(thread_id: str, user_id: str = Depends(get_current_user_id)):
@@ -322,22 +300,89 @@ async def get_agent_run(agent_run_id: str, user_id: str = Depends(get_current_us
     client = await db.client
     
     # Verify user has access to the agent run and get run data
-    agent_run_data = await verify_agent_run_access(client, agent_run_id, user_id)
+    agent_run_data = await get_agent_run_with_access_check(client, agent_run_id, user_id)
     
-    # Return empty responses array (no longer stored in Redis)
-    responses = []
-    logger.debug(f"Returning empty responses array for agent run: {agent_run_id}")
-    
-    # All responses are now in the standardized format
+    # Return the agent run data with responses from the database
     return {
         "id": agent_run_data['id'],
         "threadId": agent_run_data['thread_id'],
         "status": agent_run_data['status'],
         "startedAt": agent_run_data['started_at'],
         "completedAt": agent_run_data['completed_at'],
-        "responses": responses,
+        "responses": agent_run_data['responses'],
         "error": agent_run_data['error']
     }
+
+@router.get("/agent-run/{agent_run_id}/stream")
+async def stream_agent_run(
+    agent_run_id: str, 
+    token: Optional[str] = None,
+    request: Request = None
+):
+    """Stream the responses of an agent run from in-memory storage or reconnect to ongoing run."""
+    logger.info(f"Starting stream for agent run: {agent_run_id}")
+    client = await db.client
+    
+    # Get user ID using the streaming auth function
+    user_id = await get_user_id_from_stream_auth(request, token)
+    
+    # Verify user has access to the agent run and get run data
+    agent_run_data = await get_agent_run_with_access_check(client, agent_run_id, user_id)
+    
+    # Define a streaming generator that uses in-memory responses
+    async def stream_generator():
+        logger.info(f"Streaming responses for agent run: {agent_run_id}")
+        
+        # Check if this is an active run with stored responses
+        if agent_run_id in active_agent_runs:
+            # First, send all existing responses
+            stored_responses = active_agent_runs[agent_run_id]
+            logger.info(f"Sending {len(stored_responses)} existing responses for agent run: {agent_run_id}")
+            
+            for response in stored_responses:
+                yield f"data: {json.dumps(response)}\n\n"
+            
+            # If the run is still active (status is running), set up to stream new responses
+            if agent_run_data['status'] == 'running':
+                # Get the current length to know where to start watching for new responses
+                current_length = len(stored_responses)
+                
+                # Keep checking for new responses
+                while agent_run_id in active_agent_runs:
+                    # Check if there are new responses
+                    if len(active_agent_runs[agent_run_id]) > current_length:
+                        # Send all new responses
+                        for i in range(current_length, len(active_agent_runs[agent_run_id])):
+                            response = active_agent_runs[agent_run_id][i]
+                            yield f"data: {json.dumps(response)}\n\n"
+                        
+                        # Update current length
+                        current_length = len(active_agent_runs[agent_run_id])
+                    
+                    # Brief pause before checking again
+                    await asyncio.sleep(0.1)
+        else:
+            # If the run is not active or we don't have stored responses,
+            # send a message indicating the run is not available for streaming
+            logger.warning(f"Agent run {agent_run_id} not found in active runs")
+            yield f"data: {json.dumps({'type': 'status', 'status': agent_run_data['status'], 'message': 'Run data not available for streaming'})}\n\n"
+        
+        # Always send a completion status at the end
+        yield f"data: {json.dumps({'type': 'status', 'status': 'completed'})}\n\n"
+        logger.info(f"Streaming complete for agent run: {agent_run_id}")
+    
+    # Return a streaming response
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive", 
+            "X-Accel-Buffering": "no",
+            "Content-Type": "text/event-stream",
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
 
 async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: str):
     """Run the agent in the background and handle status updates."""
@@ -468,8 +513,10 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
                 logger.info(f"Agent run stopped due to stop signal: {agent_run_id} (instance: {instance_id})")
                 break
                 
-            # Count responses (we're not storing them anymore)
-            total_responses += 1
+            # Store response in memory
+            if agent_run_id in active_agent_runs:
+                active_agent_runs[agent_run_id].append(response)
+                total_responses += 1
             
             # Periodically log progress for long-running agents
             if total_responses % 100 == 0:
@@ -480,6 +527,14 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
         if not stop_signal_received:
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             logger.info(f"Agent run completed successfully: {agent_run_id} (duration: {duration:.2f}s, total responses: {total_responses}, instance: {instance_id})")
+            
+            # Add completion message to the stream
+            if agent_run_id in active_agent_runs:
+                active_agent_runs[agent_run_id].append({
+                    "type": "status",
+                    "status": "completed",
+                    "message": "Agent run completed successfully"
+                })
             
             # Update the agent run status in the database
             completion_timestamp = datetime.now(timezone.utc).isoformat()
@@ -534,6 +589,14 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
         traceback_str = traceback.format_exc()
         duration = (datetime.now(timezone.utc) - start_time).total_seconds()
         logger.error(f"Error in agent run {agent_run_id} after {duration:.2f}s: {error_message}\n{traceback_str} (instance: {instance_id})")
+        
+        # Add error message to the stream
+        if agent_run_id in active_agent_runs:
+            active_agent_runs[agent_run_id].append({
+                "type": "status",
+                "status": "error",
+                "message": error_message
+            })
         
         # Update the agent run with the error - with retry
         completion_timestamp = datetime.now(timezone.utc).isoformat()
@@ -600,3 +663,5 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
             logger.warning(f"Error deleting active run key: {str(e)}")
                 
         logger.info(f"Agent run background task fully completed for: {agent_run_id} (instance: {instance_id})")
+
+

@@ -310,24 +310,17 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       // Scroll to bottom immediately when user sends a message
       scrollToBottom();
       
-      // Send to the API
-      await addMessage(threadId, userMessage);
+      // Send to the API and start agent in parallel
+      const [messageResult, agentResult] = await Promise.all([
+        addMessage(threadId, userMessage),
+        startAgent(threadId)
+      ]);
       
-      // If an agent is running, stop it first
-      if (agentStatus === 'running' && agentRunId) {
-        await stopAgent(agentRunId);
-      }
-      
-      // Start a new agent run
-      const result = await startAgent(threadId);
-      setAgentRunId(result.agent_run_id);
+      setAgentRunId(agentResult.agent_run_id);
       setAgentStatus('running');
       
-      // Scroll to bottom when agent starts responding
-      scrollToBottom();
-      
-      // Start streaming the agent's responses
-      handleStreamAgent(result.agent_run_id);
+      // Start streaming the agent's responses immediately
+      handleStreamAgent(agentResult.agent_run_id);
     } catch (err) {
       console.error('Error sending message:', err);
       toast.error('Failed to send message');

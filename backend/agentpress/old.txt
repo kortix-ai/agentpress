@@ -1,0 +1,297 @@
+
+- > Realtime detect XML tool calls based on Opening & Closing XML tag is detected -> EXAMPLE:
+
+def _extract_tag_content(self, xml_chunk: str, tag_name: str) -> Tuple[Optional[str], Optional[str]]:
+        """Extract content between opening and closing tags, handling nested tags.
+        
+        Args:
+            xml_chunk: The XML content to parse
+            tag_name: Name of the tag to find
+            
+        Returns:
+            Tuple containing:
+                - str: Extracted content if found, None otherwise
+                - str: Remaining XML chunk after extraction
+                
+        Notes:
+            - Handles nested tags of the same name correctly
+            - Preserves XML structure within extracted content
+        """
+        start_tag = f'<{tag_name}'
+        end_tag = f'</{tag_name}>'
+        
+        try:
+            # Find start tag position
+            start_pos = xml_chunk.find(start_tag)
+            if start_pos == -1:
+                return None, xml_chunk
+                
+            # Find end of opening tag
+            tag_end = xml_chunk.find('>', start_pos)
+            if tag_end == -1:
+                return None, xml_chunk
+                
+            # Find matching closing tag
+            content_start = tag_end + 1
+            nesting_level = 1
+            pos = content_start
+            
+            while nesting_level > 0 and pos < len(xml_chunk):
+                next_start = xml_chunk.find(start_tag, pos)
+                next_end = xml_chunk.find(end_tag, pos)
+                
+                if next_end == -1:
+                    return None, xml_chunk
+                    
+                if next_start != -1 and next_start < next_end:
+                    nesting_level += 1
+                    pos = next_start + len(start_tag)
+                else:
+                    nesting_level -= 1
+                    pos = next_end + len(end_tag)
+            
+            if nesting_level == 0:
+                content = xml_chunk[content_start:pos - len(end_tag)]
+                remaining = xml_chunk[pos:]
+                return content, remaining
+                
+            return None, xml_chunk
+            
+        except Exception as e:
+            logging.error(f"Error extracting tag content: {e}")
+            return None, xml_chunk
+
+    def _extract_attribute(self, opening_tag: str, attr_name: str) -> Optional[str]:
+        """Extract attribute value from opening tag.
+        
+        Args:
+            opening_tag: The opening XML tag
+            attr_name: Name of the attribute to find
+            
+        Returns:
+            str: Attribute value if found, None otherwise
+            
+        Notes:
+            - Handles both single and double quoted attributes
+            - Unescapes XML entities in attribute values
+        """
+        try:
+            # Handle both single and double quotes with raw strings
+            patterns = [
+                fr'{attr_name}="([^"]*)"',  # Double quotes
+                fr"{attr_name}='([^']*)'",  # Single quotes
+                fr'{attr_name}=([^\s/>;]+)'  # No quotes - fixed escape sequence
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, opening_tag)
+                if match:
+                    value = match.group(1)
+                    # Unescape common XML entities
+                    value = value.replace('&quot;', '"').replace('&apos;', "'")
+                    value = value.replace('&lt;', '<').replace('&gt;', '>')
+                    value = value.replace('&amp;', '&')
+                    return value
+            
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error extracting attribute: {e}")
+            return None
+
+    def _extract_xml_chunks(self, content: str) -> List[str]:
+        """Extract complete XML chunks using start and end pattern matching.
+        
+        Args:
+            content: The XML content to parse
+            
+        Returns:
+            List[str]: Complete XML chunks found in the content
+            
+        Notes:
+            - Matches only registered XML tool tags
+            - Handles nested tags correctly
+        """
+        chunks = []
+        pos = 0
+        
+        try:
+            while pos < len(content):
+                # Find the next tool tag
+                next_tag_start = -1
+                current_tag = None
+                
+                # Find the earliest occurrence of any registered tag
+                for tag_name in self.tool_registry.xml_tools.keys():
+                    start_pattern = f'<{tag_name}'
+                    tag_pos = content.find(start_pattern, pos)
+                    
+                    if tag_pos != -1 and (next_tag_start == -1 or tag_pos < next_tag_start):
+                        next_tag_start = tag_pos
+                        current_tag = tag_name
+                
+                if next_tag_start == -1 or not current_tag:
+                    break
+                
+                # Find the matching end tag
+                end_pattern = f'</{current_tag}>'
+                tag_stack = []
+                chunk_start = next_tag_start
+                current_pos = next_tag_start
+                
+                while current_pos < len(content):
+                    # Look for next start or end tag of the same type
+                    next_start = content.find(f'<{current_tag}', current_pos + 1)
+                    next_end = content.find(end_pattern, current_pos)
+                    
+                    if next_end == -1:  # No closing tag found
+                        break
+                    
+                    if next_start != -1 and next_start < next_end:
+                        # Found nested start tag
+                        tag_stack.append(next_start)
+                        current_pos = next_start + 1
+                    else:
+                        # Found end tag
+                        if not tag_stack:  # This is our matching end tag
+                            chunk_end = next_end + len(end_pattern)
+                            chunk = content[chunk_start:chunk_end]
+                            chunks.append(chunk)
+                            pos = chunk_end
+                            break
+                        else:
+                            # Pop nested tag
+                            tag_stack.pop()
+                            current_pos = next_end + 1
+                
+                if current_pos >= len(content):  # Reached end without finding closing tag
+                    break
+                
+                pos = max(pos + 1, current_pos)
+        
+        except Exception as e:
+            logging.error(f"Error extracting XML chunks: {e}")
+            logging.error(f"Content was: {content}")
+        
+        return chunks
+
+- > Realtime detect Native Tool calls based on Tool / Function Calling outputs  -> EXAMPLE:
+        response_message = response.choices[0].message
+        message = {
+            "role": "assistant",
+            "content": response_message.get('content') or "",
+        }
+        
+        tool_calls = response_message.get('tool_calls')
+        if tool_calls:
+            message["tool_calls"] = [
+                {
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments
+                    }
+                } for tool_call in tool_calls
+            ]
+        
+
+          content_chunk = ""
+        is_complete = False
+        has_complete_tool_call = False
+        
+        if hasattr(chunk.choices[0], 'delta'):
+            delta = chunk.choices[0].delta
+            
+            if hasattr(delta, 'content') and delta.content:
+                content_chunk = delta.content
+
+            if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                for tool_call in delta.tool_calls:
+                    idx = tool_call.index
+                    if idx not in tool_calls_buffer:
+                        tool_calls_buffer[idx] = {
+                            'id': tool_call.id if hasattr(tool_call, 'id') and tool_call.id else None,
+                            'type': 'function',
+                            'function': {
+                                'name': tool_call.function.name if hasattr(tool_call.function, 'name') and tool_call.function.name else None,
+                                'arguments': ''
+                            }
+                        }
+                    
+                    current_tool = tool_calls_buffer[idx]
+                    if hasattr(tool_call, 'id') and tool_call.id:
+                        current_tool['id'] = tool_call.id
+                    if hasattr(tool_call.function, 'name') and tool_call.function.name:
+                        current_tool['function']['name'] = tool_call.function.name
+                    if hasattr(tool_call.function, 'arguments') and tool_call.function.arguments:
+                        current_tool['function']['arguments'] += tool_call.function.arguments
+                    
+                    if (current_tool['id'] and 
+                        current_tool['function']['name'] and 
+                        current_tool['function']['arguments']):
+                        try:
+                            json.loads(current_tool['function']['arguments'])
+                            has_complete_tool_call = True
+                        except json.JSONDecodeError:
+                            pass
+
+        if hasattr(chunk.choices[0], 'finish_reason') and chunk.choices[0].finish_reason:
+            is_complete = True
+
+        if has_complete_tool_call or is_complete:
+            complete_tool_calls = []
+            for idx, tool_call in tool_calls_buffer.items():
+                try:
+                    if (tool_call['id'] and 
+                        tool_call['function']['name'] and 
+                        tool_call['function']['arguments']):
+                        json.loads(tool_call['function']['arguments'])
+                        complete_tool_calls.append(tool_call)
+                except json.JSONDecodeError:
+                    continue
+            
+            if complete_tool_calls:
+                return {
+                    "role": "assistant",
+                    "content": content_chunk,
+                    "tool_calls": complete_tool_calls
+                }, is_complete
+                
+                
+TOOL RESULTS AS USER MSGS                
+        if assistant_msg:
+        content = assistant_msg['content']
+        # Find the opening XML tag for this tool call
+        tool_start = content.find(f'<{result["name"]}')
+        if tool_start >= 0:
+            tag_end = content.find('>', tool_start)
+            if tag_end >= 0:
+                root_tag = content[tool_start:tag_end + 1]
+                # Create a simple reference message as user role
+                result_message = {
+                    "role": "user",
+                    "content": f"<tool_result>Result for {root_tag}\n{result['content']}</tool_result>"
+                }
+                await self.add_message(thread_id, result_message)
+                return
+    
+    # Fallback if we can't find the root tag
+    result_message = {
+        "role": "user",
+        "content": f"<tool_result>Result for {result['name']}:\n{result['content']}</tool_result>"
+    }
+    await self.add_message(thread_id, result_message)
+    
+except Exception as e:
+    logging.error(f"Error adding tool result: {e}")
+    # Ensure the result is still added even if there's an error
+    result_message = {
+        "role": "user",
+        "content": f"<tool_result>Result for {result['name']}:\n{result['content']}</tool_result>"
+    }
+
+ADDING NATIVE TOOL CALL 
+        messages = await self.get_messages(thread_id)
+        if not any(msg.get('tool_call_id') == result['tool_call_id'] for msg in messages):
+            await self.add_message(thread_id, result)
