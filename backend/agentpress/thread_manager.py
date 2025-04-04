@@ -263,7 +263,8 @@ class ThreadManager:
         xml_tool_calling: bool = True,
         execute_tools: bool = True,
         execute_on_stream: bool = False,
-        execute_tool_sequentially: bool = True,
+        tool_execution_strategy: str = "sequential",
+        processor_config: Optional[ProcessorConfig] = None,
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Run a conversation thread with LLM integration and tool execution.
         
@@ -276,11 +277,12 @@ class ThreadManager:
             llm_temperature: Temperature parameter for response randomness (0-1)
             llm_max_tokens: Maximum tokens in the LLM response
             llm_native_tool_calling_choice: Tool choice preference ("auto", "required", "none")
-            native_tool_calling: Enable native function calling format
-            xml_tool_calling: Enable XML-based tool calling format
-            execute_tools: Whether to execute detected tool calls
-            execute_on_stream: Execute tools as they appear in stream
-            execute_tool_sequentially: Execute tools sequentially
+            native_tool_calling: Enable native function calling format (legacy, use processor_config)
+            xml_tool_calling: Enable XML-based tool calling format (legacy, use processor_config)
+            execute_tools: Whether to execute detected tool calls (legacy, use processor_config)
+            execute_on_stream: Execute tools as they appear in stream (legacy, use processor_config)
+            tool_execution_strategy: Strategy for executing tools (legacy, use processor_config)
+            processor_config: Complete configuration for the response processor (preferred)
             
         Returns:
             An async generator yielding response chunks or error dict
@@ -288,30 +290,51 @@ class ThreadManager:
         logger.info(f"Starting thread execution for thread {thread_id}")
         logger.debug(f"Parameters: model={llm_model}, temperature={llm_temperature}, max_tokens={llm_max_tokens}")
         
-        # Validate tool configuration - cannot have both native and XML tools enabled
-        if native_tool_calling and xml_tool_calling:
-            logger.warning("Both native and XML tool formats cannot be enabled simultaneously. Defaulting to XML tools.")
-            native_tool_calling = False
-        
         try:
             # 1. Get messages from thread for LLM call
             messages = await self.get_messages(thread_id)
             
             # 2. Prepare messages for LLM call + add temporary message if it exists
-            prepared_messages = [system_prompt] + messages
-            if temporary_message:
+            prepared_messages = [system_prompt]
+            
+            # Find the last user message index
+            last_user_index = -1
+            for i, msg in enumerate(messages):
+                if msg.get('role') == 'user':
+                    last_user_index = i
+            
+            # Insert temporary message before the last user message if it exists
+            if temporary_message and last_user_index >= 0:
+                prepared_messages.extend(messages[:last_user_index])
                 prepared_messages.append(temporary_message)
-                logger.debug("Added temporary message to prepared messages")
+                prepared_messages.extend(messages[last_user_index:])
+                logger.debug("Added temporary message before the last user message")
+            else:
+                # If no user message or no temporary message, just add all messages
+                prepared_messages.extend(messages)
+                if temporary_message:
+                    prepared_messages.append(temporary_message)
+                    logger.debug("Added temporary message to the end of prepared messages")
 
-            # 3. Create unified processor config
-            processor_config = ProcessorConfig(
-                xml_tool_calling=xml_tool_calling,
-                native_tool_calling=native_tool_calling,
-                execute_tools=execute_tools,
-                execute_on_stream=execute_on_stream,
-                execute_tool_sequentially=execute_tool_sequentially,
-                xml_adding_strategy="user_message" 
-            )
+            # 3. Create or use processor config
+            if processor_config is None:
+                # Create config from individual parameters (legacy mode)
+                # Validate tool configuration - cannot have both native and XML tools enabled
+                if native_tool_calling and xml_tool_calling:
+                    logger.warning("Both native and XML tool formats cannot be enabled simultaneously. Defaulting to XML tools.")
+                    native_tool_calling = False
+                    
+                processor_config = ProcessorConfig(
+                    xml_tool_calling=xml_tool_calling,
+                    native_tool_calling=native_tool_calling,
+                    execute_tools=execute_tools,
+                    execute_on_stream=execute_on_stream,
+                    xml_adding_strategy="user_message",
+                    tool_execution_strategy=tool_execution_strategy
+                )
+            
+            logger.debug(f"Processor config: XML={processor_config.xml_tool_calling}, Native={processor_config.native_tool_calling}, " 
+                   f"Execute tools={processor_config.execute_tools}, Strategy={processor_config.tool_execution_strategy}")
 
             # 4. Prepare tools for LLM call
             openapi_tool_schemas = None
