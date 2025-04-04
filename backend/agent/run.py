@@ -1,10 +1,17 @@
 import os
 import json
-from agentpress.thread_manager import ThreadManager
+from agentpress.thread_manager import ThreadManager, ToolChoice
 from agent.tools.files_tool import FilesTool
 from agent.tools.terminal_tool import TerminalTool
-from typing import AsyncGenerator, Optional
-from agent.prompt import INSTRUCTIONS
+from agent.tools.wait_tool import WaitTool
+# from agent.tools.search_tool import CodeSearchTool
+from typing import AsyncGenerator, Optional, Union, Dict, Any
+from agent.test_prompt import get_system_prompt
+from agentpress.response_processor import ProcessorConfig
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None):
     """Run the development agent with specified configuration."""
@@ -12,14 +19,21 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
     if not thread_manager:
         thread_manager = ThreadManager()
     
+    print("Adding tools to thread manager...")
     thread_manager.add_tool(FilesTool)
     thread_manager.add_tool(TerminalTool)
+    thread_manager.add_tool(WaitTool)
+    # thread_manager.add_tool(CodeSearchTool)
+    
     system_message = {
         "role": "system",
-        "content": INSTRUCTIONS
+        "content": get_system_prompt()
     }
 
+    model_name = "anthropic/claude-3-5-sonnet-latest" #groq/deepseek-r1-distill-llama-70b
+
     files_tool = FilesTool()
+
     files_state = await files_tool.get_workspace_state()
 
     state_message = {
@@ -32,51 +46,96 @@ Current development environment workspace state:
         """
     }
 
-    model_name = "anthropic/claude-3-7-sonnet-latest"
-
     response = await thread_manager.run_thread(
         thread_id=thread_id,
-        system_message=system_message,
-        model_name=model_name,
-        temperature=0.1,
-        max_tokens=16000,
-        tool_choice="auto",
-        temporary_message=state_message,
-        native_tool_calling=False,
-        xml_tool_calling=True,
+        system_prompt=system_message,
         stream=stream,
-        execute_tools_on_stream=True,
-        parallel_tool_execution=False        
+        temporary_message=state_message,
+        llm_model=model_name,
+        llm_temperature=0.1,
+        llm_max_tokens=8000,
+        processor_config=ProcessorConfig(
+            xml_tool_calling=True,
+            native_tool_calling=False,
+            execute_tools=True,
+            execute_on_stream=True,
+            tool_execution_strategy="sequential",
+            xml_adding_strategy="assistant_message"
+        )
     )
+        
+    if isinstance(response, dict) and "status" in response and response["status"] == "error":
+        yield response 
+        return
+        
+    async for chunk in response:
+        yield chunk
     
-    if stream:
-        if isinstance(response, AsyncGenerator):
-            async for chunk in response:
-                if hasattr(chunk.choices[0], 'delta'):
-                    delta = chunk.choices[0].delta
-                    
-                    if hasattr(delta, 'content') and delta.content is not None:
-                        yield f"data: {json.dumps({'type': 'content', 'content': delta.content})}\n\n"
-                    
-                    if hasattr(delta, 'tool_calls') and delta.tool_calls:
-                        for tool_call in delta.tool_calls:
-                            if tool_call.function:
-                                tool_data = {
-                                    'type': 'tool_call',
-                                    'name': tool_call.function.name if tool_call.function.name else '',
-                                    'arguments': tool_call.function.arguments if tool_call.function.arguments else ''
-                                }
-                                yield f"data: {json.dumps(tool_data)}\n\n"
-        else:
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Invalid response type'})}\n\n"
-    else:
-        if isinstance(response, AsyncGenerator):
-            full_response = []
-            async for chunk in response:
-                if hasattr(chunk.choices[0], 'delta'):
-                    delta = chunk.choices[0].delta
-                    if hasattr(delta, 'content') and delta.content is not None:
-                        full_response.append(delta.content)
-            yield f"data: {json.dumps({'type': 'content', 'content': ''.join(full_response)})}\n\n"
-        else:
-            yield f"data: {json.dumps({'type': 'content', 'content': response})}\n\n"
+
+
+async def test_agent():
+    """Test function to run the agent with a sample query"""
+    from agentpress.thread_manager import ThreadManager
+    
+    # Initialize ThreadManager
+    thread_manager = ThreadManager()
+    
+    # Create a test thread
+    thread_id = await thread_manager.create_thread()
+    print("\n" + "="*50)
+    print(f"🤖 Agent Thread Created: {thread_id}")
+    print("="*50 + "\n")
+    
+    # Interactive message input loop
+    while True:
+        # Get user input
+        user_message = input("\n💬 Enter your message (or 'exit' to quit): ")
+        if user_message.lower() == 'exit':
+            break
+            
+        # Add the user message to the thread
+        await thread_manager.add_message(
+            thread_id,
+            {
+                "role": "user",
+                "content": user_message
+            }
+        )
+        
+        # Run the agent and print results
+        print("\n" + "="*50)
+        print("🔄 Running agent...")
+        print("="*50 + "\n")
+        
+        chunk_counter = 0
+        current_response = ""
+        
+        async for chunk in run_agent(thread_id=thread_id, stream=True, thread_manager=thread_manager):
+            chunk_counter += 1
+            
+            if chunk.get('type') == 'content':
+                current_response += chunk['content']
+                # Print the response as it comes in
+                print(chunk['content'], end='', flush=True)
+            elif chunk.get('type') == 'tool_result':
+                print("\n\n" + "="*50)
+                print(f"🛠️ Tool Result: {chunk['name']}")
+                print(f"📝 {chunk['result']}")
+                print("="*50 + "\n")
+        
+        print("\n" + "="*50)
+        print(f"✅ Agent completed. Processed {chunk_counter} chunks.")
+        print("="*50 + "\n")
+    
+    print("\n" + "="*50)
+    print("👋 Test completed. Goodbye!")
+    print("="*50 + "\n")
+
+if __name__ == "__main__":
+    import asyncio
+    
+    # Configure any environment variables or setup needed for testing
+    load_dotenv()  # Ensure environment variables are loaded
+    
+    # Run the test function
+    asyncio.run(test_agent())

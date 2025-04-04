@@ -76,40 +76,234 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     
     // Start streaming the agent's responses with improved implementation
     const cleanup = streamAgent(runId, {
-      onMessage: (rawData: string) => {
+      onMessage: async (rawData: string) => {
         try {
-          // Parse the outer data structure
-          const data = JSON.parse(rawData);
+          // Log the raw data first for debugging
+          console.log(`[PAGE] Raw message data:`, rawData);
           
-          // Handle the nested data structure
-          if (data.content?.startsWith('data: ')) {
+          let processedData = rawData;
+          let jsonData: {
+            type?: string;
+            status?: string;
+            content?: string;
+            message?: string;
+            name?: string;
+            arguments?: string;
+          } | null = null;
+          
+          // Handle data: prefix format (SSE standard format)
+          if (rawData.startsWith('data: ')) {
+            processedData = rawData.substring(6).trim(); // Remove "data: " prefix
+            
             try {
-              const innerJson = data.content.replace('data: ', '');
-              const innerData = JSON.parse(innerJson);
+              jsonData = JSON.parse(processedData);
+              console.log('[PAGE] Successfully parsed data: prefixed JSON:', jsonData);
               
-              // Skip empty messages
-              if (!innerData.content && !innerData.arguments) return;
-              
-              window.requestAnimationFrame(() => {
-                if (innerData.type === 'tool_call') {
-                  const toolContent = innerData.name 
-                    ? `Tool: ${innerData.name}\n${innerData.arguments || ''}`
-                    : innerData.arguments || '';
-                  setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
-                } else if (innerData.type === 'content' && innerData.content) {
-                  setStreamContent(prev => prev + innerData.content);
+              // Specifically check for completion status
+              if (jsonData?.type === 'status' && jsonData?.status === 'completed') {
+                console.log('[PAGE] Detected completion status event:', processedData);
+                
+                try {
+                  // Direct access verification - forcing immediate state update
+                  // This will execute regardless of the normal flow
+                  console.log(`[PAGE] 🚨 FORCE VERIFYING completion status for run: ${runId || 'unknown'}`);
+                  
+                  // Immediately mark as not streaming to update UI
+                  setIsStreaming(false);
+                  setAgentStatus('idle');
+                  
+                  // Explicitly clean up stream to ensure it's closed
+                  if (streamCleanupRef.current) {
+                    console.log('[PAGE] 🚨 Force closing stream on completion status');
+                    streamCleanupRef.current();
+                    streamCleanupRef.current = null;
+                  }
+                  
+                  // Explicitly set agent run ID to null to reset state
+                  setAgentRunId(null);
+                  
+                  // Attempt to load fresh messages
+                  if (threadId) {
+                    console.log('[PAGE] 🚨 Force fetching messages after completion');
+                    // Fire and forget - we don't need to await this
+                    getMessages(threadId)
+                      .then(updatedMsgs => {
+                        console.log('[PAGE] 🚨 Forcefully updated messages after completion');
+                        setMessages(updatedMsgs);
+                        setStreamContent('');
+                      })
+                      .catch(err => console.error('[PAGE] Failed force message update:', err));
+                  }
+                } catch (forceErr) {
+                  console.error('[PAGE] Error in forced completion handling:', forceErr);
                 }
-              });
-            } catch (innerError) {
-              console.warn('[PAGE] Failed to parse inner data:', innerError);
+                
+                // Continue with normal status verification
+                if (runId) {
+                  try {
+                    // Force the verification request and log its execution
+                    console.log(`[PAGE] ⚠️ EXPLICITLY verifying agent run status with backend for runId: ${runId}`);
+                    let agentStatusResult;
+                    try {
+                      agentStatusResult = await getAgentStatus(runId);
+                      console.log(`[PAGE] ✅ Backend agent status API response:`, agentStatusResult);
+                    } catch (statusError) {
+                      console.error(`[PAGE] ❌ Failed to get agent status from API:`, statusError);
+                      throw statusError;
+                    }
+                    
+                    // Ensure the stream is cleaned up first
+                    if (streamCleanupRef.current) {
+                      console.log('[PAGE] Explicitly cleaning up stream due to completion status');
+                      streamCleanupRef.current();
+                      streamCleanupRef.current = null;
+                    }
+                    
+                    // Log and fetch messages
+                    console.log('[PAGE] Fetching final messages after completion');
+                    let updatedMessages;
+                    try {
+                      updatedMessages = await getMessages(threadId);
+                      console.log('[PAGE] ✅ Successfully fetched messages:', updatedMessages.length);
+                    } catch (messagesError) {
+                      console.error('[PAGE] ❌ Failed to fetch messages:', messagesError);
+                      throw messagesError;
+                    }
+                    
+                    // Update messages
+                    setMessages(updatedMessages);
+                    
+                    // Clear streaming content after a tiny delay for smooth transition
+                    setTimeout(() => {
+                      console.log('[PAGE] Clearing streaming content');
+                      setStreamContent('');
+                    }, 50);
+                    
+                    // Set agent run ID to null to prevent lingering state
+                    setAgentRunId(null);
+                    console.log('[PAGE] ✅ Completion fully handled!');
+                    
+                  } catch (err) {
+                    console.error('[PAGE] Error verifying agent status:', err);
+                    // If verification fails, still mark as completed to avoid hanging UI
+                    setAgentStatus('idle');
+                    setIsStreaming(false);
+                    setAgentRunId(null);
+                    
+                    // Clear streaming content
+                    setStreamContent('');
+                  }
+                } else {
+                  console.warn('[PAGE] Received completion status but no runId is available');
+                  // Still update UI to avoid hanging
+                  setAgentStatus('idle');
+                  setIsStreaming(false);
+                  setAgentRunId(null);
+                }
+                
+                return;
+              }
+              
+              // Handle regular content with data: prefix
+              if (jsonData?.type === 'content' && jsonData?.content) {
+                // For regular content, just append to the existing content
+                setStreamContent(prev => prev + jsonData?.content);
+                console.log('[PAGE] Added content from prefixed data:', jsonData?.content.substring(0, 30) + '...');
+                return;
+              }
+              
+              // Handle tool calls with data: prefix
+              if (jsonData?.type === 'tool_call') {
+                const toolContent = jsonData.name 
+                  ? `Tool: ${jsonData.name}\n${jsonData.arguments || ''}`
+                  : jsonData.arguments || '';
+                
+                // Update UI with tool call content
+                setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
+                console.log('[PAGE] Added tool call content from prefixed data:', toolContent.substring(0, 30) + '...');
+                return;
+              }
+            } catch (e) {
+              console.warn('[PAGE] Failed to parse data: prefix event:', e);
+              // Continue with standard parsing if data: prefix parsing fails
             }
           }
+          
+          // Standard JSON parsing for non-prefixed messages
+          try {
+            jsonData = JSON.parse(processedData);
+            
+            // Handle status messages specially
+            if (jsonData?.type === 'status') {
+              console.log(`[PAGE] Received status update: ${jsonData?.status}`);
+              
+              if (jsonData?.status === 'completed') {
+                // Same handling as the data: prefix section
+                console.log('[PAGE] Received standard completed status message');
+                
+                // IMPORTANT: Add the same completion handling here
+                try {
+                  // Direct access verification - forcing immediate state update
+                  console.log(`[PAGE] 🚨 FORCE VERIFYING completion status for standard message: ${runId || 'unknown'}`);
+                  
+                  // Immediately mark as not streaming to update UI
+                  setIsStreaming(false);
+                  setAgentStatus('idle');
+                  
+                  // Explicitly clean up stream to ensure it's closed
+                  if (streamCleanupRef.current) {
+                    console.log('[PAGE] 🚨 Force closing stream on standard completion status');
+                    streamCleanupRef.current();
+                    streamCleanupRef.current = null;
+                  }
+                  
+                  // Explicitly set agent run ID to null to reset state
+                  setAgentRunId(null);
+                  
+                  // Load fresh messages
+                  if (threadId) {
+                    getMessages(threadId)
+                      .then(updatedMsgs => {
+                        console.log('[PAGE] 🚨 Updated messages after standard completion');
+                        setMessages(updatedMsgs);
+                        setStreamContent('');
+                      })
+                      .catch(err => console.error('[PAGE] Failed standard message update:', err));
+                  }
+                } catch (forceErr) {
+                  console.error('[PAGE] Error in standard completion handling:', forceErr);
+                }
+                
+                return;
+              }
+              
+              // Don't process other status messages further
+              return;
+            }
+            
+            // Skip empty messages
+            if (!jsonData?.content && !jsonData?.arguments) return;
+            
+            // Handle different message types
+            if (jsonData?.type === 'tool_call') {
+              const toolContent = jsonData.name 
+                ? `Tool: ${jsonData.name}\n${jsonData.arguments || ''}`
+                : jsonData.arguments || '';
+              
+              // Update UI with tool call content
+              setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
+              console.log('[PAGE] Added tool call content:', toolContent.substring(0, 30) + '...');
+            } else if (jsonData?.type === 'content' && jsonData?.content) {
+              // For regular content, just append to the existing content
+              setStreamContent(prev => prev + jsonData?.content);
+              console.log('[PAGE] Added content:', jsonData?.content.substring(0, 30) + '...');
+            }
+          } catch (error) {
+            console.warn('[PAGE] Failed to process message as JSON:', error);
+          }
         } catch (error) {
-          console.warn('[PAGE] Failed to parse message:', error);
+          console.warn('[PAGE] Failed to process message:', error, 'Raw data:', rawData);
         }
-      },
-      onToolCall: (name: string, args: Record<string, unknown>) => {
-        console.log('[PAGE] Tool call received:', name, args);
       },
       onError: (error: Error | unknown) => {
         console.error('[PAGE] Streaming error:', error);
@@ -129,41 +323,38 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       onClose: async () => {
         console.log('[PAGE] Stream connection closed');
         
+        // Immediately set UI state to idle
+        setAgentStatus('idle');
+        setIsStreaming(false);
+        
         try {
           console.log(`[PAGE] Checking final status for agent run ${runId}`);
           const status = await getAgentStatus(runId);
           console.log(`[PAGE] Agent status: ${status.status}`);
           
-          // Immediately set appropriate UI state
-          if (status.status === 'completed' || status.status === 'stopped' || status.status === 'error') {
-            setAgentStatus('idle');
-            setIsStreaming(false);
-            
-            // Fetch final messages first, then clear streaming content
-            console.log('[PAGE] Fetching final messages');
-            const updatedMessages = await getMessages(threadId);
-            
-            // Clear cleanup reference to prevent reconnection
-            streamCleanupRef.current = null;
-            
-            // Update messages first
-            setMessages(updatedMessages);
-            
-            // Then clear streaming content after a tiny delay for smooth transition
-            setTimeout(() => {
-              console.log('[PAGE] Clearing streaming content');
-              setStreamContent('');
-            }, 50);
-          } else {
-            // Still running - shouldn't happen often with proper completion handling
-            console.log('[PAGE] Agent still running after stream closed');
-            setAgentStatus('running');
-            setIsStreaming(false);
-          }
+          // Clear cleanup reference to prevent reconnection
+          streamCleanupRef.current = null;
+          
+          // Set agent run ID to null to prevent lingering state
+          setAgentRunId(null);
+          
+          // Fetch final messages first, then clear streaming content
+          console.log('[PAGE] Fetching final messages');
+          const updatedMessages = await getMessages(threadId);
+          
+          // Update messages first
+          setMessages(updatedMessages);
+          
+          // Then clear streaming content after a tiny delay for smooth transition
+          setTimeout(() => {
+            console.log('[PAGE] Clearing streaming content');
+            setStreamContent('');
+          }, 50);
         } catch (err) {
           console.error('[PAGE] Error checking agent status:', err);
-          setAgentStatus('idle');
-          setIsStreaming(false);
+          
+          // Clear the agent run ID
+          setAgentRunId(null);
           
           // Handle any remaining streaming content
           if (streamContent) {
@@ -276,9 +467,16 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     // Cleanup function
     return () => {
       isMounted = false;
+      
+      // Properly clean up stream
       if (streamCleanupRef.current) {
+        console.log('[PAGE] Cleaning up stream on unmount');
         streamCleanupRef.current();
+        streamCleanupRef.current = null;
       }
+      
+      // Reset component state to prevent memory leaks
+      console.log('[PAGE] Resetting component state on unmount');
     };
   }, [projectId, threadId, user, handleStreamAgent]);
 
@@ -302,24 +500,17 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       // Scroll to bottom immediately when user sends a message
       scrollToBottom();
       
-      // Send to the API
-      await addMessage(threadId, userMessage);
+      // Send to the API and start agent in parallel
+      const [messageResult, agentResult] = await Promise.all([
+        addMessage(threadId, userMessage),
+        startAgent(threadId)
+      ]);
       
-      // If an agent is running, stop it first
-      if (agentStatus === 'running' && agentRunId) {
-        await stopAgent(agentRunId);
-      }
-      
-      // Start a new agent run
-      const result = await startAgent(threadId);
-      setAgentRunId(result.agent_run_id);
+      setAgentRunId(agentResult.agent_run_id);
       setAgentStatus('running');
       
-      // Scroll to bottom when agent starts responding
-      scrollToBottom();
-      
-      // Start streaming the agent's responses
-      handleStreamAgent(result.agent_run_id);
+      // Start streaming the agent's responses immediately
+      handleStreamAgent(agentResult.agent_run_id);
     } catch (err) {
       console.error('Error sending message:', err);
       toast.error('Failed to send message');
@@ -346,6 +537,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       
       // Mark as not streaming, but keep content visible during transition
       setIsStreaming(false);
+      setAgentStatus('idle');
       
       // Then stop the agent
       console.log('[PAGE] Sending stop request to backend');
@@ -354,7 +546,9 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       // Update UI
       console.log('[PAGE] Agent stopped successfully');
       toast.info('Agent stopped');
-      setAgentStatus('idle');
+      
+      // Reset agent run ID
+      setAgentRunId(null);
       
       // Fetch final messages to get state from database
       console.log('[PAGE] Fetching final messages after stop');
@@ -375,6 +569,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       // Still update UI state to avoid being stuck
       setAgentStatus('idle');
       setIsStreaming(false);
+      setAgentRunId(null);
       
       // Clear streaming content
       setStreamContent('');
@@ -477,6 +672,61 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       scrollToBottom();
     }
   }, [agentStatus, userHasScrolled]);
+
+  // Add synchronization effect to ensure agentRunId and agentStatus are in sync
+  useEffect(() => {
+    // If agentRunId is null, make sure agentStatus is 'idle'
+    if (agentRunId === null && agentStatus !== 'idle') {
+      console.log('[PAGE] Synchronizing agent status to idle because agentRunId is null');
+      setAgentStatus('idle');
+      setIsStreaming(false);
+    }
+    
+    // If we have an agentRunId but status is idle, check if it should be running
+    if (agentRunId !== null && agentStatus === 'idle') {
+      const checkAgentRunStatus = async () => {
+        try {
+          const status = await getAgentStatus(agentRunId);
+          if (status.status === 'running') {
+            console.log('[PAGE] Synchronizing agent status to running based on backend status');
+            setAgentStatus('running');
+            
+            // If not already streaming, start streaming
+            if (!isStreaming && !streamCleanupRef.current) {
+              console.log('[PAGE] Starting stream due to status synchronization');
+              handleStreamAgent(agentRunId);
+            }
+          } else {
+            // If the backend shows completed/stopped but we have an ID, reset it
+            console.log('[PAGE] Agent run is not running, resetting agentRunId');
+            setAgentRunId(null);
+          }
+        } catch (err) {
+          console.error('[PAGE] Error checking agent status for sync:', err);
+          // In case of error, reset to idle state
+          setAgentRunId(null);
+          setAgentStatus('idle');
+          setIsStreaming(false);
+        }
+      };
+      
+      checkAgentRunStatus();
+    }
+  }, [agentRunId, agentStatus, isStreaming, handleStreamAgent]);
+
+  // Add debug logging for agentStatus changes
+  useEffect(() => {
+    console.log(`[PAGE] 🔄 AgentStatus changed to: ${agentStatus}, isStreaming: ${isStreaming}, agentRunId: ${agentRunId}`);
+  }, [agentStatus, isStreaming, agentRunId]);
+
+  // Failsafe effect to ensure UI consistency
+  useEffect(() => {
+    // Force agentStatus to idle if not streaming or no agentRunId
+    if ((!isStreaming || agentRunId === null) && agentStatus !== 'idle') {
+      console.log('[PAGE] 🔒 FAILSAFE: Forcing agentStatus to idle because isStreaming is false or agentRunId is null');
+      setAgentStatus('idle');
+    }
+  }, [isStreaming, agentRunId, agentStatus]);
 
   // Only show a full-screen loader on the very first load
   if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {

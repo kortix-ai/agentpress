@@ -83,7 +83,7 @@ def setup_logger(name: str = 'agentpress') -> logging.Logger:
     
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
     
     # Create formatters
     file_formatter = logging.Formatter(

@@ -150,7 +150,7 @@ class Tool(ABC):
         Returns:
             ToolResult with success=False and error message
         """
-        logger.error(f"Tool {self.__class__.__name__} failed: {msg}")
+        logger.debug(f"Tool {self.__class__.__name__} returned failed result: {msg}")
         return ToolResult(success=False, output=msg)
 
 def _add_schema(func, schema: ToolSchema):

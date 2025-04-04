@@ -82,11 +82,21 @@ class ToolRegistry:
             Dict mapping function names to their implementations
         """
         available_functions = {}
+        
+        # Get OpenAPI tool functions
         for tool_name, tool_info in self.tools.items():
             tool_instance = tool_info['instance']
-            for func_name, func in tool_instance.__class__.__dict__.items():
-                if callable(func) and not func_name.startswith("__"):
-                    available_functions[func_name] = getattr(tool_instance, func_name)
+            function_name = tool_name
+            function = getattr(tool_instance, function_name)
+            available_functions[function_name] = function
+            
+        # Get XML tool functions
+        for tag_name, tool_info in self.xml_tools.items():
+            tool_instance = tool_info['instance']
+            method_name = tool_info['method']
+            function = getattr(tool_instance, method_name)
+            available_functions[method_name] = function
+            
         logger.debug(f"Retrieved {len(available_functions)} available functions")
         return available_functions
 

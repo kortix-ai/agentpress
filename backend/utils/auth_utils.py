@@ -126,31 +126,3 @@ async def verify_thread_access(client, thread_id: str, user_id: str):
         raise HTTPException(status_code=403, detail="Not authorized to access this thread")
     
     return True
-
-async def verify_agent_run_access(client, agent_run_id: str, user_id: str):
-    """
-    Verify that a user has access to a specific agent run by checking thread ownership.
-    
-    Args:
-        client: The Supabase client
-        agent_run_id: The agent run ID to check access for
-        user_id: The user ID to check permissions for
-        
-    Returns:
-        dict: The agent run data if access is granted
-        
-    Raises:
-        HTTPException: If the user doesn't have access or the agent run doesn't exist
-    """
-    agent_run = await client.table('agent_runs').select('*').eq('id', agent_run_id).execute()
-    
-    if not agent_run.data or len(agent_run.data) == 0:
-        raise HTTPException(status_code=404, detail="Agent run not found")
-        
-    agent_run_data = agent_run.data[0]
-    thread_id = agent_run_data['thread_id']
-    
-    # Verify user has access to this thread
-    await verify_thread_access(client, thread_id, user_id)
-    
-    return agent_run_data 
