@@ -399,30 +399,50 @@ export const getMessages = async (threadId: string, hideToolMsgs: boolean = fals
 
 // Agent APIs
 export const startAgent = async (threadId: string): Promise<{ agent_run_id: string }> => {
-  const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session?.access_token) {
-    throw new Error('No access token available');
-  }
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
 
-  const response = await fetch(`${API_URL}/thread/${threadId}/agent/start`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`,
-    },
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Error starting agent: ${response.statusText}`);
+    // Check if backend URL is configured
+    if (!API_URL) {
+      throw new Error('Backend URL is not configured. Set NEXT_PUBLIC_BACKEND_URL in your environment.');
+    }
+
+    console.log(`[API] Starting agent for thread ${threadId} using ${API_URL}/thread/${threadId}/agent/start`);
+    
+    const response = await fetch(`${API_URL}/thread/${threadId}/agent/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'No error details available');
+      console.error(`[API] Error starting agent: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Error starting agent: ${response.statusText} (${response.status})`);
+    }
+    
+    // Invalidate relevant caches
+    apiCache.invalidateAgentRuns(threadId);
+    apiCache.invalidateThreadMessages(threadId);
+    
+    return response.json();
+  } catch (error) {
+    console.error('[API] Failed to start agent:', error);
+    
+    // Provide clearer error message for network errors
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      throw new Error(`Cannot connect to backend server. Please check your internet connection and make sure the backend is running.`);
+    }
+    
+    throw error;
   }
-  
-  // Invalidate relevant caches
-  apiCache.invalidateAgentRuns(threadId);
-  apiCache.invalidateThreadMessages(threadId);
-  
-  return response.json();
 };
 
 export const stopAgent = async (agentRunId: string): Promise<void> => {
@@ -447,24 +467,39 @@ export const stopAgent = async (agentRunId: string): Promise<void> => {
 };
 
 export const getAgentStatus = async (agentRunId: string): Promise<AgentRun> => {
-  const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  console.log(`[API] ⚠️ Requesting agent status for ${agentRunId}`);
   
-  if (!session?.access_token) {
-    throw new Error('No access token available');
-  }
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      console.error('[API] ❌ No access token available for getAgentStatus');
+      throw new Error('No access token available');
+    }
 
-  const response = await fetch(`${API_URL}/agent-run/${agentRunId}`, {
-    headers: {
-      'Authorization': `Bearer ${session.access_token}`,
-    },
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Error getting agent status: ${response.statusText}`);
+    const url = `${API_URL}/agent-run/${agentRunId}`;
+    console.log(`[API] 🔍 Fetching from: ${url}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'No error details available');
+      console.error(`[API] ❌ Error getting agent status: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Error getting agent status: ${response.statusText} (${response.status})`);
+    }
+    
+    const data = await response.json();
+    console.log(`[API] ✅ Successfully got agent status:`, data);
+    return data;
+  } catch (error) {
+    console.error('[API] ❌ Failed to get agent status:', error);
+    throw error;
   }
-  
-  return response.json();
 };
 
 export const getAgentRuns = async (threadId: string): Promise<AgentRun[]> => {
@@ -513,7 +548,6 @@ export const getAgentRuns = async (threadId: string): Promise<AgentRun[]> => {
 
 export const streamAgent = (agentRunId: string, callbacks: {
   onMessage: (content: string) => void;
-  onToolCall: (name: string, args: Record<string, unknown>) => void;
   onError: (error: Error | string) => void;
   onClose: () => void;
 }): () => void => {
@@ -557,32 +591,54 @@ export const streamAgent = (agentRunId: string, callbacks: {
           // Log raw data for debugging
           console.log(`[STREAM] Received data: ${rawData.substring(0, 100)}${rawData.length > 100 ? '...' : ''}`);
           
-          // Pass the raw data directly to onMessage for handling in the component
-          callbacks.onMessage(rawData);
-          
-          // Try to parse for tool calls
-          try {
-            const data = JSON.parse(rawData);
-            if (data.content?.startsWith('data: ')) {
-              const innerJson = data.content.replace('data: ', '');
-              const innerData = JSON.parse(innerJson);
-              
-              if (innerData.type === 'tool_call') {
-                callbacks.onToolCall(innerData.name || '', innerData.arguments || '');
-              }
-            }
-          } catch (parseError) {
-            // Ignore parsing errors for tool calls
-            console.debug('[STREAM] Could not parse tool call data:', parseError);
+          // Skip empty messages
+          if (!rawData || rawData.trim() === '') {
+            console.debug('[STREAM] Received empty message, skipping');
+            return;
           }
           
+          // Check if this is a status completion message
+          if (rawData.includes('"type":"status"') && rawData.includes('"status":"completed"')) {
+            console.log(`[STREAM] ⚠️ Detected completion status message: ${rawData}`);
+            
+            try {
+              // Explicitly call onMessage before closing the stream to ensure the message is processed
+              callbacks.onMessage(rawData);
+              
+              // Explicitly close the EventSource connection when we receive a completion message
+              if (eventSourceInstance && !isClosing) {
+                console.log(`[STREAM] ⚠️ Closing EventSource due to completion message for ${agentRunId}`);
+                isClosing = true;
+                eventSourceInstance.close();
+                eventSourceInstance = null;
+                
+                // Explicitly call onClose here to ensure the client knows the stream is closed
+                setTimeout(() => {
+                  console.log(`[STREAM] 🚨 Explicitly calling onClose after completion for ${agentRunId}`);
+                  callbacks.onClose();
+                }, 0);
+              }
+              
+              // Exit early to prevent duplicate message processing
+              return;
+            } catch (closeError) {
+              console.error(`[STREAM] ❌ Error while closing stream on completion: ${closeError}`);
+              // Continue with normal processing if there's an error during closure
+            }
+          }
+          
+          // Pass the raw data directly to onMessage for handling in the component
+          callbacks.onMessage(rawData);
         } catch (error) {
           console.error(`[STREAM] Error handling message:`, error);
           callbacks.onError(error instanceof Error ? error : String(error));
         }
       };
       
-      eventSourceInstance.onerror = () => {
+      eventSourceInstance.onerror = (event) => {
+        // Add detailed event logging
+        console.log(`[STREAM] 🔍 EventSource onerror triggered for ${agentRunId}`, event);
+        
         // EventSource errors are often just connection closures
         // For clean closures (manual or completed), we don't need to log an error
         if (isClosing) {
@@ -639,4 +695,4 @@ export const streamAgent = (agentRunId: string, callbacks: {
       eventSourceInstance = null;
     }
   };
-}; 
+};
