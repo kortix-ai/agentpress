@@ -26,15 +26,20 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
         "role": "system",
         "content": get_system_prompt()
     }
-    print(f"System prompt length: {len(system_message['content'])} characters")
 
     model_name = "anthropic/claude-3-7-sonnet-latest" #groq/deepseek-r1-distill-llama-70b
-    print(f"Using LLM model: {model_name}")
 
-    state_message = """
+    files_state = await files_tool.get_workspace_state()
 
-    """
-
+    state_message = {
+        "role": "user",
+        "content": f"""
+Current development environment workspace state:
+<current_workspace_state>
+{json.dumps(files_state, indent=2)}
+</current_workspace_state>
+        """
+    }
     print("Starting thread_manager.run_thread...")
     # Force XML tool usage by setting native_tool_calling=False
     response = await thread_manager.run_thread(
