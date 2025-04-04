@@ -3,16 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minimal Web Project</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Enhanced Minimal HTML</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
-        <h1>Welcome!</h1>
-        <p>This is a minimal web project setup.</p>
-        <button id="clickMe">Click Me!</button>
+        <h1>Welcome to My Enhanced HTML Page</h1>
+        <p>This is a simple, clean HTML5 document with enhanced styling and interactivity.</p>
+        
+        <button onclick="toggleContent()">Show/Hide Content</button>
+        
+        <div id="hiddenContent" class="hidden">
+            <h2>Hidden Content</h2>
+            <p>This content can be toggled with the button above!</p>
+        </div>
     </div>
-    
-    <script src="script.js"></script>
+
+    <script>
+        function toggleContent() {
+            const content = document.getElementById('hiddenContent');
+            content.classList.toggle('hidden');
+        }
+    </script>
 </body>
 </html>

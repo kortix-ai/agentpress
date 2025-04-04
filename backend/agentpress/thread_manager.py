@@ -20,7 +20,8 @@ from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
 from agentpress.response_processor import (
     ResponseProcessor, 
-    ProcessorConfig
+    ProcessorConfig,
+    XmlAddingStrategy
 )
 from services.supabase import DBConnection
 from utils.logger import logger
@@ -264,6 +265,7 @@ class ThreadManager:
         execute_tools: bool = True,
         execute_on_stream: bool = False,
         tool_execution_strategy: str = "sequential",
+        xml_adding_strategy: XmlAddingStrategy = "assistant_message",
         processor_config: Optional[ProcessorConfig] = None,
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Run a conversation thread with LLM integration and tool execution.
@@ -282,6 +284,7 @@ class ThreadManager:
             execute_tools: Whether to execute detected tool calls (legacy, use processor_config)
             execute_on_stream: Execute tools as they appear in stream (legacy, use processor_config)
             tool_execution_strategy: Strategy for executing tools (legacy, use processor_config)
+            xml_adding_strategy: Strategy for adding XML tool results (legacy, use processor_config)
             processor_config: Complete configuration for the response processor (preferred)
             
         Returns:
@@ -329,7 +332,7 @@ class ThreadManager:
                     native_tool_calling=native_tool_calling,
                     execute_tools=execute_tools,
                     execute_on_stream=execute_on_stream,
-                    xml_adding_strategy="user_message",
+                    xml_adding_strategy=xml_adding_strategy,
                     tool_execution_strategy=tool_execution_strategy
                 )
             

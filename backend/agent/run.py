@@ -5,11 +5,11 @@ from agent.tools.files_tool import FilesTool
 from agent.tools.terminal_tool import TerminalTool
 from agent.tools.wait_tool import WaitTool
 # from agent.tools.search_tool import CodeSearchTool
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Union, Dict, Any
 from agent.test_prompt import get_system_prompt
 from dotenv import load_dotenv
 
-from backend.agentpress.response_processor import ProcessorConfig
+from agentpress.response_processor import ProcessorConfig
 
 # Load environment variables
 load_dotenv()
@@ -61,7 +61,8 @@ Current development environment workspace state:
             native_tool_calling=False,
             execute_tools=True,
             execute_on_stream=False,
-            tool_execution_strategy="sequential"
+            tool_execution_strategy="sequential",
+            xml_adding_strategy="assistant_message"
         )
     )
         
@@ -140,4 +141,3 @@ if __name__ == "__main__":
     
     # Run the test function
     asyncio.run(test_agent())
-

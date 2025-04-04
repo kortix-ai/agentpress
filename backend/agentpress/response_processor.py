@@ -223,7 +223,7 @@ class ResponseProcessor:
                         thread_id, 
                         tool_call, 
                         result, 
-                        config.xml_adding_strategy if is_xml_tool else "user_message"  # Always use user or assistant message
+                        config.xml_adding_strategy if is_xml_tool else "assistant_message"  # Always use user or assistant message
                     )
                 
                 # Execute any remaining tool calls if not done during streaming
@@ -778,7 +778,7 @@ class ResponseProcessor:
         thread_id: str, 
         tool_call: Dict[str, Any], 
         result: ToolResult,
-        strategy: Union[XmlAddingStrategy, str] = "user_message"
+        strategy: Union[XmlAddingStrategy, str] = "assistant_message"
     ):
         """Add a tool result to the thread based on the specified format."""
         try:
