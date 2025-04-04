@@ -397,3 +397,45 @@ class CodeSearchTool(Tool):
                         break
                     
         return matches 
+    
+
+if __name__ == "__main__":
+    import asyncio
+    import json
+    
+    async def run_demos():
+        # Initialize the search tool
+        search_tool = CodeSearchTool()
+        
+        print("=" * 50)
+        print("DEMO: LIST DIRECTORY")
+        print("=" * 50)
+        list_result = await search_tool.list_dir(".")
+        if list_result.success:
+            print(json.dumps(list_result.data, indent=2))
+        else:
+            print(f"Error: {list_result.message}")
+            
+        print("\n" + "=" * 50)
+        print("DEMO: GREP SEARCH")
+        print("=" * 50)
+        grep_result = await search_tool.grep_search("def", include_pattern="*.py", case_sensitive=False)
+        if grep_result.success:
+            print(json.dumps(grep_result.data, indent=2))
+        else:
+            print(f"Error: {grep_result.message}")
+            
+        print("\n" + "=" * 50)
+        print("DEMO: FILE SEARCH")
+        print("=" * 50)
+        file_result = await search_tool.file_search("tool")
+        if file_result.success:
+            print(json.dumps(file_result.data, indent=2))
+        else:
+            print(f"Error: {file_result.message}")
+    
+    # Run all demos
+    asyncio.run(run_demos())
+    
+
+    

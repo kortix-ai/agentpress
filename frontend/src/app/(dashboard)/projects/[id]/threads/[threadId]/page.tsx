@@ -78,38 +78,32 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     const cleanup = streamAgent(runId, {
       onMessage: (rawData: string) => {
         try {
-          // Parse the outer data structure
-          const data = JSON.parse(rawData);
+          // Log the raw data first for debugging
+          console.log(`[PAGE] Raw message data:`, rawData);
           
-          // Handle the nested data structure
-          if (data.content?.startsWith('data: ')) {
-            try {
-              const innerJson = data.content.replace('data: ', '');
-              const innerData = JSON.parse(innerJson);
-              
-              // Skip empty messages
-              if (!innerData.content && !innerData.arguments) return;
-              
-              window.requestAnimationFrame(() => {
-                if (innerData.type === 'tool_call') {
-                  const toolContent = innerData.name 
-                    ? `Tool: ${innerData.name}\n${innerData.arguments || ''}`
-                    : innerData.arguments || '';
-                  setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
-                } else if (innerData.type === 'content' && innerData.content) {
-                  setStreamContent(prev => prev + innerData.content);
-                }
-              });
-            } catch (innerError) {
-              console.warn('[PAGE] Failed to parse inner data:', innerError);
-            }
+          // Try to parse the raw data as JSON
+          const parsedData = JSON.parse(rawData);
+          
+          // Skip empty messages
+          if (!parsedData.content && !parsedData.arguments) return;
+          
+          // Handle different message types
+          if (parsedData.type === 'tool_call') {
+            const toolContent = parsedData.name 
+              ? `Tool: ${parsedData.name}\n${parsedData.arguments || ''}`
+              : parsedData.arguments || '';
+            
+            // Update UI with tool call content
+            setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
+            console.log('[PAGE] Added tool call content:', toolContent.substring(0, 30) + '...');
+          } else if (parsedData.type === 'content' && parsedData.content) {
+            // For regular content, just append to the existing content
+            setStreamContent(prev => prev + parsedData.content);
+            console.log('[PAGE] Added content:', parsedData.content.substring(0, 30) + '...');
           }
         } catch (error) {
-          console.warn('[PAGE] Failed to parse message:', error);
+          console.warn('[PAGE] Failed to process message:', error, 'Raw data:', rawData);
         }
-      },
-      onToolCall: (name: string, args: Record<string, unknown>) => {
-        console.log('[PAGE] Tool call received:', name, args);
       },
       onError: (error: Error | unknown) => {
         console.error('[PAGE] Streaming error:', error);

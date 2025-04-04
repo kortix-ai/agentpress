@@ -17,17 +17,8 @@ from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator
 from services.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
-from agentpress.processor.llm_response_processor import LLMResponseProcessor
-from agentpress.processor.base_processors import ToolParserBase, ToolExecutorBase, ResultsAdderBase
 from services.supabase import DBConnection
 from utils.logger import logger
-
-from agentpress.processor.xml.xml_tool_parser import XMLToolParser
-from agentpress.processor.xml.xml_tool_executor import XMLToolExecutor
-from agentpress.processor.xml.xml_results_adder import XMLResultsAdder
-from agentpress.processor.standard.standard_tool_parser import StandardToolParser
-from agentpress.processor.standard.standard_tool_executor import StandardToolExecutor
-from agentpress.processor.standard.standard_results_adder import StandardResultsAdder
 
 class ThreadManager:
     """Manages conversation threads with LLM models and tool execution.
@@ -264,9 +255,6 @@ class ThreadManager:
         stream: bool = False,
         execute_tools_on_stream: bool = False,
         parallel_tool_execution: bool = False,
-        tool_parser: Optional[ToolParserBase] = None,
-        tool_executor: Optional[ToolExecutorBase] = None,
-        results_adder: Optional[ResultsAdderBase] = None
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Run a conversation thread with specified parameters."""
         logger.info(f"Starting thread execution for thread {thread_id}")
@@ -277,10 +265,10 @@ class ThreadManager:
                     f"parallel_tool_execution={parallel_tool_execution}")
         
         try:
-            # 1. Get messages from thread
+            # 1. Get messages from thread for LLM call
             messages = await self.get_messages(thread_id)
             
-            # 2. Prepare messages for LLM + add temporary message if it exists
+            # 2. Prepare messages for LLM call + add temporary message if it exists
             prepared_messages = [system_message] + messages
             if temporary_message:
                 prepared_messages.append(temporary_message)
@@ -290,20 +278,7 @@ class ThreadManager:
                 logger.error("Invalid configuration: Cannot use both native and XML tool calling")
                 raise ValueError("Cannot use both native LLM tool calling and XML tool calling simultaneously")
 
-            if native_tool_calling or xml_tool_calling:
-                logger.debug("Initializing tool components")
-                if tool_parser is None:
-                    tool_parser = XMLToolParser(tool_registry=self.tool_registry) if xml_tool_calling else StandardToolParser()
-                    logger.debug(f"Using {tool_parser.__class__.__name__} for tool parsing")
-                
-                if tool_executor is None:
-                    tool_executor = XMLToolExecutor(parallel=parallel_tool_execution, tool_registry=self.tool_registry) if xml_tool_calling else StandardToolExecutor(parallel=parallel_tool_execution)
-                    logger.debug(f"Using {tool_executor.__class__.__name__} for tool execution")
-                
-                if results_adder is None:
-                    results_adder = XMLResultsAdder(self) if xml_tool_calling else StandardResultsAdder(self)
-                    logger.debug(f"Using {results_adder.__class__.__name__} for results adding")
-
+            # 3. Prepare tools for LLM call
             openapi_tool_schemas = None
             if native_tool_calling:
                 openapi_tool_schemas = self.tool_registry.get_openapi_schemas()
@@ -316,43 +291,98 @@ class ThreadManager:
                 available_functions = {}
                 logger.debug("No tool calling enabled")
 
+            # 4. Make LLM API call
             logger.info("Making LLM API call")
-            llm_response = await self._run_thread_completion(
-                messages=prepared_messages,
-                model_name=model_name,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                tools=openapi_tool_schemas,
-                tool_choice=tool_choice if native_tool_calling else None,
-                stream=stream
-            )
+            try:
+                llm_response = await make_llm_api_call(
+                    prepared_messages,
+                    model_name,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    tools=openapi_tool_schemas,
+                    tool_choice=tool_choice if native_tool_calling else None,
+                    stream=stream
+                )
+                logger.debug("Successfully received LLM API response")
+            except Exception as e:
+                logger.error(f"Failed to make LLM API call: {str(e)}", exc_info=True)
+                raise
 
-            response_processor = LLMResponseProcessor(
-                thread_id=thread_id,
-                available_functions=available_functions,
-                add_message_callback=self.add_message,
-                update_message_callback=self._update_message,
-                get_messages_callback=self.get_messages,
-                parallel_tool_execution=parallel_tool_execution,
-                tool_parser=tool_parser,
-                tool_executor=tool_executor,
-                results_adder=results_adder
-            )
-
+            # 5. Process LLM response
             if stream:
-                logger.info("Processing streaming response")
-                return response_processor.process_stream(
-                    response_stream=llm_response,
-                    execute_tools=execute_tools,
-                    execute_tools_on_stream=execute_tools_on_stream
-                )
+                logger.info("Received streaming response from LLM API")
+                
+                # Create a formatted stream that processes each chunk
+                async def process_streaming_response():
+                    try:
+                        async for chunk in llm_response:
+                            # Log the chunk contents for debugging
+                            if hasattr(chunk, 'choices') and chunk.choices:
+                                if hasattr(chunk.choices[0], 'delta'):
+                                    delta = chunk.choices[0].delta
+                                    
+                                    if hasattr(delta, 'content') and delta.content:
+                                        print(f"STREAM CONTENT: {delta.content}")
+                                        # Yield a formatted content response
+                                        yield {"type": "content", "content": delta.content}
+                                    
+                                    if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                                        for tool_call in delta.tool_calls:
+                                            if hasattr(tool_call, 'function'):
+                                                function_name = tool_call.function.name
+                                                arguments = tool_call.function.arguments
+                                                print(f"STREAM TOOL CALL: {function_name} - {arguments}")
+                                                # Yield a formatted tool call response
+                                                yield {
+                                                    "type": "tool_call",
+                                                    "name": function_name,
+                                                    "arguments": arguments
+                                                }
+                    except Exception as e:
+                        logger.error(f"Error processing stream: {str(e)}", exc_info=True)
+                        # Yield an error response
+                        yield {"type": "error", "message": str(e)}
+                
+                return process_streaming_response()
             else:
-                logger.info("Processing non-streaming response")
-                await response_processor.process_response(
-                    response=llm_response,
-                    execute_tools=execute_tools
-                )
-                return llm_response
+                logger.info("Received non-streaming response from LLM API")
+                # Convert non-streaming response into a single-chunk stream
+                async def single_chunk_stream():
+                    try:
+                        formatted_response = {"type": "content", "content": ""}
+                        
+                        if hasattr(llm_response, 'choices') and llm_response.choices:
+                            choice = llm_response.choices[0]
+                            
+                            if hasattr(choice, 'message'):
+                                message = choice.message
+                                
+                                if hasattr(message, 'content') and message.content:
+                                    print(f"RESPONSE CONTENT: {message.content}")
+                                    formatted_response = {"type": "content", "content": message.content}
+                                
+                                if hasattr(message, 'tool_calls') and message.tool_calls:
+                                    formatted_response = {"type": "tool_calls", "tool_calls": []}
+                                    for tool_call in message.tool_calls:
+                                        if hasattr(tool_call, 'function'):
+                                            function_name = tool_call.function.name
+                                            arguments = tool_call.function.arguments
+                                            print(f"RESPONSE TOOL CALL: {function_name} - {arguments}")
+                                            formatted_response["tool_calls"].append({
+                                                "name": function_name,
+                                                "arguments": arguments
+                                            })
+                        
+                        # For debugging, also log the full response
+                        print(f"FULL RESPONSE: {json.dumps(llm_response, indent=2, default=str) if hasattr(llm_response, '__dict__') else str(llm_response)}")
+                        
+                        yield formatted_response
+                    except Exception as e:
+                        logger.error(f"Error formatting response: {str(e)}", exc_info=True)
+                        yield {"type": "error", "message": str(e)}
+                
+                return single_chunk_stream()
+          
 
         except Exception as e:
             logger.error(f"Error in run_thread: {str(e)}", exc_info=True)
@@ -360,31 +390,3 @@ class ThreadManager:
                 "status": "error",
                 "message": str(e)
             }
-
-    async def _run_thread_completion(
-        self,
-        messages: List[Dict[str, Any]],
-        model_name: str,
-        temperature: float,
-        max_tokens: Optional[int],
-        tools: Optional[List[Dict[str, Any]]],
-        tool_choice: Optional[str],
-        stream: bool
-    ) -> Union[Any, AsyncGenerator]:
-        """Get completion from LLM API."""
-        logger.debug(f"Making LLM API call with model {model_name}")
-        try:
-            response = await make_llm_api_call(
-                messages,
-                model_name,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                tools=tools,
-                tool_choice=tool_choice,
-                stream=stream
-            )
-            logger.debug("Successfully received LLM API response")
-            return response
-        except Exception as e:
-            logger.error(f"Failed to make LLM API call: {str(e)}", exc_info=True)
-            raise

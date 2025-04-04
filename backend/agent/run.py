@@ -34,7 +34,7 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
 #         """
 #     }
 
-    model_name = "anthropic/claude-3-7-sonnet-latest"
+    model_name = "anthropic/claude-3-7-sonnet-latest" #anthropic/claude-3-7-sonnet-latest
 
     response = await thread_manager.run_thread(
         thread_id=thread_id,
@@ -51,34 +51,6 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
         parallel_tool_execution=False        
     )
     
-    if stream:
-        if isinstance(response, AsyncGenerator):
-            async for chunk in response:
-                if hasattr(chunk.choices[0], 'delta'):
-                    delta = chunk.choices[0].delta
-                    
-                    if hasattr(delta, 'content') and delta.content is not None:
-                        yield f"data: {json.dumps({'type': 'content', 'content': delta.content})}\n\n"
-                    
-                    if hasattr(delta, 'tool_calls') and delta.tool_calls:
-                        for tool_call in delta.tool_calls:
-                            if tool_call.function:
-                                tool_data = {
-                                    'type': 'tool_call',
-                                    'name': tool_call.function.name if tool_call.function.name else '',
-                                    'arguments': tool_call.function.arguments if tool_call.function.arguments else ''
-                                }
-                                yield f"data: {json.dumps(tool_data)}\n\n"
-        else:
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Invalid response type'})}\n\n"
-    else:
-        if isinstance(response, AsyncGenerator):
-            full_response = []
-            async for chunk in response:
-                if hasattr(chunk.choices[0], 'delta'):
-                    delta = chunk.choices[0].delta
-                    if hasattr(delta, 'content') and delta.content is not None:
-                        full_response.append(delta.content)
-            yield f"data: {json.dumps({'type': 'content', 'content': ''.join(full_response)})}\n\n"
-        else:
-            yield f"data: {json.dumps({'type': 'content', 'content': response})}\n\n"
+    # All responses are now async generators yielding formatted responses
+    async for chunk in response:
+        yield chunk
