@@ -3,19 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flappy Bird Clone</title>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/styles.css">
+    <title>Flappy Bird Test</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
 </head>
 <body>
-    <div id="game-over">
-        Game Over!<br>
-        Score: <span id="final-score">0</span><br>
-        Click to restart
-    </div>
     <canvas id="gameCanvas" width="320" height="480"></canvas>
-    <script src="assets/sounds.js"></script>
-    <script src="assets/sprites.js"></script>
-    <script src="game.js"></script>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Test bird
+        const bird = {
+            x: 50,
+            y: 200,
+            size: 20
+        };
+        
+        // Draw test bird
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'red';
+            ctx.fillRect(bird.x, bird.y, bird.size, bird.size);
+        }
+        
+        draw();
+    </script>
 </body>
 </html>

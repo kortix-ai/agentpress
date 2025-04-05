@@ -240,12 +240,10 @@ class ResponseProcessor:
                             # Get the result
                             result = execution["task"].result()
                             tool_call = execution["tool_call"]
+                            tool_index = execution.get("tool_index", -1)
                             
                             # Store result for later database updates
                             tool_results_buffer.append((tool_call, result))
-                            
-                            # Get the tool index
-                            tool_index = execution.get("tool_index", -1)
                             
                             # Yield tool status message first
                             yield {
@@ -269,6 +267,20 @@ class ResponseProcessor:
                             
                         except Exception as e:
                             logger.error(f"Error getting tool execution result: {str(e)}")
+                            tool_call = execution["tool_call"]
+                            tool_index = execution.get("tool_index", -1)
+                            
+                            # Yield error status
+                            yield {
+                                "type": "tool_status",
+                                "status": "error",
+                                "name": tool_call["name"],
+                                "message": f"Error executing tool: {str(e)}",
+                                "tool_index": tool_index
+                            }
+                            
+                            # Mark for removal
+                            completed_executions.append(i)
                 
                 # Remove completed executions from pending list (in reverse to maintain indices)
                 for i in sorted(completed_executions, reverse=True):
@@ -288,14 +300,12 @@ class ResponseProcessor:
                         if execution["task"].done():
                             result = execution["task"].result()
                             tool_call = execution["tool_call"]
+                            tool_index = execution.get("tool_index", -1)
                             
                             # Store result for later
                             tool_results_buffer.append((tool_call, result))
                             
-                            # Get the tool index
-                            tool_index = execution.get("tool_index", -1)
-                            
-                            # Yield tool status message first
+                            # Yield tool status message first 
                             yield {
                                 "type": "tool_status",
                                 "status": "completed" if result.success else "failed",
@@ -315,11 +325,12 @@ class ResponseProcessor:
                         logger.error(f"Error processing remaining tool execution: {str(e)}")
                         # Yield error status for the tool
                         if "tool_call" in execution:
+                            tool_call = execution["tool_call"]
                             tool_index = execution.get("tool_index", -1)
                             yield {
                                 "type": "tool_status",
                                 "status": "error",
-                                "name": execution["tool_call"].get("name", "unknown"),
+                                "name": tool_call.get("name", "unknown"),
                                 "message": f"Error processing tool result: {str(e)}",
                                 "tool_index": tool_index
                             }
