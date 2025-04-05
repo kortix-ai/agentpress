@@ -100,6 +100,9 @@ class ResponseProcessor:
         # For tracking pending tool executions
         pending_tool_executions = []
         
+        # Tool execution index counter
+        tool_execution_index = 0
+        
         logger.info(f"Starting to process streaming response for thread {thread_id}")
         logger.info(f"Config: XML={config.xml_tool_calling}, Native={config.native_tool_calling}, " 
                    f"Execute on stream={config.execute_on_stream}, Execution strategy={config.tool_execution_strategy}")
@@ -135,14 +138,27 @@ class ResponseProcessor:
                                 if tool_call:
                                     # Execute tool if needed, but in background
                                     if config.execute_tools and config.execute_on_stream:
+                                        # Yield tool execution start message
+                                        yield {
+                                            "type": "tool_status",
+                                            "status": "started",
+                                            "name": tool_call["name"],
+                                            "message": f"Starting execution of {tool_call['name']}",
+                                            "tool_index": tool_execution_index
+                                        }
+                                        
                                         # Start tool execution as a background task
                                         execution_task = asyncio.create_task(self._execute_tool(tool_call))
                                         
                                         # Store the task for later retrieval 
                                         pending_tool_executions.append({
                                             "task": execution_task,
-                                            "tool_call": tool_call
+                                            "tool_call": tool_call,
+                                            "tool_index": tool_execution_index
                                         })
+                                        
+                                        # Increment the tool execution index
+                                        tool_execution_index += 1
                                         
                                         # Immediately continue processing more chunks
                     
@@ -192,14 +208,27 @@ class ResponseProcessor:
                                     "id": current_tool['id']
                                 }
                                 
+                                # Yield tool execution start message
+                                yield {
+                                    "type": "tool_status",
+                                    "status": "started",
+                                    "name": tool_call_data["name"],
+                                    "message": f"Starting execution of {tool_call_data['name']}",
+                                    "tool_index": tool_execution_index
+                                }
+                                
                                 # Start tool execution as a background task
                                 execution_task = asyncio.create_task(self._execute_tool(tool_call_data))
                                 
                                 # Store the task for later retrieval 
                                 pending_tool_executions.append({
                                     "task": execution_task,
-                                    "tool_call": tool_call_data
+                                    "tool_call": tool_call_data,
+                                    "tool_index": tool_execution_index
                                 })
+                                
+                                # Increment the tool execution index
+                                tool_execution_index += 1
                                 
                                 # Immediately continue processing more chunks
                 
@@ -215,11 +244,24 @@ class ResponseProcessor:
                             # Store result for later database updates
                             tool_results_buffer.append((tool_call, result))
                             
+                            # Get the tool index
+                            tool_index = execution.get("tool_index", -1)
+                            
+                            # Yield tool status message first
+                            yield {
+                                "type": "tool_status",
+                                "status": "completed" if result.success else "failed",
+                                "name": tool_call["name"],
+                                "message": f"Tool {tool_call['name']} {'completed successfully' if result.success else 'failed'}",
+                                "tool_index": tool_index
+                            }
+                            
                             # Yield tool execution result for client display
                             yield {
                                 "type": "tool_result",
                                 "name": tool_call["name"],
-                                "result": str(result)
+                                "result": str(result),
+                                "tool_index": tool_index
                             }
                             
                             # Mark for removal
@@ -250,14 +292,37 @@ class ResponseProcessor:
                             # Store result for later
                             tool_results_buffer.append((tool_call, result))
                             
+                            # Get the tool index
+                            tool_index = execution.get("tool_index", -1)
+                            
+                            # Yield tool status message first
+                            yield {
+                                "type": "tool_status",
+                                "status": "completed" if result.success else "failed",
+                                "name": tool_call["name"],
+                                "message": f"Tool {tool_call['name']} {'completed successfully' if result.success else 'failed'}",
+                                "tool_index": tool_index
+                            }
+                            
                             # Yield tool execution result
                             yield {
                                 "type": "tool_result",
                                 "name": tool_call["name"],
-                                "result": str(result)
+                                "result": str(result),
+                                "tool_index": tool_index
                             }
                     except Exception as e:
                         logger.error(f"Error processing remaining tool execution: {str(e)}")
+                        # Yield error status for the tool
+                        if "tool_call" in execution:
+                            tool_index = execution.get("tool_index", -1)
+                            yield {
+                                "type": "tool_status",
+                                "status": "error",
+                                "name": execution["tool_call"].get("name", "unknown"),
+                                "message": f"Error processing tool result: {str(e)}",
+                                "tool_index": tool_index
+                            }
             
             # After streaming completes, process any remaining content and tool calls
             if accumulated_content:
