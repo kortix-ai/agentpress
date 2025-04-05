@@ -321,4 +321,8 @@ if __name__ == "__main__":
         delete_result = await files_tool.delete_file(test_file_path)
         print("Delete file result:", delete_result)
 
+        # Test read_file after delete (should fail)
+        read_deleted_result = await files_tool.read_file(test_file_path)
+        print("Read deleted file result:", read_deleted_result)
+
     asyncio.run(test_files_tool())
