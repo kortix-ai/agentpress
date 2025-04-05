@@ -46,16 +46,36 @@ class ThreadManager:
         """Add a tool to the ThreadManager."""
         self.tool_registry.register_tool(tool_class, function_names, **kwargs)
 
-    async def create_thread(self) -> str:
-        """Create a new conversation thread."""
+    async def create_thread(self, project_id: Optional[str] = None, user_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> str:
+        """Create a new conversation thread.
+        
+        Args:
+            project_id: Optional project ID to associate with the thread
+            user_id: Optional user ID to associate with the thread
+            metadata: Optional additional metadata for the thread
+            
+        Returns:
+            The created thread ID
+        """
         logger.info("Creating new conversation thread")
         thread_id = str(uuid.uuid4())
         try:
             client = await self.db.client
+            
+            # Initialize metadata dictionary
+            thread_metadata = metadata or {}
+            
+            # Add project_id and user_id to metadata if provided
+            if project_id:
+                thread_metadata['project_id'] = project_id
+            if user_id:
+                thread_metadata['user_id'] = user_id
+            
             thread_data = {
                 'thread_id': thread_id,
-                'messages': json.dumps([])
+                'metadata': json.dumps(thread_metadata)
             }
+            
             await client.table('threads').insert(thread_data).execute()
             logger.info(f"Successfully created thread with ID: {thread_id}")
             return thread_id
@@ -63,43 +83,64 @@ class ThreadManager:
             logger.error(f"Failed to create thread: {str(e)}", exc_info=True)
             raise
 
-    async def add_message(self, thread_id: str, message_data: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None):
-        """Add a message to an existing thread."""
+    async def add_message(
+        self, 
+        thread_id: str, 
+        message_data: Dict[str, Any], 
+        images: Optional[List[Dict[str, Any]]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        message_type: Optional[str] = None,
+        include_in_llm: Optional[bool] = None
+    ):
+        """Add a message to an existing thread.
+        
+        Args:
+            thread_id: The ID of the thread to add the message to
+            message_data: The message data (content, role, etc)
+            images: Optional image attachments for the message
+            metadata: Optional metadata to attach to the message
+            message_type: Optional explicit message type (overrides autodetection)
+            include_in_llm: Whether to include in LLM message history
+        """
         logger.info(f"Adding message to thread {thread_id}")
         logger.debug(f"Message data: {message_data}")
         logger.debug(f"Images: {images}")
         
         try:
-            # Handle cleanup of incomplete tool calls
-            '''
-            if message_data['role'] == 'user':
-                logger.debug("Checking for incomplete tool calls")
-                messages = await self.get_messages(thread_id)
-                last_assistant_index = next((i for i in reversed(range(len(messages))) 
-                    if messages[i]['role'] == 'assistant' and 'tool_calls' in messages[i]), None)
-                
-                if last_assistant_index is not None:
-                    tool_call_count = len(messages[last_assistant_index]['tool_calls'])
-                    tool_response_count = sum(1 for msg in messages[last_assistant_index+1:] 
-                                           if msg['role'] == 'tool')
-                    
-                    if tool_call_count != tool_response_count:
-                        logger.info(f"Found incomplete tool calls in thread {thread_id}. Cleaning up...")
-                        await self.cleanup_incomplete_tool_calls(thread_id)
-            '''
-
             # Convert ToolResult instances to strings
             for key, value in message_data.items():
                 if isinstance(value, ToolResult):
                     message_data[key] = str(value)
 
+            # Determine message type if not explicitly provided
+            if message_type is None:
+                message_type = 'other'
+                if 'role' in message_data:
+                    role = message_data['role']
+                    if role == 'user':
+                        message_type = 'llm_user_message'
+                    elif role == 'assistant':
+                        message_type = 'llm_assistant_message'
+                    elif role == 'system':
+                        message_type = 'llm_system_message'
+                    elif role == 'tool':
+                        message_type = 'tool_response'
+
+            # Determine whether to include in LLM history
+            if include_in_llm is None:
+                # By default, include all message types except tool responses and custom types
+                include_in_llm = message_type.startswith('llm_')
+
             # Handle image attachments
+            content = message_data.get('content', '')
             if images:
                 logger.debug(f"Processing {len(images)} image attachments")
-                if isinstance(message_data['content'], str):
-                    message_data['content'] = [{"type": "text", "text": message_data['content']}]
-                elif not isinstance(message_data['content'], list):
-                    message_data['content'] = []
+                if isinstance(content, str):
+                    content_obj = [{"type": "text", "text": content}]
+                elif not isinstance(content, list):
+                    content_obj = []
+                else:
+                    content_obj = content
 
                 for image in images:
                     image_content = {
@@ -109,26 +150,51 @@ class ThreadManager:
                             "detail": "high"
                         }
                     }
-                    message_data['content'].append(image_content)
-
-            # Get current messages
+                    content_obj.append(image_content)
+                
+                # Update the content
+                content = content_obj
+            
+            # Prepare message data to insert
+            if isinstance(content, str):
+                # Simple text content
+                content_json = {
+                    "role": message_data.get('role', 'unknown'),
+                    "text": content
+                }
+            else:
+                # Complex content (list or object)
+                content_json = {
+                    "role": message_data.get('role', 'unknown'),
+                    "content": content
+                }
+                
+                # If there are tool_calls, include them
+                if 'tool_calls' in message_data:
+                    content_json["tool_calls"] = message_data['tool_calls']
+            
+            # Prepare metadata
+            message_metadata = metadata or {}
+            
+            # Add message ID if available
+            if 'id' in message_data:
+                message_metadata['message_id'] = message_data['id']
+                
+            # Add tool call info if available
+            if 'tool_call_id' in message_data:
+                message_metadata['tool_call_id'] = message_data['tool_call_id']
+                
+            # Insert the message
             client = await self.db.client
-            thread = await client.table('threads').select('*').eq('thread_id', thread_id).single().execute()
-            
-            if not thread.data:
-                logger.error(f"Thread {thread_id} not found")
-                raise ValueError(f"Thread {thread_id} not found")
-            
-            messages = json.loads(thread.data['messages'])
-            messages.append(message_data)
-            
-            # Update thread
-            await client.table('threads').update({
-                'messages': json.dumps(messages)
-            }).eq('thread_id', thread_id).execute()
+            await client.table('messages').insert({
+                'thread_id': thread_id,
+                'type': message_type,
+                'is_llm_message': include_in_llm,
+                'content': json.dumps(content_json),
+                'metadata': json.dumps(message_metadata)
+            }).execute()
 
             logger.info(f"Successfully added message to thread {thread_id}")
-            logger.debug(f"Updated message count: {len(messages)}")
             
         except Exception as e:
             logger.error(f"Failed to add message to thread {thread_id}: {str(e)}", exc_info=True)
@@ -139,23 +205,83 @@ class ThreadManager:
         thread_id: str,
         hide_tool_msgs: bool = False,
         only_latest_assistant: bool = False,
-        regular_list: bool = True
+        include_metadata: bool = False,
+        message_types: Optional[List[str]] = None,
+        limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """Retrieve messages from a thread with optional filtering."""
+        """Retrieve messages from a thread with optional filtering.
+        
+        Args:
+            thread_id: The ID of the thread to get messages from
+            hide_tool_msgs: Whether to hide tool messages
+            only_latest_assistant: Whether to only return the latest assistant message
+            include_metadata: Whether to include message metadata in the result
+            message_types: Optional list of message types to include
+            limit: Optional maximum number of messages to return
+            
+        Returns:
+            A list of messages from the thread
+        """
         logger.debug(f"Retrieving messages for thread {thread_id}")
-        logger.debug(f"Filters: hide_tool_msgs={hide_tool_msgs}, only_latest_assistant={only_latest_assistant}, regular_list={regular_list}")
+        logger.debug(f"Filters: hide_tool_msgs={hide_tool_msgs}, only_latest_assistant={only_latest_assistant}")
         
         try:
             client = await self.db.client
-            thread = await client.table('threads').select('*').eq('thread_id', thread_id).single().execute()
             
-            if not thread.data:
-                logger.warning(f"Thread {thread_id} not found")
+            # Start building the query
+            query = client.table('messages').select('*').eq('thread_id', thread_id).order('created_at')
+            
+            # Add message type filter if specified
+            if message_types:
+                query = query.in_('type', message_types)
+                
+            # Add limit if specified
+            if limit:
+                query = query.limit(limit)
+                
+            # Execute the query
+            result = await query.execute()
+            
+            if not result.data:
+                logger.warning(f"No messages found for thread {thread_id}")
                 return []
             
-            messages = json.loads(thread.data['messages'])
+            # Process the messages
+            messages = []
+            for msg_record in result.data:
+                content_obj = json.loads(msg_record['content'])
+                
+                # Create message in the format expected by the LLM API
+                msg = {
+                    'role': content_obj.get('role', 'unknown')
+                }
+                
+                # Handle different content formats
+                if 'text' in content_obj:
+                    msg['content'] = content_obj['text']
+                elif 'content' in content_obj:
+                    msg['content'] = content_obj['content']
+                else:
+                    # Fallback
+                    msg['content'] = ''
+                
+                # Include tool_calls if they exist
+                if 'tool_calls' in content_obj:
+                    msg['tool_calls'] = content_obj['tool_calls']
+                
+                # Include metadata if requested
+                if include_metadata:
+                    msg['metadata'] = json.loads(msg_record['metadata'])
+                    msg['type'] = msg_record['type']
+                    msg['is_llm_message'] = msg_record['is_llm_message']
+                    msg['created_at'] = msg_record['created_at']
+                    msg['message_id'] = msg_record['message_id']
+                
+                messages.append(msg)
+                
             logger.debug(f"Retrieved {len(messages)} messages")
             
+            # Apply filters
             if only_latest_assistant:
                 for msg in reversed(messages):
                     if msg.get('role') == 'assistant':
@@ -172,38 +298,60 @@ class ThreadManager:
                 ]
                 logger.debug(f"Filtered out tool messages. Remaining: {len(messages)}")
             
-            if regular_list:
-                messages = [
-                    msg for msg in messages
-                    if msg.get('role') in ['system', 'assistant', 'tool', 'user']
-                ]
-                logger.debug(f"Filtered to regular messages. Count: {len(messages)}")
-            
             return messages
             
         except Exception as e:
             logger.error(f"Failed to get messages for thread {thread_id}: {str(e)}", exc_info=True)
             raise
 
-    async def _update_message(self, thread_id: str, message: Dict[str, Any]):
-        """Update an existing message in the thread."""
-        client = await self.db.client
-        thread = await client.table('threads').select('*').eq('thread_id', thread_id).single().execute()
+    async def get_messages_for_llm(self, thread_id: str) -> List[Dict[str, Any]]:
+        """Retrieve messages suitable for sending to the LLM."""
+        logger.debug(f"Retrieving LLM-suitable messages for thread {thread_id}")
         
-        if not thread.data:
-            return
-        
-        messages = json.loads(thread.data['messages'])
-        
-        # Find and update the last assistant message
-        for i in reversed(range(len(messages))):
-            if messages[i].get('role') == 'assistant':
-                messages[i] = message
-                break
-        
-        await client.table('threads').update({
-            'messages': json.dumps(messages)
-        }).eq('thread_id', thread_id).execute()
+        try:
+            client = await self.db.client
+            result = await client.table('messages') \
+                .select('*') \
+                .eq('thread_id', thread_id) \
+                .eq('is_llm_message', True) \
+                .order('created_at') \
+                .execute()
+            
+            if not result.data:
+                logger.warning(f"No LLM-suitable messages found for thread {thread_id}")
+                return []
+            
+            # Convert from database format to LLM format
+            messages = []
+            for msg_record in result.data:
+                content_obj = json.loads(msg_record['content'])
+                
+                # Create message in the format expected by the LLM API
+                msg = {
+                    'role': content_obj.get('role', 'unknown')
+                }
+                
+                # Handle different content formats
+                if 'text' in content_obj:
+                    msg['content'] = content_obj['text']
+                elif 'content' in content_obj:
+                    msg['content'] = content_obj['content']
+                else:
+                    # Fallback
+                    msg['content'] = ''
+                
+                # Include tool_calls if they exist
+                if 'tool_calls' in content_obj:
+                    msg['tool_calls'] = content_obj['tool_calls']
+                
+                messages.append(msg)
+            
+            logger.debug(f"Retrieved {len(messages)} LLM-suitable messages")
+            return messages
+            
+        except Exception as e:
+            logger.error(f"Failed to get LLM-suitable messages for thread {thread_id}: {str(e)}", exc_info=True)
+            raise
 
     # async def cleanup_incomplete_tool_calls(self, thread_id: str):
     #     """Clean up incomplete tool calls in a thread."""
@@ -282,31 +430,18 @@ class ThreadManager:
         
         try:
             # 1. Get messages from thread for LLM call
-            messages = await self.get_messages(thread_id)
+            messages = await self.get_messages_for_llm(thread_id)
             
-            # 2. Prepare messages for LLM call + add temporary message if it exists
+            # 2. Prepare messages for LLM call
             prepared_messages = [system_prompt]
+            prepared_messages.extend(messages)
             
-            # Find the last user message index
-            last_user_index = -1
-            for i, msg in enumerate(messages):
-                if msg.get('role') == 'user':
-                    last_user_index = i
-            
-            # Insert temporary message before the last user message if it exists
-            if temporary_message and last_user_index >= 0:
-                prepared_messages.extend(messages[:last_user_index])
+            # 3. Add temporary message if provided
+            if temporary_message:
                 prepared_messages.append(temporary_message)
-                prepared_messages.extend(messages[last_user_index:])
-                logger.debug("Added temporary message before the last user message")
-            else:
-                # If no user message or no temporary message, just add all messages
-                prepared_messages.extend(messages)
-                if temporary_message:
-                    prepared_messages.append(temporary_message)
-                    logger.debug("Added temporary message to the end of prepared messages")
+                logger.debug("Added temporary message to prepared messages")
 
-            # 3. Create or use processor config
+            # 4. Create or use processor config
             if processor_config is None:
                 processor_config = ProcessorConfig()
             
@@ -322,13 +457,13 @@ class ThreadManager:
                     "message": error_message
                 }
 
-            # 4. Prepare tools for LLM call
+            # 5. Prepare tools for LLM call
             openapi_tool_schemas = None
             if processor_config.native_tool_calling:
                 openapi_tool_schemas = self.tool_registry.get_openapi_schemas()
                 logger.debug(f"Retrieved {len(openapi_tool_schemas) if openapi_tool_schemas else 0} OpenAPI tool schemas")
 
-            # 5. Make LLM API call
+            # 6. Make LLM API call
             logger.info("Making LLM API call")
             try:
                 llm_response = await make_llm_api_call(
@@ -345,7 +480,7 @@ class ThreadManager:
                 logger.error(f"Failed to make LLM API call: {str(e)}", exc_info=True)
                 raise
 
-            # 6. Process LLM response using the ResponseProcessor
+            # 7. Process LLM response using the ResponseProcessor
             if stream:
                 logger.info("Processing streaming response")
                 return self.response_processor.process_streaming_response(
