@@ -31,7 +31,8 @@ class ToolExecutionContext:
     tool_call: Dict[str, Any]
     tool_index: int
     result: Optional[ToolResult] = None
-    display_name: Optional[str] = None
+    function_name: Optional[str] = None
+    xml_tag_name: Optional[str] = None
     error: Optional[Exception] = None
 
 @dataclass
@@ -212,7 +213,7 @@ class ResponseProcessor:
                             if has_complete_tool_call and config.execute_tools and config.execute_on_stream:
                                 # Execute this tool call
                                 tool_call_data = {
-                                    "name": current_tool['function']['name'],
+                                    "function_name": current_tool['function']['name'],
                                     "arguments": json.loads(current_tool['function']['arguments']),
                                     "id": current_tool['id']
                                 }
@@ -343,7 +344,8 @@ class ResponseProcessor:
                             formatted_result = self._format_xml_tool_result(tool_call, result)
                             yield {
                                 "type": "tool_result",
-                                "name": context.display_name,
+                                "function_name": context.function_name,
+                                "xml_tag_name": context.xml_tag_name,
                                 "result": formatted_result,
                                 "tool_index": tool_index
                             }
@@ -405,7 +407,7 @@ class ResponseProcessor:
                     if config.native_tool_calling and complete_native_tool_calls:
                         for tool_call in complete_native_tool_calls:
                             tool_calls_to_execute.append({
-                                "name": tool_call["function"]["name"],
+                                "function_name": tool_call["function"]["name"],
                                 "arguments": tool_call["function"]["arguments"],
                                 "id": tool_call["id"]
                             })
@@ -492,7 +494,7 @@ class ResponseProcessor:
                         for tool_call in response_message.tool_calls:
                             if hasattr(tool_call, 'function'):
                                 tool_calls.append({
-                                    "name": tool_call.function.name,
+                                    "function_name": tool_call.function.name,
                                     "arguments": json.loads(tool_call.function.arguments) if isinstance(tool_call.function.arguments, str) else tool_call.function.arguments,
                                     "id": tool_call.id if hasattr(tool_call, 'id') else str(uuid.uuid4())
                                 })
@@ -870,12 +872,12 @@ class ResponseProcessor:
             return []
             
         try:
-            tool_names = [t.get('name', 'unknown') for t in tool_calls]
+            tool_names = [t.get('function_name', 'unknown') for t in tool_calls]
             logger.info(f"Executing {len(tool_calls)} tools sequentially: {tool_names}")
             
             results = []
             for index, tool_call in enumerate(tool_calls):
-                tool_name = tool_call.get('name', 'unknown')
+                tool_name = tool_call.get('function_name', 'unknown')
                 logger.debug(f"Executing tool {index+1}/{len(tool_calls)}: {tool_name}")
                 
                 try:
@@ -893,8 +895,8 @@ class ResponseProcessor:
         except Exception as e:
             logger.error(f"Error in sequential tool execution: {str(e)}", exc_info=True)
             # Return partial results plus error results for remaining tools
-            completed_tool_names = [r[0].get('name', 'unknown') for r in results] if 'results' in locals() else []
-            remaining_tools = [t for t in tool_calls if t.get('name', 'unknown') not in completed_tool_names]
+            completed_tool_names = [r[0].get('function_name', 'unknown') for r in results] if 'results' in locals() else []
+            remaining_tools = [t for t in tool_calls if t.get('function_name', 'unknown') not in completed_tool_names]
             
             # Add error results for remaining tools
             error_results = [(tool, ToolResult(success=False, output=f"Execution error: {str(e)}")) 
@@ -918,7 +920,7 @@ class ResponseProcessor:
             return []
             
         try:
-            tool_names = [t.get('name', 'unknown') for t in tool_calls]
+            tool_names = [t.get('function_name', 'unknown') for t in tool_calls]
             logger.info(f"Executing {len(tool_calls)} tools in parallel: {tool_names}")
             
             # Create tasks for all tool calls
@@ -931,7 +933,7 @@ class ResponseProcessor:
             processed_results = []
             for i, (tool_call, result) in enumerate(zip(tool_calls, results)):
                 if isinstance(result, Exception):
-                    logger.error(f"Error executing tool {tool_call.get('name', 'unknown')}: {str(result)}")
+                    logger.error(f"Error executing tool {tool_call.get('function_name', 'unknown')}: {str(result)}")
                     # Create error result
                     error_result = ToolResult(success=False, output=f"Error executing tool: {str(result)}")
                     processed_results.append((tool_call, error_result))
@@ -1004,25 +1006,6 @@ class ResponseProcessor:
         function_name = tool_call["function_name"]
         return f"Result for {function_name}: {str(result)}"
 
-    def _get_tool_display_name(self, function_name: str) -> str:
-        """Get the XML tag name for a function name.
-        
-        Args:
-            function_name: The function name to look up
-            
-        Returns:
-            The XML tag name if found, otherwise the original function name
-        """
-        if not hasattr(self.tool_registry, 'xml_tools'):
-            return function_name
-            
-        # Check if this function corresponds to an XML tool
-        for tag_name, xml_tool_info in self.tool_registry.xml_tools.items():
-            if xml_tool_info.get('method') == function_name:
-                return tag_name
-                
-        # Default to the function name if no XML tag found
-        return function_name
 
     # At class level, define a method for yielding tool results
     def _yield_tool_result(self, context: ToolExecutionContext) -> Dict[str, Any]:
@@ -1030,7 +1013,8 @@ class ResponseProcessor:
         if not context.result:
             return {
                 "type": "tool_result",
-                "name": context.display_name,
+                "function_name": context.function_name,
+                "xml_tag_name": context.xml_tag_name,
                 "result": "No result available",
                 "tool_index": context.tool_index
             }
@@ -1038,7 +1022,8 @@ class ResponseProcessor:
         formatted_result = self._format_xml_tool_result(context.tool_call, context.result)
         return {
             "type": "tool_result",
-            "name": context.display_name,
+            "function_name": context.function_name,
+            "xml_tag_name": context.xml_tag_name,
             "result": formatted_result,
             "tool_index": context.tool_index
         }
@@ -1050,22 +1035,26 @@ class ResponseProcessor:
             tool_index=tool_index
         )
         
-        # Always use xml_tag_name if it exists
+        # Set function_name and xml_tag_name fields
         if "xml_tag_name" in tool_call:
-            context.display_name = tool_call["xml_tag_name"]
+            context.xml_tag_name = tool_call["xml_tag_name"]
+            context.function_name = tool_call.get("function_name", tool_call["xml_tag_name"])
         else:
             # For non-XML tools, use function name directly
-            context.display_name = tool_call["function_name"]
+            context.function_name = tool_call.get("function_name", "unknown")
+            context.xml_tag_name = None
         
         return context
         
     def _yield_tool_started(self, context: ToolExecutionContext) -> Dict[str, Any]:
         """Format and return a tool started status message."""
+        tool_name = context.xml_tag_name or context.function_name
         return {
             "type": "tool_status",
             "status": "started",
-            "name": context.display_name,
-            "message": f"Starting execution of {context.display_name}",
+            "function_name": context.function_name,
+            "xml_tag_name": context.xml_tag_name,
+            "message": f"Starting execution of {tool_name}",
             "tool_index": context.tool_index
         }
         
@@ -1074,21 +1063,25 @@ class ResponseProcessor:
         if not context.result:
             return self._yield_tool_error(context)
             
+        tool_name = context.xml_tag_name or context.function_name
         return {
             "type": "tool_status",
             "status": "completed" if context.result.success else "failed",
-            "name": context.display_name,
-            "message": f"Tool {context.display_name} {'completed successfully' if context.result.success else 'failed'}",
+            "function_name": context.function_name,
+            "xml_tag_name": context.xml_tag_name,
+            "message": f"Tool {tool_name} {'completed successfully' if context.result.success else 'failed'}",
             "tool_index": context.tool_index
         }
         
     def _yield_tool_error(self, context: ToolExecutionContext) -> Dict[str, Any]:
         """Format and return a tool error status message."""
         error_msg = str(context.error) if context.error else "Unknown error"
+        tool_name = context.xml_tag_name or context.function_name
         return {
             "type": "tool_status",
             "status": "error",
-            "name": context.display_name,
+            "function_name": context.function_name,
+            "xml_tag_name": context.xml_tag_name,
             "message": f"Error executing tool: {error_msg}",
             "tool_index": context.tool_index
         } 

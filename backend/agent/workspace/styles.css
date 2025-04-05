@@ -1,150 +1,69 @@
 :root {
-    --primary-color: #2c3e50;
-    --secondary-color: #3498db;
-    --accent-color: #e74c3c;
-    --background-color: #f5f6fa;
-    --text-color: #2c3e50;
+    --primary-color: #000;
+    --secondary-color: #444;
 }
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+/* Navigation */
+.navbar-brand {
+    font-weight: 700;
+    font-size: 24px;
+    color: var(--primary-color) !important;
 }
 
-body {
-    font-family: 'Arial', sans-serif;
-    background-color: var(--background-color);
-    color: var(--text-color);
+/* Hero Sections */
+.hero {
+    height: 60vh;
+    background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1584622650111-993a426fbf0a?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80');
+    background-size: cover;
+    background-position: center;
+    color: white;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Cards */
+.card {
+    border: none;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: transform 0.3s;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+/* Buttons */
+.btn-dark {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 20px;
+}
+
+.btn-dark:hover {
+    background: #333;
+}
+
+/* Forms */
+.form-control {
+    border-radius: 5px;
+    padding: 12px;
+}
+
+/* Footer */
+.footer {
+    background: var(--primary-color);
+    color: white;
+    padding: 50px 0;
+    margin-top: 100px;
 }
 
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 20px;
-}
-
-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px 0;
-    margin-bottom: 30px;
-}
-
-h1 {
-    color: var(--primary-color);
-    font-size: 2.5em;
-}
-
-.status-indicator {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.pulse {
-    width: 10px;
-    height: 10px;
-    background-color: #2ecc71;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.5); opacity: 0.7; }
-    100% { transform: scale(1); opacity: 1; }
-}
-
-main {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 30px;
-}
-
-.interaction-panel, .visualization-panel {
-    background: white;
-    border-radius: 15px;
-    padding: 20px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.chat-interface {
-    height: 500px;
-    display: flex;
-    flex-direction: column;
-}
-
-.messages {
-    flex-grow: 1;
-    overflow-y: auto;
-    padding: 15px;
-    margin-bottom: 15px;
-}
-
-.input-area {
-    display: flex;
-    gap: 10px;
-}
-
-input[type="text"] {
-    flex-grow: 1;
-    padding: 12px;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    font-size: 16px;
-}
-
-button {
-    padding: 12px 24px;
-    background-color: var(--secondary-color);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-
-button:hover {
-    background-color: #2980b9;
-}
-
-.neural-network {
-    height: 300px;
-    margin-bottom: 20px;
-}
-
-canvas {
-    width: 100%;
-    height: 100%;
-}
-
-.metrics {
-    display: grid;
-    gap: 20px;
-}
-
-.metric h3 {
-    margin-bottom: 10px;
-}
-
-.progress-bar {
-    height: 20px;
-    background-color: #f0f0f0;
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.progress {
-    height: 100%;
-    background-color: var(--secondary-color);
-    width: 0%;
-    transition: width 0.3s ease;
-}
-
-@media (max-width: 768px) {
-    main {
-        grid-template-columns: 1fr;
-    }
+    padding: 0 20px;
 }
