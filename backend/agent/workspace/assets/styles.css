@@ -1,0 +1,46 @@
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background: #111;
+    font-family: 'Press Start 2P', cursive;
+    overflow: hidden;
+}
+
+canvas {
+    border: 3px solid #0ff;
+    background: #070721;
+    box-shadow: 0 0 20px #0ff;
+}
+
+#game-over {
+    display: none;
+    position: absolute;
+    color: #0ff;
+    font-size: 24px;
+    text-align: center;
+    text-shadow: 0 0 10px #0ff;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #0ff;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 10px #0ff; }
+    50% { box-shadow: 0 0 20px #0ff, 0 0 30px #f0f; }
+    100% { box-shadow: 0 0 10px #0ff; }
+}
+
+.score {
+    position: absolute;
+    top: 20px;
+    color: #0ff;
+    text-shadow: 0 0 10px #0ff;
+}
+
+#current-score { left: 20px; }
+#high-score { right: 20px; }
