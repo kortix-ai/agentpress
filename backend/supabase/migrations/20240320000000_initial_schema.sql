@@ -1,7 +1,18 @@
+-- Create projects table
+CREATE TABLE projects (
+    project_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT,
+    user_id UUID NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
 -- Create threads table
 CREATE TABLE threads (
-    thread_id UUID PRIMARY KEY,
-    metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
+    thread_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID,
+    project_id UUID REFERENCES projects(project_id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -13,7 +24,7 @@ CREATE TABLE messages (
     type TEXT NOT NULL,
     is_llm_message BOOLEAN NOT NULL DEFAULT TRUE,
     content JSONB NOT NULL,
-    metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
+    metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -25,7 +36,6 @@ CREATE TABLE agent_runs (
     status TEXT NOT NULL DEFAULT 'running',
     started_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     completed_at TIMESTAMP WITH TIME ZONE,
-    metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
     responses JSONB NOT NULL DEFAULT '[]'::jsonb,
     error TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
@@ -57,19 +67,285 @@ CREATE TRIGGER update_agent_runs_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_projects_updated_at
+    BEFORE UPDATE ON projects
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Create indexes for better query performance
 CREATE INDEX idx_threads_created_at ON threads(created_at);
-CREATE INDEX idx_threads_metadata ON threads USING gin (metadata);
-CREATE INDEX idx_messages_thread_id ON messages(thread_id);
-CREATE INDEX idx_messages_type ON messages(type);
-CREATE INDEX idx_messages_is_llm_message ON messages(is_llm_message);
-CREATE INDEX idx_messages_metadata ON messages USING gin (metadata);
+CREATE INDEX idx_threads_user_id ON threads(user_id);
+CREATE INDEX idx_threads_project_id ON threads(project_id);
 CREATE INDEX idx_agent_runs_thread_id ON agent_runs(thread_id);
 CREATE INDEX idx_agent_runs_status ON agent_runs(status);
 CREATE INDEX idx_agent_runs_created_at ON agent_runs(created_at);
+CREATE INDEX idx_projects_user_id ON projects(user_id);
+CREATE INDEX idx_projects_created_at ON projects(created_at);
+CREATE INDEX idx_messages_thread_id ON messages(thread_id);
+CREATE INDEX idx_messages_created_at ON messages(created_at);
 
--- Grant basic permissions (without RLS yet)
-GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+-- Enable Row Level Security
+ALTER TABLE threads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+
+-- Project policies
+CREATE POLICY project_select_policy ON projects
+    FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY project_insert_policy ON projects
+    FOR INSERT
+    WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY project_update_policy ON projects
+    FOR UPDATE
+    USING (auth.uid() = user_id);
+
+CREATE POLICY project_delete_policy ON projects
+    FOR DELETE
+    USING (auth.uid() = user_id);
+
+-- Thread policies based on project ownership
+CREATE POLICY thread_select_policy ON threads
+    FOR SELECT
+    USING (
+        auth.uid() = user_id OR 
+        EXISTS (
+            SELECT 1 FROM projects
+            WHERE projects.project_id = threads.project_id
+            AND projects.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY thread_insert_policy ON threads
+    FOR INSERT
+    WITH CHECK (
+        auth.uid() = user_id OR 
+        EXISTS (
+            SELECT 1 FROM projects
+            WHERE projects.project_id = threads.project_id
+            AND projects.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY thread_update_policy ON threads
+    FOR UPDATE
+    USING (
+        auth.uid() = user_id OR 
+        EXISTS (
+            SELECT 1 FROM projects
+            WHERE projects.project_id = threads.project_id
+            AND projects.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY thread_delete_policy ON threads
+    FOR DELETE
+    USING (
+        auth.uid() = user_id OR 
+        EXISTS (
+            SELECT 1 FROM projects
+            WHERE projects.project_id = threads.project_id
+            AND projects.user_id = auth.uid()
+        )
+    );
+
+-- Create policies for agent_runs based on thread ownership
+CREATE POLICY agent_run_select_policy ON agent_runs
+    FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM threads
+            JOIN projects ON threads.project_id = projects.project_id
+            WHERE threads.thread_id = agent_runs.thread_id
+            AND (
+                threads.user_id = auth.uid() OR 
+                projects.user_id = auth.uid()
+            )
+        )
+    );
+
+CREATE POLICY agent_run_insert_policy ON agent_runs
+    FOR INSERT
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM threads
+            JOIN projects ON threads.project_id = projects.project_id
+            WHERE threads.thread_id = agent_runs.thread_id
+            AND (
+                threads.user_id = auth.uid() OR 
+                projects.user_id = auth.uid()
+            )
+        )
+    );
+
+CREATE POLICY agent_run_update_policy ON agent_runs
+    FOR UPDATE
+    USING (
+        EXISTS (
+            SELECT 1 FROM threads
+            JOIN projects ON threads.project_id = projects.project_id
+            WHERE threads.thread_id = agent_runs.thread_id
+            AND (
+                threads.user_id = auth.uid() OR 
+                projects.user_id = auth.uid()
+            )
+        )
+    );
+
+CREATE POLICY agent_run_delete_policy ON agent_runs
+    FOR DELETE
+    USING (
+        EXISTS (
+            SELECT 1 FROM threads
+            JOIN projects ON threads.project_id = projects.project_id
+            WHERE threads.thread_id = agent_runs.thread_id
+            AND (
+                threads.user_id = auth.uid() OR 
+                projects.user_id = auth.uid()
+            )
+        )
+    );
+
+-- Create message policies based on thread ownership
+CREATE POLICY message_select_policy ON messages
+    FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM threads
+            LEFT JOIN projects ON threads.project_id = projects.project_id
+            WHERE threads.thread_id = messages.thread_id
+            AND (
+                threads.user_id = auth.uid() OR 
+                projects.user_id = auth.uid()
+            )
+        )
+    );
+
+CREATE POLICY message_insert_policy ON messages
+    FOR INSERT
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM threads
+            LEFT JOIN projects ON threads.project_id = projects.project_id
+            WHERE threads.thread_id = messages.thread_id
+            AND (
+                threads.user_id = auth.uid() OR 
+                projects.user_id = auth.uid()
+            )
+        )
+    );
+
+CREATE POLICY message_update_policy ON messages
+    FOR UPDATE
+    USING (
+        EXISTS (
+            SELECT 1 FROM threads
+            LEFT JOIN projects ON threads.project_id = projects.project_id
+            WHERE threads.thread_id = messages.thread_id
+            AND (
+                threads.user_id = auth.uid() OR 
+                projects.user_id = auth.uid()
+            )
+        )
+    );
+
+CREATE POLICY message_delete_policy ON messages
+    FOR DELETE
+    USING (
+        EXISTS (
+            SELECT 1 FROM threads
+            LEFT JOIN projects ON threads.project_id = projects.project_id
+            WHERE threads.thread_id = messages.thread_id
+            AND (
+                threads.user_id = auth.uid() OR 
+                projects.user_id = auth.uid()
+            )
+        )
+    );
+
+-- Grant permissions to roles
+GRANT ALL PRIVILEGES ON TABLE projects TO authenticated, service_role;
 GRANT ALL PRIVILEGES ON TABLE threads TO authenticated, service_role;
 GRANT ALL PRIVILEGES ON TABLE messages TO authenticated, service_role;
 GRANT ALL PRIVILEGES ON TABLE agent_runs TO authenticated, service_role;
+
+-- Create a function that matches the Python get_messages behavior
+CREATE OR REPLACE FUNCTION get_llm_formatted_messages(p_thread_id UUID)
+RETURNS JSONB
+SECURITY INVOKER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    messages_array JSONB := '[]'::JSONB;
+BEGIN
+    -- Check if thread exists
+    IF NOT EXISTS (
+        SELECT 1 FROM threads t
+        WHERE t.thread_id = p_thread_id
+    ) THEN
+        RAISE EXCEPTION 'Thread not found';
+    END IF;
+
+    -- Parse content if it's stored as a string and return proper JSON objects
+    WITH parsed_messages AS (
+        SELECT 
+            CASE 
+                WHEN jsonb_typeof(content) = 'string' THEN content::text::jsonb
+                ELSE content
+            END AS parsed_content,
+            created_at
+        FROM messages
+        WHERE thread_id = p_thread_id
+        AND is_llm_message = TRUE
+    )
+    SELECT JSONB_AGG(parsed_content ORDER BY created_at)
+    INTO messages_array
+    FROM parsed_messages;
+    
+    -- Handle the case when no messages are found
+    IF messages_array IS NULL THEN
+        RETURN '[]'::JSONB;
+    END IF;
+    
+    RETURN messages_array;
+END;
+$$;
+
+-- Grant execute permission on the function
+GRANT EXECUTE ON FUNCTION get_llm_formatted_messages TO authenticated, service_role;
+
+-- Create function to create a new thread
+CREATE OR REPLACE FUNCTION create_thread()
+RETURNS JSONB
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    new_thread_id UUID := gen_random_uuid();
+    result JSONB;
+BEGIN
+    -- Insert new thread with the current user
+    INSERT INTO threads (thread_id, user_id, created_at, updated_at)
+    VALUES (new_thread_id, auth.uid(), TIMEZONE('utc'::text, NOW()), TIMEZONE('utc'::text, NOW()));
+    
+    -- Get the created thread data
+    SELECT jsonb_build_object(
+        'thread_id', thread_id,
+        'user_id', user_id,
+        'project_id', project_id,
+        'created_at', created_at,
+        'updated_at', updated_at
+    ) INTO result
+    FROM threads
+    WHERE thread_id = new_thread_id;
+    
+    RETURN result;
+END;
+$$;
+
+-- Grant execute permission on the function
+GRANT EXECUTE ON FUNCTION create_thread TO authenticated, service_role;

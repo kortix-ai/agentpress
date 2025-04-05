@@ -31,7 +31,8 @@ class ToolExecutionContext:
     tool_call: Dict[str, Any]
     tool_index: int
     result: Optional[ToolResult] = None
-    display_name: Optional[str] = None
+    function_name: Optional[str] = None
+    xml_tag_name: Optional[str] = None
     error: Optional[Exception] = None
 
 @dataclass
@@ -212,7 +213,7 @@ class ResponseProcessor:
                             if has_complete_tool_call and config.execute_tools and config.execute_on_stream:
                                 # Execute this tool call
                                 tool_call_data = {
-                                    "name": current_tool['function']['name'],
+                                    "function_name": current_tool['function']['name'],
                                     "arguments": json.loads(current_tool['function']['arguments']),
                                     "id": current_tool['id']
                                 }
@@ -343,7 +344,8 @@ class ResponseProcessor:
                             formatted_result = self._format_xml_tool_result(tool_call, result)
                             yield {
                                 "type": "tool_result",
-                                "name": context.display_name,
+                                "function_name": context.function_name,
+                                "xml_tag_name": context.xml_tag_name,
                                 "result": formatted_result,
                                 "tool_index": tool_index
                             }
@@ -371,11 +373,17 @@ class ResponseProcessor:
                             continue
                 
                 # Add assistant message with accumulated content
-                await self.add_message(thread_id, {
+                message_data = {
                     "role": "assistant",
                     "content": accumulated_content,
                     "tool_calls": complete_native_tool_calls if config.native_tool_calling and complete_native_tool_calls else None
-                })
+                }
+                await self.add_message(
+                    thread_id=thread_id, 
+                    type="assistant", 
+                    content=message_data,
+                    is_llm_message=True
+                )
                 
                 # Now add all buffered tool results AFTER the assistant message
                 for tool_call, result in tool_results_buffer:
@@ -405,7 +413,7 @@ class ResponseProcessor:
                     if config.native_tool_calling and complete_native_tool_calls:
                         for tool_call in complete_native_tool_calls:
                             tool_calls_to_execute.append({
-                                "name": tool_call["function"]["name"],
+                                "function_name": tool_call["function"]["name"],
                                 "arguments": tool_call["function"]["arguments"],
                                 "id": tool_call["id"]
                             })
@@ -492,7 +500,7 @@ class ResponseProcessor:
                         for tool_call in response_message.tool_calls:
                             if hasattr(tool_call, 'function'):
                                 tool_calls.append({
-                                    "name": tool_call.function.name,
+                                    "function_name": tool_call.function.name,
                                     "arguments": json.loads(tool_call.function.arguments) if isinstance(tool_call.function.arguments, str) else tool_call.function.arguments,
                                     "id": tool_call.id if hasattr(tool_call, 'id') else str(uuid.uuid4())
                                 })
@@ -508,11 +516,17 @@ class ResponseProcessor:
                                 })
             
             # Add assistant message FIRST
-            await self.add_message(thread_id, {
+            message_data = {
                 "role": "assistant",
                 "content": content,
                 "tool_calls": native_tool_calls if config.native_tool_calling and 'native_tool_calls' in locals() else None
-            })
+            }
+            await self.add_message(
+                thread_id=thread_id, 
+                type="assistant", 
+                content=message_data,
+                is_llm_message=True
+            )
             
             # Yield content first
             yield {"type": "content", "content": content}
@@ -697,16 +711,20 @@ class ResponseProcessor:
             if not tag_match:
                 logger.error(f"No tag found in XML chunk: {xml_chunk}")
                 return None
-                
-            tag_name = tag_match.group(1)
-            logger.info(f"Found XML tag: {tag_name}")
             
-            # Get tool info and schema
-            tool_info = self.tool_registry.get_xml_tool(tag_name)
+            # This is the XML tag as it appears in the text (e.g., "create-file")
+            xml_tag_name = tag_match.group(1)
+            logger.info(f"Found XML tag: {xml_tag_name}")
+            
+            # Get tool info and schema from registry
+            tool_info = self.tool_registry.get_xml_tool(xml_tag_name)
             if not tool_info or not tool_info['schema'].xml_schema:
-                logger.error(f"No tool or schema found for tag: {tag_name}")
+                logger.error(f"No tool or schema found for tag: {xml_tag_name}")
                 return None
-                
+            
+            # This is the actual function name to call (e.g., "create_file")
+            function_name = tool_info['method']
+            
             schema = tool_info['schema'].xml_schema
             params = {}
             remaining_chunk = xml_chunk
@@ -721,26 +739,26 @@ class ResponseProcessor:
                         if value is not None:
                             params[mapping.param_name] = value
                             logger.info(f"Found attribute {mapping.path} -> {mapping.param_name}: {value}")
-                    
+                
                     elif mapping.node_type == "element":
                         # Extract element content
                         content, remaining_chunk = self._extract_tag_content(remaining_chunk, mapping.path)
                         if content is not None:
                             params[mapping.param_name] = content.strip()
                             logger.info(f"Found element {mapping.path} -> {mapping.param_name}")
-                    
+                
                     elif mapping.node_type == "text":
                         if mapping.path == ".":
                             # Extract root content
-                            content, _ = self._extract_tag_content(remaining_chunk, tag_name)
+                            content, _ = self._extract_tag_content(remaining_chunk, xml_tag_name)
                             if content is not None:
                                 params[mapping.param_name] = content.strip()
                                 logger.info(f"Found text content for {mapping.param_name}")
-                    
+                
                     elif mapping.node_type == "content":
                         if mapping.path == ".":
                             # Extract root content
-                            content, _ = self._extract_tag_content(remaining_chunk, tag_name)
+                            content, _ = self._extract_tag_content(remaining_chunk, xml_tag_name)
                             if content is not None:
                                 params[mapping.param_name] = content.strip()
                                 logger.info(f"Found root content for {mapping.param_name}")
@@ -757,10 +775,11 @@ class ResponseProcessor:
                 logger.error(f"XML chunk: {xml_chunk}")
                 return None
             
-            # Create tool call
+            # Create tool call with clear separation between function_name and xml_tag_name
             tool_call = {
-                "name": tool_info['method'],
-                "arguments": params
+                "function_name": function_name,  # The actual method to call (e.g., create_file)
+                "xml_tag_name": xml_tag_name,    # The original XML tag (e.g., create-file)
+                "arguments": params              # The extracted parameters
             }
             
             logger.info(f"Created tool call: {tool_call}")
@@ -792,7 +811,7 @@ class ResponseProcessor:
     async def _execute_tool(self, tool_call: Dict[str, Any]) -> ToolResult:
         """Execute a single tool call and return the result."""
         try:
-            function_name = tool_call["name"]
+            function_name = tool_call["function_name"]
             arguments = tool_call["arguments"]
             
             logger.info(f"Executing tool: {function_name} with arguments: {arguments}")
@@ -817,7 +836,7 @@ class ResponseProcessor:
             logger.info(f"Tool execution complete: {function_name} -> {result}")
             return result
         except Exception as e:
-            logger.error(f"Error executing tool {tool_call['name']}: {str(e)}", exc_info=True)
+            logger.error(f"Error executing tool {tool_call['function_name']}: {str(e)}", exc_info=True)
             return ToolResult(success=False, output=f"Error executing tool: {str(e)}")
 
     async def _execute_tools(
@@ -865,12 +884,12 @@ class ResponseProcessor:
             return []
             
         try:
-            tool_names = [t.get('name', 'unknown') for t in tool_calls]
+            tool_names = [t.get('function_name', 'unknown') for t in tool_calls]
             logger.info(f"Executing {len(tool_calls)} tools sequentially: {tool_names}")
             
             results = []
             for index, tool_call in enumerate(tool_calls):
-                tool_name = tool_call.get('name', 'unknown')
+                tool_name = tool_call.get('function_name', 'unknown')
                 logger.debug(f"Executing tool {index+1}/{len(tool_calls)}: {tool_name}")
                 
                 try:
@@ -888,8 +907,8 @@ class ResponseProcessor:
         except Exception as e:
             logger.error(f"Error in sequential tool execution: {str(e)}", exc_info=True)
             # Return partial results plus error results for remaining tools
-            completed_tool_names = [r[0].get('name', 'unknown') for r in results] if 'results' in locals() else []
-            remaining_tools = [t for t in tool_calls if t.get('name', 'unknown') not in completed_tool_names]
+            completed_tool_names = [r[0].get('function_name', 'unknown') for r in results] if 'results' in locals() else []
+            remaining_tools = [t for t in tool_calls if t.get('function_name', 'unknown') not in completed_tool_names]
             
             # Add error results for remaining tools
             error_results = [(tool, ToolResult(success=False, output=f"Execution error: {str(e)}")) 
@@ -913,7 +932,7 @@ class ResponseProcessor:
             return []
             
         try:
-            tool_names = [t.get('name', 'unknown') for t in tool_calls]
+            tool_names = [t.get('function_name', 'unknown') for t in tool_calls]
             logger.info(f"Executing {len(tool_calls)} tools in parallel: {tool_names}")
             
             # Create tasks for all tool calls
@@ -926,7 +945,7 @@ class ResponseProcessor:
             processed_results = []
             for i, (tool_call, result) in enumerate(zip(tool_calls, results)):
                 if isinstance(result, Exception):
-                    logger.error(f"Error executing tool {tool_call.get('name', 'unknown')}: {str(result)}")
+                    logger.error(f"Error executing tool {tool_call.get('function_name', 'unknown')}: {str(result)}")
                     # Create error result
                     error_result = ToolResult(success=False, output=f"Error executing tool: {str(result)}")
                     processed_results.append((tool_call, error_result))
@@ -967,51 +986,49 @@ class ResponseProcessor:
                 "role": result_role,
                 "content": content
             }
-            await self.add_message(thread_id, result_message)
+            await self.add_message(
+                thread_id=thread_id, 
+                type=result_role if result_role == "assistant" else "user_proxy",
+                content=result_message,
+                is_llm_message=(result_role == "assistant")
+            )
         except Exception as e:
             logger.error(f"Error adding tool result: {str(e)}", exc_info=True)
             # Fallback to a simple message
             try:
-                await self.add_message(thread_id, {
+                fallback_message = {
                     "role": "user",
                     "content": str(result)
-                })
+                }
+                await self.add_message(
+                    thread_id=thread_id, 
+                    type="user_proxy", 
+                    content=fallback_message,
+                    is_llm_message=True
+                )
             except Exception as e2:
                 logger.error(f"Failed even with fallback message: {str(e2)}", exc_info=True)
 
 
     def _format_xml_tool_result(self, tool_call: Dict[str, Any], result: ToolResult) -> str:
-        """Format a tool result as a simple XML tag.
+        """Format a tool result as an XML tag or plain text.
         
         Args:
             tool_call: The tool call that was executed
             result: The result of the tool execution
             
         Returns:
-            String containing the XML-formatted result or standard format if not XML
+            String containing the formatted result
         """
-        xml_tag_name = self._get_tool_display_name(tool_call["name"])
+        # Always use xml_tag_name if it exists
+        if "xml_tag_name" in tool_call:
+            xml_tag_name = tool_call["xml_tag_name"]
+            return f"<{xml_tag_name}> {str(result)} </{xml_tag_name}>"
         
-        # If display name is same as method name, it's not an XML tool
-        if xml_tag_name == tool_call["name"]:
-            return f"Result for {tool_call['name']}: {str(result)}"
-            
-        # Format as simple XML tag without attributes
-        xml_output = f"<{xml_tag_name}> {str(result)} </{xml_tag_name}>"
-        return xml_output
+        # Non-XML tool, just return the function result
+        function_name = tool_call["function_name"]
+        return f"Result for {function_name}: {str(result)}"
 
-    def _get_tool_display_name(self, method_name: str) -> str:
-        """Get the display name for a tool (XML tag name if applicable, or method name)."""
-        if not hasattr(self.tool_registry, 'xml_tools'):
-            return method_name
-            
-        # Check if this method corresponds to an XML tool
-        for tag_name, xml_tool_info in self.tool_registry.xml_tools.items():
-            if xml_tool_info.get('method') == method_name:
-                return tag_name
-                
-        # Default to the method name if no XML tag found
-        return method_name
 
     # At class level, define a method for yielding tool results
     def _yield_tool_result(self, context: ToolExecutionContext) -> Dict[str, Any]:
@@ -1019,7 +1036,8 @@ class ResponseProcessor:
         if not context.result:
             return {
                 "type": "tool_result",
-                "name": context.display_name,
+                "function_name": context.function_name,
+                "xml_tag_name": context.xml_tag_name,
                 "result": "No result available",
                 "tool_index": context.tool_index
             }
@@ -1027,7 +1045,8 @@ class ResponseProcessor:
         formatted_result = self._format_xml_tool_result(context.tool_call, context.result)
         return {
             "type": "tool_result",
-            "name": context.display_name,
+            "function_name": context.function_name,
+            "xml_tag_name": context.xml_tag_name,
             "result": formatted_result,
             "tool_index": context.tool_index
         }
@@ -1038,16 +1057,27 @@ class ResponseProcessor:
             tool_call=tool_call,
             tool_index=tool_index
         )
-        context.display_name = self._get_tool_display_name(tool_call["name"])
+        
+        # Set function_name and xml_tag_name fields
+        if "xml_tag_name" in tool_call:
+            context.xml_tag_name = tool_call["xml_tag_name"]
+            context.function_name = tool_call.get("function_name", tool_call["xml_tag_name"])
+        else:
+            # For non-XML tools, use function name directly
+            context.function_name = tool_call.get("function_name", "unknown")
+            context.xml_tag_name = None
+        
         return context
         
     def _yield_tool_started(self, context: ToolExecutionContext) -> Dict[str, Any]:
         """Format and return a tool started status message."""
+        tool_name = context.xml_tag_name or context.function_name
         return {
             "type": "tool_status",
             "status": "started",
-            "name": context.display_name,
-            "message": f"Starting execution of {context.display_name}",
+            "function_name": context.function_name,
+            "xml_tag_name": context.xml_tag_name,
+            "message": f"Starting execution of {tool_name}",
             "tool_index": context.tool_index
         }
         
@@ -1056,21 +1086,25 @@ class ResponseProcessor:
         if not context.result:
             return self._yield_tool_error(context)
             
+        tool_name = context.xml_tag_name or context.function_name
         return {
             "type": "tool_status",
             "status": "completed" if context.result.success else "failed",
-            "name": context.display_name,
-            "message": f"Tool {context.display_name} {'completed successfully' if context.result.success else 'failed'}",
+            "function_name": context.function_name,
+            "xml_tag_name": context.xml_tag_name,
+            "message": f"Tool {tool_name} {'completed successfully' if context.result.success else 'failed'}",
             "tool_index": context.tool_index
         }
         
     def _yield_tool_error(self, context: ToolExecutionContext) -> Dict[str, Any]:
         """Format and return a tool error status message."""
         error_msg = str(context.error) if context.error else "Unknown error"
+        tool_name = context.xml_tag_name or context.function_name
         return {
             "type": "tool_status",
             "status": "error",
-            "name": context.display_name,
+            "function_name": context.function_name,
+            "xml_tag_name": context.xml_tag_name,
             "message": f"Error executing tool: {error_msg}",
             "tool_index": context.tool_index
         } 
