@@ -697,16 +697,20 @@ class ResponseProcessor:
             if not tag_match:
                 logger.error(f"No tag found in XML chunk: {xml_chunk}")
                 return None
-                
-            tag_name = tag_match.group(1)
-            logger.info(f"Found XML tag: {tag_name}")
             
-            # Get tool info and schema
-            tool_info = self.tool_registry.get_xml_tool(tag_name)
+            # This is the XML tag as it appears in the text (e.g., "create-file")
+            xml_tag_name = tag_match.group(1)
+            logger.info(f"Found XML tag: {xml_tag_name}")
+            
+            # Get tool info and schema from registry
+            tool_info = self.tool_registry.get_xml_tool(xml_tag_name)
             if not tool_info or not tool_info['schema'].xml_schema:
-                logger.error(f"No tool or schema found for tag: {tag_name}")
+                logger.error(f"No tool or schema found for tag: {xml_tag_name}")
                 return None
-                
+            
+            # This is the actual function name to call (e.g., "create_file")
+            function_name = tool_info['method']
+            
             schema = tool_info['schema'].xml_schema
             params = {}
             remaining_chunk = xml_chunk
@@ -721,26 +725,26 @@ class ResponseProcessor:
                         if value is not None:
                             params[mapping.param_name] = value
                             logger.info(f"Found attribute {mapping.path} -> {mapping.param_name}: {value}")
-                    
+                
                     elif mapping.node_type == "element":
                         # Extract element content
                         content, remaining_chunk = self._extract_tag_content(remaining_chunk, mapping.path)
                         if content is not None:
                             params[mapping.param_name] = content.strip()
                             logger.info(f"Found element {mapping.path} -> {mapping.param_name}")
-                    
+                
                     elif mapping.node_type == "text":
                         if mapping.path == ".":
                             # Extract root content
-                            content, _ = self._extract_tag_content(remaining_chunk, tag_name)
+                            content, _ = self._extract_tag_content(remaining_chunk, xml_tag_name)
                             if content is not None:
                                 params[mapping.param_name] = content.strip()
                                 logger.info(f"Found text content for {mapping.param_name}")
-                    
+                
                     elif mapping.node_type == "content":
                         if mapping.path == ".":
                             # Extract root content
-                            content, _ = self._extract_tag_content(remaining_chunk, tag_name)
+                            content, _ = self._extract_tag_content(remaining_chunk, xml_tag_name)
                             if content is not None:
                                 params[mapping.param_name] = content.strip()
                                 logger.info(f"Found root content for {mapping.param_name}")
@@ -757,10 +761,11 @@ class ResponseProcessor:
                 logger.error(f"XML chunk: {xml_chunk}")
                 return None
             
-            # Create tool call
+            # Create tool call with clear separation between function_name and xml_tag_name
             tool_call = {
-                "name": tool_info['method'],
-                "arguments": params
+                "function_name": function_name,  # The actual method to call (e.g., create_file)
+                "xml_tag_name": xml_tag_name,    # The original XML tag (e.g., create-file)
+                "arguments": params              # The extracted parameters
             }
             
             logger.info(f"Created tool call: {tool_call}")
@@ -792,7 +797,7 @@ class ResponseProcessor:
     async def _execute_tool(self, tool_call: Dict[str, Any]) -> ToolResult:
         """Execute a single tool call and return the result."""
         try:
-            function_name = tool_call["name"]
+            function_name = tool_call["function_name"]
             arguments = tool_call["arguments"]
             
             logger.info(f"Executing tool: {function_name} with arguments: {arguments}")
@@ -817,7 +822,7 @@ class ResponseProcessor:
             logger.info(f"Tool execution complete: {function_name} -> {result}")
             return result
         except Exception as e:
-            logger.error(f"Error executing tool {tool_call['name']}: {str(e)}", exc_info=True)
+            logger.error(f"Error executing tool {tool_call['function_name']}: {str(e)}", exc_info=True)
             return ToolResult(success=False, output=f"Error executing tool: {str(e)}")
 
     async def _execute_tools(
@@ -981,37 +986,43 @@ class ResponseProcessor:
 
 
     def _format_xml_tool_result(self, tool_call: Dict[str, Any], result: ToolResult) -> str:
-        """Format a tool result as a simple XML tag.
+        """Format a tool result as an XML tag or plain text.
         
         Args:
             tool_call: The tool call that was executed
             result: The result of the tool execution
             
         Returns:
-            String containing the XML-formatted result or standard format if not XML
+            String containing the formatted result
         """
-        xml_tag_name = self._get_tool_display_name(tool_call["name"])
+        # Always use xml_tag_name if it exists
+        if "xml_tag_name" in tool_call:
+            xml_tag_name = tool_call["xml_tag_name"]
+            return f"<{xml_tag_name}> {str(result)} </{xml_tag_name}>"
         
-        # If display name is same as method name, it's not an XML tool
-        if xml_tag_name == tool_call["name"]:
-            return f"Result for {tool_call['name']}: {str(result)}"
-            
-        # Format as simple XML tag without attributes
-        xml_output = f"<{xml_tag_name}> {str(result)} </{xml_tag_name}>"
-        return xml_output
+        # Non-XML tool, just return the function result
+        function_name = tool_call["function_name"]
+        return f"Result for {function_name}: {str(result)}"
 
-    def _get_tool_display_name(self, method_name: str) -> str:
-        """Get the display name for a tool (XML tag name if applicable, or method name)."""
-        if not hasattr(self.tool_registry, 'xml_tools'):
-            return method_name
+    def _get_tool_display_name(self, function_name: str) -> str:
+        """Get the XML tag name for a function name.
+        
+        Args:
+            function_name: The function name to look up
             
-        # Check if this method corresponds to an XML tool
+        Returns:
+            The XML tag name if found, otherwise the original function name
+        """
+        if not hasattr(self.tool_registry, 'xml_tools'):
+            return function_name
+            
+        # Check if this function corresponds to an XML tool
         for tag_name, xml_tool_info in self.tool_registry.xml_tools.items():
-            if xml_tool_info.get('method') == method_name:
+            if xml_tool_info.get('method') == function_name:
                 return tag_name
                 
-        # Default to the method name if no XML tag found
-        return method_name
+        # Default to the function name if no XML tag found
+        return function_name
 
     # At class level, define a method for yielding tool results
     def _yield_tool_result(self, context: ToolExecutionContext) -> Dict[str, Any]:
@@ -1038,7 +1049,14 @@ class ResponseProcessor:
             tool_call=tool_call,
             tool_index=tool_index
         )
-        context.display_name = self._get_tool_display_name(tool_call["name"])
+        
+        # Always use xml_tag_name if it exists
+        if "xml_tag_name" in tool_call:
+            context.display_name = tool_call["xml_tag_name"]
+        else:
+            # For non-XML tools, use function name directly
+            context.display_name = tool_call["function_name"]
+        
         return context
         
     def _yield_tool_started(self, context: ToolExecutionContext) -> Dict[str, Any]:
