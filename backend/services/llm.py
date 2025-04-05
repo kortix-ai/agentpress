@@ -18,6 +18,8 @@ from openai import OpenAIError
 import litellm
 from utils.logger import logger
 
+litellm.set_verbose=True
+
 # Constants
 MAX_RETRIES = 3
 RATE_LIMIT_DELAY = 30
@@ -45,6 +47,20 @@ def setup_api_keys() -> None:
     if os.environ.get('OPENROUTER_API_KEY') and not os.environ.get('OPENROUTER_API_BASE'):
         os.environ['OPENROUTER_API_BASE'] = 'https://openrouter.ai/api/v1'
         logger.debug("Set default OPENROUTER_API_BASE to https://openrouter.ai/api/v1")
+    
+    # Set up AWS Bedrock credentials
+    aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+    aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    aws_region = os.environ.get('AWS_REGION_NAME')
+    
+    if aws_access_key and aws_secret_key and aws_region:
+        logger.debug(f"AWS credentials set for Bedrock in region: {aws_region}")
+        # Configure LiteLLM to use AWS credentials
+        os.environ['AWS_ACCESS_KEY_ID'] = aws_access_key
+        os.environ['AWS_SECRET_ACCESS_KEY'] = aws_secret_key
+        os.environ['AWS_REGION_NAME'] = aws_region
+    else:
+        logger.warning(f"Missing AWS credentials for Bedrock integration - access_key: {bool(aws_access_key)}, secret_key: {bool(aws_secret_key)}, region: {aws_region}")
 
 async def handle_error(error: Exception, attempt: int, max_attempts: int) -> None:
     """Handle API errors with appropriate delays and logging."""
@@ -64,7 +80,8 @@ def prepare_params(
     api_key: Optional[str] = None,
     api_base: Optional[str] = None,
     stream: bool = False,
-    top_p: Optional[float] = None
+    top_p: Optional[float] = None,
+    model_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Prepare parameters for the API call."""
     params = {
@@ -80,11 +97,19 @@ def prepare_params(
         params["api_key"] = api_key
     if api_base:
         params["api_base"] = api_base
+    if model_id:
+        params["model_id"] = model_id
 
     # Handle token limits
     if max_tokens is not None:
-        param_name = "max_completion_tokens" if 'o1' in model_name else "max_tokens"
-        params[param_name] = max_tokens
+        # For Claude 3.7 in Bedrock, do not set max_tokens or max_tokens_to_sample
+        # as it causes errors with inference profiles
+        if model_name.startswith("bedrock/") and "claude-3-7" in model_name:
+            logger.debug(f"Skipping max_tokens for Claude 3.7 model: {model_name}")
+            # Do not add any max_tokens parameter for Claude 3.7
+        else:
+            param_name = "max_completion_tokens" if 'o1' in model_name else "max_tokens"
+            params[param_name] = max_tokens
 
     # Add tools if provided
     if tools:
@@ -94,12 +119,12 @@ def prepare_params(
         })
         logger.debug(f"Added {len(tools)} tools to API parameters")
 
-    # Add Claude-specific headers
-    if "claude" in model_name.lower() or "anthropic" in model_name.lower():
-        params["extra_headers"] = {
-            "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
-        }
-        logger.debug("Added Claude-specific headers")
+    # # Add Claude-specific headers
+    # if "claude" in model_name.lower() or "anthropic" in model_name.lower():
+    #     params["extra_headers"] = {
+    #         "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
+    #     }
+    #     logger.debug("Added Claude-specific headers")
     
     # Add OpenRouter-specific parameters
     if model_name.startswith("openrouter/"):
@@ -116,6 +141,19 @@ def prepare_params(
                 extra_headers["X-Title"] = app_name
             params["extra_headers"] = extra_headers
             logger.debug(f"Added OpenRouter site URL and app name to headers")
+    
+    # # Add Bedrock-specific parameters
+    # if model_name.startswith("bedrock/"):
+    #     logger.debug(f"Preparing AWS Bedrock parameters for model: {model_name}")
+        
+    #     # Set AWS region if available
+    #     aws_region = os.environ.get("AWS_REGION")
+    #     if aws_region:
+    #         params["aws_region"] = aws_region
+    #         logger.debug(f"Set AWS region for Bedrock: {aws_region}")
+        
+    #     # Check if model requires specific configuration
+    #     model_id = model_name.split('/', 1)[1] if '/' in model_name else model_name
 
     return params
 
@@ -130,14 +168,15 @@ async def make_llm_api_call(
     api_key: Optional[str] = None,
     api_base: Optional[str] = None,
     stream: bool = False,
-    top_p: Optional[float] = None
+    top_p: Optional[float] = None,
+    model_id: Optional[str] = None
 ) -> Union[Dict[str, Any], AsyncGenerator]:
     """
     Make an API call to a language model using LiteLLM.
     
     Args:
         messages: List of message dictionaries for the conversation
-        model_name: Name of the model to use (e.g., "gpt-4", "claude-3", "openrouter/openai/gpt-4")
+        model_name: Name of the model to use (e.g., "gpt-4", "claude-3", "openrouter/openai/gpt-4", "bedrock/anthropic.claude-3-sonnet-20240229-v1:0")
         response_format: Desired format for the response
         temperature: Sampling temperature (0-1)
         max_tokens: Maximum tokens in the response
@@ -147,6 +186,7 @@ async def make_llm_api_call(
         api_base: Override default API base URL
         stream: Whether to stream the response
         top_p: Top-p sampling parameter
+        model_id: Optional ARN for Bedrock inference profiles
         
     Returns:
         Union[Dict[str, Any], AsyncGenerator]: API response or stream
@@ -167,7 +207,8 @@ async def make_llm_api_call(
         api_key=api_key,
         api_base=api_base,
         stream=stream,
-        top_p=top_p
+        top_p=top_p,
+        model_id=model_id
     )
     
     last_error = None
@@ -243,14 +284,36 @@ async def test_openrouter():
         print(f"Error testing OpenRouter: {str(e)}")
         return False
 
+async def test_bedrock():
+    """Test the AWS Bedrock integration with a simple query."""
+    test_messages = [
+        {"role": "user", "content": "Hello, can you give me a quick test response?"}
+    ]
+    
+    try:    
+        response = await make_llm_api_call(
+            model_name="bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0",
+            model_id="arn:aws:bedrock:us-west-2:935064898258:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            messages=test_messages,
+            temperature=0.7,
+            # Claude 3.7 has issues with max_tokens, so omit it
+            # max_tokens=100
+        )
+        print(f"Response: {response.choices[0].message.content}")
+        print(f"Model used: {response.model}")
+        
+        return True
+    except Exception as e:
+        print(f"Error testing Bedrock: {str(e)}")
+        return False
+
 if __name__ == "__main__":
     import asyncio
+        
+    test_success = asyncio.run(test_bedrock())
     
-    print("Testing OpenRouter integration...")
-    success = asyncio.run(test_openrouter())
-    
-    if success:
-        print("\n✅ OpenRouter integration test completed successfully!")
+    if test_success:
+        print("\n✅ integration test completed successfully!")
     else:
-        print("\n❌ OpenRouter integration test failed!")
+        print("\n❌ Bedrock integration test failed!")
 

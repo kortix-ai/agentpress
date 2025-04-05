@@ -32,7 +32,7 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
         "content": get_system_prompt()
     }
 
-    model_name = "anthropic/claude-3-5-sonnet-latest" #groq/deepseek-r1-distill-llama-70b
+    model_name = "bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0" #groq/deepseek-r1-distill-llama-70b
 
     files_tool = FilesTool()
 
