@@ -10,19 +10,14 @@ This module provides comprehensive conversation management, including:
 """
 
 import json
-import logging
-import asyncio
 import uuid
-import re
 from typing import List, Dict, Any, Optional, Type, Union, AsyncGenerator, Tuple, Callable, Literal
 from services.llm import make_llm_api_call
 from agentpress.tool import Tool, ToolResult
 from agentpress.tool_registry import ToolRegistry
 from agentpress.response_processor import (
     ResponseProcessor, 
-    ProcessorConfig,
-    XmlAddingStrategy,
-    ToolExecutionStrategy
+    ProcessorConfig    
 )
 from services.supabase import DBConnection
 from utils.logger import logger
@@ -317,6 +312,15 @@ class ThreadManager:
             
             logger.debug(f"Processor config: XML={processor_config.xml_tool_calling}, Native={processor_config.native_tool_calling}, " 
                    f"Execute tools={processor_config.execute_tools}, Strategy={processor_config.tool_execution_strategy}")
+
+            # Check if native_tool_calling is enabled and throw an error if it is
+            if processor_config.native_tool_calling:
+                error_message = "Native tool calling is not supported in this version"
+                logger.error(error_message)
+                return {
+                    "status": "error",
+                    "message": error_message
+                }
 
             # 4. Prepare tools for LLM call
             openapi_tool_schemas = None
