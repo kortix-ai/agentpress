@@ -1,7 +1,7 @@
 import os
 import json
 import uuid
-from agentpress.thread_manager import ThreadManager, ToolChoice
+from agentpress.thread_manager import ThreadManager
 from agent.tools.files_tool import FilesTool
 from agent.tools.terminal_tool import TerminalTool
 from agent.tools.wait_tool import WaitTool
@@ -10,7 +10,6 @@ from typing import Optional
 from agent.test_prompt import get_system_prompt
 from agentpress.response_processor import ProcessorConfig
 from dotenv import load_dotenv
-from services.supabase import DBConnection
 
 # Load environment variables
 load_dotenv()
@@ -61,8 +60,8 @@ Current development environment workspace state:
             native_tool_calling=False,
             execute_tools=True,
             execute_on_stream=True,
-            tool_execution_strategy="sequential",
-            xml_adding_strategy="assistant_message"
+            tool_execution_strategy="parallel",
+            xml_adding_strategy="user_message"
         )
     )
         

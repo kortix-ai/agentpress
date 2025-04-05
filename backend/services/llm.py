@@ -18,7 +18,7 @@ from openai import OpenAIError
 import litellm
 from utils.logger import logger
 
-litellm.set_verbose=True
+# litellm.set_verbose=True
 
 # Constants
 MAX_RETRIES = 3
@@ -142,18 +142,13 @@ def prepare_params(
             params["extra_headers"] = extra_headers
             logger.debug(f"Added OpenRouter site URL and app name to headers")
     
-    # # Add Bedrock-specific parameters
-    # if model_name.startswith("bedrock/"):
-    #     logger.debug(f"Preparing AWS Bedrock parameters for model: {model_name}")
+    # Add Bedrock-specific parameters
+    if model_name.startswith("bedrock/"):
+        logger.debug(f"Preparing AWS Bedrock parameters for model: {model_name}")
         
-    #     # Set AWS region if available
-    #     aws_region = os.environ.get("AWS_REGION")
-    #     if aws_region:
-    #         params["aws_region"] = aws_region
-    #         logger.debug(f"Set AWS region for Bedrock: {aws_region}")
-        
-    #     # Check if model requires specific configuration
-    #     model_id = model_name.split('/', 1)[1] if '/' in model_name else model_name
+        if not model_id and "anthropic.claude-3-7-sonnet" in model_name:
+            params["model_id"] = "arn:aws:bedrock:us-west-2:935064898258:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+            logger.debug(f"Auto-set model_id for Claude 3.7 Sonnet: {params['model_id']}")
 
     return params
 

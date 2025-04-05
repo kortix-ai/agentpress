@@ -3,196 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wielder.ai - Intelligent Solutions</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        :root {
-            --primary-color: #ff69b4;
-            --secondary-color: #ff1493;
-            --text-color: #333333;
-            --bg-color: #ffe6e6;
-        }
-
-        body {
-            line-height: 1.6;
-            color: var(--text-color);
-        }
-
-        .navbar {
-            position: fixed;
-            top: 0;
-            width: 100%;
-            background: var(--bg-color);
-            padding: 1rem 5%;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            z-index: 1000;
-        }
-
-        .navbar .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: var(--primary-color);
-        }
-
-        .nav-links {
-            float: right;
-        }
-
-        .nav-links a {
-            text-decoration: none;
-            color: var(--text-color);
-            margin-left: 2rem;
-            font-weight: 500;
-        }
-
-        .hero {
-            height: 100vh;
-            background: linear-gradient(rgba(255,105,180,0.3), rgba(255,105,180,0.3)), url('https://source.unsplash.com/random/1920x1080/?ai') center/cover;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            color: white;
-            padding: 0 5%;
-        }
-
-        .hero h1 {
-            font-size: 3.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .hero p {
-            font-size: 1.2rem;
-            margin-bottom: 2rem;
-        }
-
-        .cta-button {
-            display: inline-block;
-            padding: 1rem 2rem;
-            background: var(--secondary-color);
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-            transition: background 0.3s;
-        }
-
-        .cta-button:hover {
-            background: #0873c4;
-        }
-
-        .features {
-            padding: 5rem 5%;
-            background: var(--bg-color);
-        }
-
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 2rem;
-            margin-top: 3rem;
-        }
-
-        .feature-card {
-            padding: 2rem;
-            background: #ffe6e6;
-            border-radius: 10px;
-            text-align: center;
-        }
-
-        .feature-card i {
-            font-size: 2.5rem;
-            color: var(--secondary-color);
-            margin-bottom: 1rem;
-        }
-
-        .cta-section {
-            background: var(--secondary-color);
-            color: white;
-            text-align: center;
-            padding: 5rem 5%;
-        }
-
-        footer {
-            background: var(--primary-color);
-            color: white;
-            text-align: center;
-            padding: 2rem 5%;
-        }
-    </style>
+    <title>Modern Web App</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="animate-bottom">
-    <nav class="navbar">
-        <span class="logo">Wielder.ai</span>
-        <div class="nav-links">
-            <a href="#features">Features</a>
-            <a href="#about">About</a>
-            <a href="#contact">Contact</a>
-        </div>
-    </nav>
-
-    <section class="hero">
-        <div class="hero-content">
-            <h1>Transform Your Business with AI</h1>
-            <p>Leverage the power of artificial intelligence to drive innovation and growth</p>
-            <a href="#" class="cta-button">Get Started</a>
-        </div>
-    </section>
-
-    <section class="features" id="features">
-        <div class="features-grid">
-            <div class="feature-card">
-                <i class="fas fa-brain"></i>
-                <h3>Smart Automation</h3>
-                <p>Automate repetitive tasks and focus on what matters most.</p>
+<body>
+    <header>
+        <nav class="navbar">
+            <div class="logo">
+                <h1>WebApp</h1>
             </div>
-            <div class="feature-card">
-                <i class="fas fa-chart-line"></i>
-                <h3>Predictive Analytics</h3>
-                <p>Make data-driven decisions with our predictive models.</p>
+            <ul class="nav-links">
+                <li><a href="#" class="active">Home</a></li>
+                <li><a href="#">Features</a></li>
+                <li><a href="#">About</a></li>
+                <li><a href="#">Contact</a></li>
+            </ul>
+            <div class="burger">
+                <div class="line1"></div>
+                <div class="line2"></div>
+                <div class="line3"></div>
             </div>
-            <div class="feature-card">
-                <i class="fas fa-shield-alt"></i>
-                <h3>Secure & Reliable</h3>
-                <p>Your data is protected with enterprise-grade security.</p>
-            </div>
-        </div>
-    </section>
+        </nav>
+    </header>
 
-    <section class="cta-section">
-        <h2>Ready to Get Started?</h2>
-        <p>Join thousands of companies already using Wielder.ai</p>
-        <a href="#" class="cta-button">Start Free Trial</a>
-    </section>
+    <main>
+        <section class="hero">
+            <div class="hero-content">
+                <h1>Welcome to Our Modern Web Application</h1>
+                <p>A responsive and interactive web experience built with HTML, CSS, and JavaScript.</p>
+                <button class="cta-button">Get Started</button>
+            </div>
+        </section>
+
+        <section class="features">
+            <h2>Key Features</h2>
+            <div class="feature-cards">
+                <div class="card">
+                    <i class="fas fa-mobile-alt"></i>
+                    <h3>Responsive Design</h3>
+                    <p>Looks great on all devices, from mobile to desktop.</p>
+                </div>
+                <div class="card">
+                    <i class="fas fa-bolt"></i>
+                    <h3>Fast Performance</h3>
+                    <p>Optimized for speed and efficiency.</p>
+                </div>
+                <div class="card">
+                    <i class="fas fa-lock"></i>
+                    <h3>Secure</h3>
+                    <p>Built with security best practices in mind.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="newsletter">
+            <h2>Stay Updated</h2>
+            <p>Subscribe to our newsletter for the latest updates.</p>
+            <form id="newsletter-form">
+                <input type="email" placeholder="Enter your email" required>
+                <button type="submit">Subscribe</button>
+            </form>
+            <div id="form-message"></div>
+        </section>
+    </main>
 
     <footer>
-        <p>&copy; 2023 Wielder.ai. All rights reserved.</p>
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>About Us</h3>
+                <p>We build modern web applications with cutting-edge technologies.</p>
+            </div>
+            <div class="footer-section">
+                <h3>Quick Links</h3>
+                <ul>
+                    <li><a href="#">Home</a></li>
+                    <li><a href="#">Features</a></li>
+                    <li><a href="#">About</a></li>
+                    <li><a href="#">Contact</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h3>Connect With Us</h3>
+                <div class="social-icons">
+                    <a href="#"><i class="fab fa-twitter"></i></a>
+                    <a href="#"><i class="fab fa-facebook"></i></a>
+                    <a href="#"><i class="fab fa-instagram"></i></a>
+                    <a href="#"><i class="fab fa-linkedin"></i></a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2023 Modern Web App. All rights reserved.</p>
+        </div>
     </footer>
 
-    <script>
-        // Add smooth scrolling to all links
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                document.querySelector(this.getAttribute('href')).scrollIntoView({
-                    behavior: 'smooth'
-                });
-            });
-        });
-
-        // Add scroll effect to hero section
-        window.addEventListener('scroll', () => {
-            const hero = document.querySelector('.hero');
-            const scrolled = window.pageYOffset;
-            hero.style.backgroundPositionY = scrolled * 0.5 + 'px';
-        });
-    </script>
+    <script src="js/app.js"></script>
 </body>
 </html>
