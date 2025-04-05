@@ -109,10 +109,7 @@ class ResponseProcessor:
         # For tracking pending tool executions
         pending_tool_executions = []
         
-        # Tool execution index counter
-        tool_execution_index = 0
-        
-        # Tool index for remaining tools (used at end of function)
+        # Tool index counter for tracking all tool executions
         tool_index = 0
         
         logger.info(f"Starting to process streaming response for thread {thread_id}")
@@ -150,7 +147,7 @@ class ResponseProcessor:
                                     # Create a context for this tool execution
                                     context = self._create_tool_context(
                                         tool_call=tool_call,
-                                        tool_index=tool_execution_index
+                                        tool_index=tool_index
                                     )
                                     
                                     # Execute tool if needed, but in background
@@ -165,12 +162,12 @@ class ResponseProcessor:
                                         pending_tool_executions.append({
                                             "task": execution_task,
                                             "tool_call": tool_call,
-                                            "tool_index": tool_execution_index,
+                                            "tool_index": tool_index,
                                             "context": context
                                         })
                                         
-                                        # Increment the tool execution index
-                                        tool_execution_index += 1
+                                        # Increment the tool index
+                                        tool_index += 1
                                         
                                         # Immediately continue processing more chunks
                     
@@ -223,7 +220,7 @@ class ResponseProcessor:
                                 # Create a context for this tool execution
                                 context = self._create_tool_context(
                                     tool_call=tool_call_data,
-                                    tool_index=tool_execution_index
+                                    tool_index=tool_index
                                 )
                                 
                                 # Yield tool execution start message
@@ -236,12 +233,12 @@ class ResponseProcessor:
                                 pending_tool_executions.append({
                                     "task": execution_task,
                                     "tool_call": tool_call_data,
-                                    "tool_index": tool_execution_index,
+                                    "tool_index": tool_index,
                                     "context": context
                                 })
                                 
-                                # Increment the tool execution index
-                                tool_execution_index += 1
+                                # Increment the tool index
+                                tool_index += 1
                                 
                                 # Immediately continue processing more chunks
                 
