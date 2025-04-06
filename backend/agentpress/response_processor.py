@@ -988,7 +988,7 @@ class ResponseProcessor:
             }
             await self.add_message(
                 thread_id=thread_id, 
-                type=result_role if result_role == "assistant" else "user_proxy",
+                type=result_role if result_role == "assistant" else "user",
                 content=result_message,
                 is_llm_message=(result_role == "assistant")
             )
@@ -1002,7 +1002,7 @@ class ResponseProcessor:
                 }
                 await self.add_message(
                     thread_id=thread_id, 
-                    type="user_proxy", 
+                    type="user", 
                     content=fallback_message,
                     is_llm_message=True
                 )

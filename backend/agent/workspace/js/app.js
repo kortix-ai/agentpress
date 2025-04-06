@@ -1,135 +1,166 @@
-// DOM Elements
-const burger = document.querySelector('.burger');
-const navLinks = document.querySelector('.nav-links');
-const newsletterForm = document.getElementById('newsletter-form');
-const formMessage = document.getElementById('form-message');
-
-// Toggle navigation menu
-burger.addEventListener('click', () => {
-    navLinks.classList.toggle('active');
-    
-    // Animate burger menu
-    burger.classList.toggle('toggle');
-    
-    // Animation for burger icon
-    const lines = burger.querySelectorAll('div');
-    if (burger.classList.contains('toggle')) {
-        lines[0].style.transform = 'rotate(-45deg) translate(-5px, 6px)';
-        lines[1].style.opacity = '0';
-        lines[2].style.transform = 'rotate(45deg) translate(-5px, -6px)';
-    } else {
-        lines[0].style.transform = 'none';
-        lines[1].style.opacity = '1';
-        lines[2].style.transform = 'none';
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize portfolio items to show on page load
+    const portfolioItems = document.querySelectorAll('.portfolio-item');
+    portfolioItems.forEach(item => {
+        item.classList.add('show');
+    });
+    // Check for saved theme preference or use default
+    const currentTheme = localStorage.getItem('theme') || 'light';
+    if (currentTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.getElementById('dark-mode-toggle').checked = true;
     }
-});
 
-// Close menu when clicking a nav link
-document.querySelectorAll('.nav-links a').forEach(link => {
-    link.addEventListener('click', () => {
-        navLinks.classList.remove('active');
+    // Dark mode toggle functionality
+    const darkModeToggle = document.getElementById('dark-mode-toggle');
+    darkModeToggle.addEventListener('change', function() {
+        if (this.checked) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+            localStorage.setItem('theme', 'light');
+        }
+    });
+
+    // Mobile Navigation Toggle
+    const burger = document.querySelector('.burger');
+    const nav = document.querySelector('.nav-links');
+    const navLinks = document.querySelectorAll('.nav-links li');
+    
+    burger.addEventListener('click', () => {
+        // Toggle Nav
+        nav.classList.toggle('nav-active');
         
-        // Reset burger icon
-        const lines = burger.querySelectorAll('div');
-        lines[0].style.transform = 'none';
-        lines[1].style.opacity = '1';
-        lines[2].style.transform = 'none';
-        burger.classList.remove('toggle');
+        // Animate Links
+        navLinks.forEach((link, index) => {
+            if (link.style.animation) {
+                link.style.animation = '';
+            } else {
+                link.style.animation = `navLinkFade 0.5s ease forwards ${index / 7 + 0.3}s`;
+            }
+        });
+        
+        // Burger Animation
+        burger.classList.toggle('toggle');
+    });
+    
+    // Smooth scrolling for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const targetId = this.getAttribute('href');
+            if (targetId === '#') return;
+            
+            const targetElement = document.querySelector(targetId);
+            if (targetElement) {
+                targetElement.scrollIntoView({
+                    behavior: 'smooth'
+                });
+            }
+        });
+    });
+    
+    // CTA Button Animation
+    const ctaButton = document.querySelector('.cta-button');
+    if (ctaButton) {
+        ctaButton.addEventListener('click', () => {
+            alert('Thank you for your interest! This is where you would implement your sign-up or onboarding flow.');
+        });
+    }
+    
+    // Add active class to nav items when scrolling
+    window.addEventListener('scroll', () => {
+        const sections = document.querySelectorAll('section');
+        const navItems = document.querySelectorAll('.nav-links a');
+        
+        let current = '';
+        
+        sections.forEach(section => {
+            const sectionTop = section.offsetTop;
+            const sectionHeight = section.clientHeight;
+            
+            if (pageYOffset >= sectionTop - 200) {
+                current = section.getAttribute('id');
+            }
+        });
+        
+        navItems.forEach(item => {
+            item.classList.remove('active');
+            if (item.getAttribute('href') === `#${current}`) {
+                item.classList.add('active');
+            }
+        });
     });
 });
 
-// Newsletter form submission
-if (newsletterForm) {
-    newsletterForm.addEventListener('submit', (e) => {
+// Add a simple animation to feature cards when they come into view
+const cards = document.querySelectorAll('.card');
+
+const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.classList.add('animated');
+        }
+    });
+}, {
+    threshold: 0.1
+});
+
+cards.forEach(card => {
+    observer.observe(card);
+});
+
+// Contact Form Handling
+const contactForm = document.getElementById('contactForm');
+const formStatus = document.getElementById('formStatus');
+
+if (contactForm) {
+    contactForm.addEventListener('submit', function(e) {
         e.preventDefault();
         
-        const email = newsletterForm.querySelector('input[type="email"]').value;
+        // Get form values
+        const name = document.getElementById('name').value;
+        const email = document.getElementById('email').value;
+        const subject = document.getElementById('subject').value;
+        const message = document.getElementById('message').value;
         
-        // Simple email validation
-        if (!validateEmail(email)) {
-            showMessage('Please enter a valid email address', 'error');
+        // Simple validation
+        if (!name || !email || !subject || !message) {
+            showFormStatus('Please fill in all fields', 'error');
             return;
         }
         
-        // Simulate form submission
-        showMessage('Submitting...', '');
+        if (!isValidEmail(email)) {
+            showFormStatus('Please enter a valid email address', 'error');
+            return;
+        }
         
-        // Simulate API call with timeout
+        // Simulate form submission (in a real app, you would send data to a server)
+        showFormStatus('Sending...', '');
+        
+        // Simulate server response after 1.5 seconds
         setTimeout(() => {
-            // Success response simulation
-            showMessage('Thank you for subscribing!', 'success');
-            newsletterForm.reset();
+            // Reset form
+            contactForm.reset();
+            showFormStatus('Your message has been sent successfully!', 'success');
         }, 1500);
     });
 }
 
-// Email validation function
-function validateEmail(email) {
-    const re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-    return re.test(String(email).toLowerCase());
+// Helper function to validate email
+function isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
 }
 
-// Show form message
-function showMessage(message, type) {
-    formMessage.textContent = message;
-    formMessage.className = type;
-}
-
-// Smooth scrolling for anchor links
-document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function(e) {
-        e.preventDefault();
-        
-        const targetId = this.getAttribute('href');
-        if (targetId === '#') return;
-        
-        const targetElement = document.querySelector(targetId);
-        if (targetElement) {
-            window.scrollTo({
-                top: targetElement.offsetTop - 70, // Adjust for fixed header
-                behavior: 'smooth'
-            });
-        }
-    });
-});
-
-// Intersection Observer for animations
-const observerOptions = {
-    threshold: 0.1,
-    rootMargin: '0px 0px -50px 0px'
-};
-
-const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            entry.target.classList.add('animate');
-            observer.unobserve(entry.target);
-        }
-    });
-}, observerOptions);
-
-// Observe elements for animation
-document.querySelectorAll('.card, .hero-content, .newsletter').forEach(el => {
-    observer.observe(el);
-});
-
-// Add animation classes
-document.querySelectorAll('.card').forEach((card, index) => {
-    card.style.opacity = '0';
-    card.style.transform = 'translateY(20px)';
-    card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-    card.style.transitionDelay = `${index * 0.1}s`;
-});
-
-// Animation for elements when they come into view
-document.addEventListener('DOMContentLoaded', () => {
-    const animateOnScroll = () => {
-        document.querySelectorAll('.animate').forEach(el => {
-            el.style.opacity = '1';
-            el.style.transform = 'translateY(0)';
-        });
-    };
+// Helper function to show form status
+function showFormStatus(message, status) {
+    formStatus.textContent = message;
+    formStatus.className = 'form-status';
     
-    // Initial check for elements in viewport
-    setTimeout(animateOnScroll, 100);
-});
+    if (status) {
+        formStatus.classList.add(status);
+    }
+}

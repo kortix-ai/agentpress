@@ -1,36 +1,48 @@
-# Modern Web Application
+# Modern Web Application with Dark Mode
 
-This is a responsive and interactive web application built with HTML, CSS, and JavaScript.
+This is a responsive and interactive web application template built with HTML, CSS, and JavaScript, featuring a dark mode toggle and contact form.
 
 ## Features
 
-- Responsive design that works on mobile, tablet, and desktop
-- Interactive navigation menu with smooth animations
-- Newsletter subscription form with validation
-- Smooth scrolling for anchor links
-- Intersection Observer for scroll animations
-- Modern UI with cards, gradients, and hover effects
-
-## Structure
-
-- `index.html` - Main HTML file
-- `css/styles.css` - Stylesheet with responsive design
-- `js/app.js` - JavaScript for interactivity and animations
+- Responsive design that works on all devices
+- Interactive navigation menu with mobile support
+- Modern UI with smooth animations
+- Dark mode toggle with local storage persistence
+- Portfolio section with filtering and lightbox
+- Contact form with validation
+- Clean and maintainable code structure
 
 ## Getting Started
 
-1. Clone this repository
-2. Open `index.html` in your browser
-3. Explore the features and functionality
+1. Clone or download this repository
+2. Open `index.html` in your browser to view the application
+3. Modify the HTML, CSS, and JavaScript files to customize the application
+
+## Project Structure
+
+```
+├── index.html          # Main HTML file
+├── css/
+│   └── styles.css      # Main stylesheet
+├── js/
+│   └── app.js          # JavaScript functionality
+└── README.md           # Project documentation
+```
 
 ## Customization
 
-You can easily customize this template by:
-
-- Changing the color variables in the CSS `:root` section
-- Adding more sections to the HTML
-- Extending the JavaScript functionality
+- Update the content in `index.html` to match your project
+- Modify colors and styles in `css/styles.css`
+- Add additional functionality in `js/app.js`
 
 ## Browser Support
 
-This application works in all modern browsers that support ES6 JavaScript features.
+This template works in all modern browsers including:
+- Chrome
+- Firefox
+- Safari
+- Edge
+
+## License
+
+This project is available for personal and commercial use.
