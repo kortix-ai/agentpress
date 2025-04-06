@@ -86,8 +86,8 @@ export type Thread = {
   thread_id: string;
   user_id: string | null;
   project_id?: string | null;
-  messages: Message[];
   created_at: string;
+  updated_at: string;
 }
 
 export type Message = {
@@ -242,15 +242,9 @@ export const getThreads = async (projectId?: string): Promise<Thread[]> => {
     
     if (error) throw error;
     
-    // Parse messages from JSON string
-    const threads = (data || []).map(thread => ({
-      ...thread,
-      messages: thread.messages ? JSON.parse(thread.messages) : []
-    }));
-    
     // Cache the result
-    apiCache.setThreads(projectId || 'all', threads);
-    return threads;
+    apiCache.setThreads(projectId || 'all', data || []);
+    return data || [];
   })();
   
   // Add to queue and return
@@ -267,10 +261,7 @@ export const getThread = async (threadId: string): Promise<Thread> => {
   
   if (error) throw error;
   
-  return {
-    ...data,
-    messages: data.messages ? JSON.parse(data.messages) : []
-  };
+  return data;
 };
 
 export const createThread = async (projectId?: string): Promise<Thread> => {
@@ -287,8 +278,7 @@ export const createThread = async (projectId?: string): Promise<Thread> => {
     .insert({
       thread_id: threadId,
       project_id: projectId || null,
-      user_id: userData.user?.id || null,
-      messages: JSON.stringify([])
+      user_id: userData.user?.id || null
     })
     .select()
     .single();
@@ -298,43 +288,31 @@ export const createThread = async (projectId?: string): Promise<Thread> => {
     throw new Error(`Error creating thread: ${error.message}`);
   }
   
-  return {
-    ...data,
-    messages: []
-  };
+  return data;
 };
 
-export const addMessage = async (threadId: string, message: { role: string, content: string }): Promise<void> => {
+export const addUserMessage = async (threadId: string, content: string): Promise<void> => {
   const supabase = createClient();
-  // First, get the current thread messages
-  const { data: threadData, error: threadError } = await supabase
-    .from('threads')
-    .select('messages')
-    .eq('thread_id', threadId)
-    .single();
   
-  if (threadError) {
-    console.error('Error fetching thread messages:', threadError);
-    throw new Error(`Error adding message: ${threadError.message}`);
-  }
+  // Format the message in the format the LLM expects - keep it simple with only required fields
+  const message = {
+    role: 'user',
+    content: content
+  };
   
-  // Parse existing messages
-  const existingMessages = threadData.messages ? JSON.parse(threadData.messages) : [];
+  // Insert the message into the messages table
+  const { error } = await supabase
+    .from('messages')
+    .insert({
+      thread_id: threadId,
+      type: 'user',
+      is_llm_message: true,
+      content: JSON.stringify(message)
+    });
   
-  // Add the new message
-  const updatedMessages = [...existingMessages, message];
-  
-  // Update the thread with the new messages
-  const { error: updateError } = await supabase
-    .from('threads')
-    .update({
-      messages: JSON.stringify(updatedMessages)
-    })
-    .eq('thread_id', threadId);
-  
-  if (updateError) {
-    console.error('Error updating thread messages:', updateError);
-    throw new Error(`Error adding message: ${updateError.message}`);
+  if (error) {
+    console.error('Error adding user message:', error);
+    throw new Error(`Error adding message: ${error.message}`);
   }
   
   // Invalidate the cache for this thread's messages
@@ -364,19 +342,38 @@ export const getMessages = async (threadId: string, hideToolMsgs: boolean = fals
   // Create and queue the promise
   const fetchPromise = (async () => {
     const supabase = createClient();
+    
+    // Query all messages for the thread instead of using RPC
     const { data, error } = await supabase
-      .from('threads')
-      .select('messages')
+      .from('messages')
+      .select('*')
       .eq('thread_id', threadId)
-      .single();
+      .order('created_at', { ascending: true });
     
     if (error) {
       console.error('Error fetching messages:', error);
       throw new Error(`Error getting messages: ${error.message}`);
     }
     
-    // Parse messages from JSON string
-    const messages = data.messages ? JSON.parse(data.messages) : [];
+    // Process the messages to the expected format
+    const messages = (data || []).map(msg => {
+      try {
+        // Parse the content from JSONB
+        const content = typeof msg.content === 'string' 
+          ? JSON.parse(msg.content) 
+          : msg.content;
+          
+        // Return in the format the app expects
+        return content;
+      } catch (e) {
+        console.error('Error parsing message content:', e, msg);
+        // Fallback for malformed messages
+        return {
+          role: msg.is_llm_message ? 'assistant' : 'user',
+          content: 'Error: Could not parse message content'
+        };
+      }
+    });
     
     // Cache the result
     apiCache.setThreadMessages(threadId, messages);

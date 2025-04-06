@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 import asyncio
 from utils.logger import logger
+import uuid
 
 # Import the agent API module
 from agent import api as agent_api
@@ -20,19 +21,21 @@ load_dotenv()
 # Initialize managers
 db = DBConnection()
 thread_manager = None
+instance_id = str(uuid.uuid4())[:8]  # Generate instance ID at module load time
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     global thread_manager
-    logger.info("Starting up FastAPI application")
+    logger.info(f"Starting up FastAPI application with instance ID: {instance_id}")
     await db.initialize()
     thread_manager = ThreadManager()
     
     # Initialize the agent API with shared resources
     agent_api.initialize(
         thread_manager,
-        db
+        db,
+        instance_id  # Pass the instance_id to agent_api
     )
     
     # Initialize Redis before restoring agent runs
@@ -68,7 +71,11 @@ app.include_router(agent_api.router, prefix="/api")
 async def health_check():
     """Health check endpoint to verify API is working."""
     logger.info("Health check endpoint called")
-    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {
+        "status": "ok", 
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "instance_id": instance_id
+    }
 
 if __name__ == "__main__":
     import uvicorn

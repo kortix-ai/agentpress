@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
 import { ArrowDown } from 'lucide-react';
-import { addMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
+import { addUserMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
 import { toast } from 'sonner';
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChatInput } from '@/components/chat-input';
@@ -502,7 +502,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       
       // Send to the API and start agent in parallel
       const [messageResult, agentResult] = await Promise.all([
-        addMessage(threadId, userMessage),
+        addUserMessage(threadId, userMessage.content),
         startAgent(threadId)
       ]);
       
