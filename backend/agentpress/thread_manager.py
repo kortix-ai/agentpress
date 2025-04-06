@@ -202,19 +202,7 @@ class ThreadManager:
                 openapi_tool_schemas = self.tool_registry.get_openapi_schemas()
                 logger.debug(f"Retrieved {len(openapi_tool_schemas) if openapi_tool_schemas else 0} OpenAPI tool schemas")
 
-            # 5. Track this agent run in the database
-            run_id = str(uuid.uuid4())
-            client = await self.db.client
-            run_data = {
-                'id': run_id,
-                'thread_id': thread_id,
-                'status': 'running',
-                'started_at': 'now()',
-            }
-            await client.table('agent_runs').insert(run_data).execute()
-            logger.debug(f"Created agent run record with ID: {run_id}")
-
-            # 6. Make LLM API call
+            # 5. Make LLM API call - removed agent run tracking
             logger.info("Making LLM API call")
             try:
                 llm_response = await make_llm_api_call(
@@ -228,17 +216,10 @@ class ThreadManager:
                 )
                 logger.debug("Successfully received LLM API response")
             except Exception as e:
-                # Update agent_run status to error
-                await client.table('agent_runs').update({
-                    'status': 'error',
-                    'error': str(e),
-                    'completed_at': 'now()'
-                }).eq('id', run_id).execute()
-                
                 logger.error(f"Failed to make LLM API call: {str(e)}", exc_info=True)
                 raise
 
-            # 7. Process LLM response using the ResponseProcessor
+            # 6. Process LLM response using the ResponseProcessor
             if stream:
                 logger.info("Processing streaming response")
                 response_generator = self.response_processor.process_streaming_response(
@@ -247,32 +228,8 @@ class ThreadManager:
                     config=processor_config
                 )
                 
-                # Wrap the generator to update the agent_run when complete
-                async def wrapped_generator():
-                    responses = []
-                    try:
-                        async for chunk in response_generator:
-                            responses.append(chunk)
-                            yield chunk
-                            
-                        # Update agent_run to completed when done
-                        await client.table('agent_runs').update({
-                            'status': 'completed',
-                            'responses': json.dumps(responses),
-                            'completed_at': 'now()'
-                        }).eq('id', run_id).execute()
-                        logger.debug(f"Updated agent run {run_id} to completed status")
-                    except Exception as e:
-                        # Update agent_run to error
-                        await client.table('agent_runs').update({
-                            'status': 'error',
-                            'error': str(e),
-                            'completed_at': 'now()'
-                        }).eq('id', run_id).execute()
-                        logger.error(f"Error in streaming response: {str(e)}", exc_info=True)
-                        raise
-                        
-                return wrapped_generator()
+                # Return the generator directly without agent run updates
+                return response_generator
             else:
                 logger.info("Processing non-streaming response")
                 try:
@@ -281,23 +238,8 @@ class ThreadManager:
                         thread_id=thread_id,
                         config=processor_config
                     )
-                    
-                    # Update agent_run to completed
-                    await client.table('agent_runs').update({
-                        'status': 'completed',
-                        'responses': json.dumps([response]),
-                        'completed_at': 'now()'
-                    }).eq('id', run_id).execute()
-                    logger.debug(f"Updated agent run {run_id} to completed status")
-                    
                     return response
                 except Exception as e:
-                    # Update agent_run to error
-                    await client.table('agent_runs').update({
-                        'status': 'error',
-                        'error': str(e),
-                        'completed_at': 'now()'
-                    }).eq('id', run_id).execute()
                     logger.error(f"Error in non-streaming response: {str(e)}", exc_info=True)
                     raise
           

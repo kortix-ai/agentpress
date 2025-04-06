@@ -7,7 +7,7 @@ from agent.tools.terminal_tool import TerminalTool
 from agent.tools.wait_tool import WaitTool
 # from agent.tools.search_tool import CodeSearchTool
 from typing import Optional
-from agent.test_prompt import get_system_prompt
+from agent.prompt import get_system_prompt
 from agentpress.response_processor import ProcessorConfig
 from dotenv import load_dotenv
 

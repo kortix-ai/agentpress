@@ -29,10 +29,12 @@ class XMLNodeMapping:
         param_name (str): Name of the function parameter
         node_type (str): Type of node ("element", "attribute", or "content")
         path (str): XPath-like path to the node ("." means root element)
+        required (bool): Whether the parameter is required (defaults to True)
     """
     param_name: str
     node_type: str = "element"
     path: str = "."
+    required: bool = True
 
 @dataclass
 class XMLTagSchema:
@@ -50,20 +52,22 @@ class XMLTagSchema:
     mappings: List[XMLNodeMapping] = field(default_factory=list)
     example: Optional[str] = None
     
-    def add_mapping(self, param_name: str, node_type: str = "element", path: str = ".") -> None:
+    def add_mapping(self, param_name: str, node_type: str = "element", path: str = ".", required: bool = True) -> None:
         """Add a new node mapping to the schema.
         
         Args:
             param_name: Name of the function parameter
             node_type: Type of node ("element", "attribute", or "content")
             path: XPath-like path to the node
+            required: Whether the parameter is required
         """
         self.mappings.append(XMLNodeMapping(
             param_name=param_name,
             node_type=node_type, 
-            path=path
+            path=path,
+            required=required
         ))
-        logger.debug(f"Added XML mapping for parameter '{param_name}' with type '{node_type}' at path '{path}'")
+        logger.debug(f"Added XML mapping for parameter '{param_name}' with type '{node_type}' at path '{path}', required={required}")
 
 @dataclass
 class ToolSchema:
@@ -173,7 +177,7 @@ def openapi_schema(schema: Dict[str, Any]):
 
 def xml_schema(
     tag_name: str,
-    mappings: List[Dict[str, str]] = None,
+    mappings: List[Dict[str, Any]] = None,
     example: str = None
 ):
     """
@@ -185,6 +189,7 @@ def xml_schema(
             - param_name: Name of the function parameter
             - node_type: "element", "attribute", or "content" 
             - path: Path to the node (default "." for root)
+            - required: Whether the parameter is required (default True)
         example: Optional example showing how to use the XML tag
     
     Example:
@@ -213,7 +218,8 @@ def xml_schema(
                 xml_schema.add_mapping(
                     param_name=mapping["param_name"],
                     node_type=mapping.get("node_type", "element"),
-                    path=mapping.get("path", ".")
+                    path=mapping.get("path", "."),
+                    required=mapping.get("required", True)
                 )
                 
         return _add_schema(func, ToolSchema(

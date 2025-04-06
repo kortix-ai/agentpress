@@ -768,7 +768,7 @@ class ResponseProcessor:
                     continue
             
             # Validate required parameters
-            missing = [mapping.param_name for mapping in schema.mappings if mapping.param_name not in params]
+            missing = [mapping.param_name for mapping in schema.mappings if mapping.required and mapping.param_name not in params]
             if missing:
                 logger.error(f"Missing required parameters: {missing}")
                 logger.error(f"Current params: {params}")
