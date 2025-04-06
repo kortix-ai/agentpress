@@ -19,22 +19,27 @@ from utils.logger import logger
 router = APIRouter()
 thread_manager = None
 db = None 
-instance_id = None
 
 # In-memory storage for active agent runs and their responses
 active_agent_runs: Dict[str, List[Any]] = {}
 
 def initialize(
     _thread_manager: ThreadManager,
-    _db: DBConnection
+    _db: DBConnection,
+    _instance_id: str = None
 ):
     """Initialize the agent API with resources from the main API."""
     global thread_manager, db, instance_id
     thread_manager = _thread_manager
     db = _db
     
-    # Generate instance ID
-    instance_id = str(uuid.uuid4())[:8]
+    # Use provided instance_id or generate a new one
+    if _instance_id:
+        instance_id = _instance_id
+    else:
+        # Generate instance ID
+        instance_id = str(uuid.uuid4())[:8]
+    
     logger.info(f"Initialized agent API with instance ID: {instance_id}")
     
     # Note: Redis will be initialized in the lifespan function in api.py

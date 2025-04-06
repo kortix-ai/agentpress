@@ -7,8 +7,8 @@ interface Thread {
   thread_id: string;
   project_id?: string | null;
   user_id?: string | null;
-  messages: Message[];
   created_at: string;
+  updated_at: string;
 }
 
 interface ThreadCardProps {
@@ -17,9 +17,10 @@ interface ThreadCardProps {
   variant?: 'default' | 'new';
   isLoading?: boolean;
   onClick?: () => void;
+  messageCount?: number;
 }
 
-export function ThreadCard({ thread, projectId, variant = 'default', isLoading, onClick }: ThreadCardProps) {
+export function ThreadCard({ thread, projectId, variant = 'default', isLoading, onClick, messageCount = 0 }: ThreadCardProps) {
   if (variant === 'new') {
     return (
       <Card 
@@ -62,7 +63,7 @@ export function ThreadCard({ thread, projectId, variant = 'default', isLoading, 
         </CardHeader>
         <CardContent className="p-4 pt-2">
           <p className="text-sm text-muted-foreground">
-            {thread.messages.length} message{thread.messages.length !== 1 ? 's' : ''}
+            {messageCount} message{messageCount !== 1 ? 's' : ''}
           </p>
         </CardContent>
       </Card>

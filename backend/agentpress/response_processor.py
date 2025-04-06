@@ -373,11 +373,17 @@ class ResponseProcessor:
                             continue
                 
                 # Add assistant message with accumulated content
-                await self.add_message(thread_id, {
+                message_data = {
                     "role": "assistant",
                     "content": accumulated_content,
                     "tool_calls": complete_native_tool_calls if config.native_tool_calling and complete_native_tool_calls else None
-                })
+                }
+                await self.add_message(
+                    thread_id=thread_id, 
+                    type="assistant", 
+                    content=message_data,
+                    is_llm_message=True
+                )
                 
                 # Now add all buffered tool results AFTER the assistant message
                 for tool_call, result in tool_results_buffer:
@@ -510,11 +516,17 @@ class ResponseProcessor:
                                 })
             
             # Add assistant message FIRST
-            await self.add_message(thread_id, {
+            message_data = {
                 "role": "assistant",
                 "content": content,
                 "tool_calls": native_tool_calls if config.native_tool_calling and 'native_tool_calls' in locals() else None
-            })
+            }
+            await self.add_message(
+                thread_id=thread_id, 
+                type="assistant", 
+                content=message_data,
+                is_llm_message=True
+            )
             
             # Yield content first
             yield {"type": "content", "content": content}
@@ -974,15 +986,26 @@ class ResponseProcessor:
                 "role": result_role,
                 "content": content
             }
-            await self.add_message(thread_id, result_message)
+            await self.add_message(
+                thread_id=thread_id, 
+                type=result_role if result_role == "assistant" else "user",
+                content=result_message,
+                is_llm_message=(result_role == "assistant")
+            )
         except Exception as e:
             logger.error(f"Error adding tool result: {str(e)}", exc_info=True)
             # Fallback to a simple message
             try:
-                await self.add_message(thread_id, {
+                fallback_message = {
                     "role": "user",
                     "content": str(result)
-                })
+                }
+                await self.add_message(
+                    thread_id=thread_id, 
+                    type="user", 
+                    content=fallback_message,
+                    is_llm_message=True
+                )
             except Exception as e2:
                 logger.error(f"Failed even with fallback message: {str(e2)}", exc_info=True)
 

@@ -1,6 +1,7 @@
 import os
 import json
-from agentpress.thread_manager import ThreadManager, ToolChoice
+import uuid
+from agentpress.thread_manager import ThreadManager
 from agent.tools.files_tool import FilesTool
 from agent.tools.terminal_tool import TerminalTool
 from agent.tools.wait_tool import WaitTool
@@ -30,7 +31,7 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
         "content": get_system_prompt()
     }
 
-    model_name = "groq/deepseek-r1-distill-llama-70b" #anthropic/claude-3-5-sonnet-latest
+    model_name = "bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0" #groq/deepseek-r1-distill-llama-70b
 
     files_tool = FilesTool()
 
@@ -60,7 +61,7 @@ Current development environment workspace state:
             execute_tools=True,
             execute_on_stream=True,
             tool_execution_strategy="sequential",
-            xml_adding_strategy="assistant_message"
+            xml_adding_strategy="user_message"
         )
     )
         
@@ -72,16 +73,30 @@ Current development environment workspace state:
         yield chunk
     
 
-
 async def test_agent():
     """Test function to run the agent with a sample query"""
     from agentpress.thread_manager import ThreadManager
+    from services.supabase import DBConnection
     
     # Initialize ThreadManager
     thread_manager = ThreadManager()
     
-    # Create a test thread
-    thread_id = await thread_manager.create_thread()
+    # Create a test thread directly with Postgres function
+    client = await DBConnection().client
+    
+    try:
+        thread_result = await client.table('threads').insert({}).execute()
+        thread_data = thread_result.data[0] if thread_result.data else None
+        
+        if not thread_data:
+            print("Error: No thread data returned")
+            return
+            
+        thread_id = thread_data['thread_id']
+    except Exception as e:
+        print(f"Error creating thread: {str(e)}")
+        return
+        
     print("\n" + "="*50)
     print(f"🤖 Agent Thread Created: {thread_id}")
     print("="*50 + "\n")
@@ -95,11 +110,13 @@ async def test_agent():
             
         # Add the user message to the thread
         await thread_manager.add_message(
-            thread_id,
-            {
+            thread_id=thread_id,
+            type="user",
+            content={
                 "role": "user",
                 "content": user_message
-            }
+            },
+            is_llm_message=True
         )
         
         # Run the agent and print results
@@ -119,8 +136,8 @@ async def test_agent():
                 print(chunk['content'], end='', flush=True)
             elif chunk.get('type') == 'tool_result':
                 print("\n\n" + "="*50)
-                print(f"🛠️ Tool Result: {chunk['name']}")
-                print(f"📝 {chunk['result']}")
+                print(f"🛠️ Tool Result: {chunk.get('function_name', 'Unknown Tool')}")
+                print(f"📝 {chunk.get('result', chunk)}")
                 print("="*50 + "\n")
         
         print("\n" + "="*50)

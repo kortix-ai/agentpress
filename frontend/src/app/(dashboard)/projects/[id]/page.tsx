@@ -175,14 +175,15 @@ export default function ProjectPage({ params }: { params: Promise<ProjectParams>
                 key={thread.thread_id}
                 thread={thread}
                 projectId={projectId}
+                messageCount={0}
               />
             ))}
             
             <ThreadCard
               thread={{
                 thread_id: 'new',
-                messages: [],
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
               }}
               projectId={projectId}
               variant="new"

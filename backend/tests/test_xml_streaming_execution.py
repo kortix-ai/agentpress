@@ -118,21 +118,25 @@ async def test_xml_streaming_execution():
         # Simulate adding system message (mocked)
         print(f"MOCK: Adding system message to thread {thread_id}")
         await thread_manager.add_message(
-            thread_id,
-            {
+            thread_id=thread_id,
+            type="system",
+            content={
                 "role": "system",
                 "content": "You are a testing assistant that will execute wait commands."
-            }
+            },
+            is_llm_message=False
         )
         
         # Simulate adding message with XML content (mocked)
         print(f"MOCK: Adding message with XML content to thread {thread_id}")
         await thread_manager.add_message(
-            thread_id,
-            {
+            thread_id=thread_id,
+            type="assistant",
+            content={
                 "role": "assistant",
                 "content": XML_CONTENT
-            }
+            },
+            is_llm_message=True
         )
         
         print(f"🧵 Using test thread: {thread_id}")

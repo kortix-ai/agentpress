@@ -100,11 +100,13 @@ async def test_execution_strategies():
         # Simulate adding message (mocked)
         print(f"MOCK: Adding test message with {test['name']} execution strategy content")
         await thread_manager.add_message(
-            thread_id,
-            {
+            thread_id=thread_id,
+            type="assistant",
+            content={
                 "role": "assistant",
                 "content": test["content"]
-            }
+            },
+            is_llm_message=True
         )
         
         start_time = asyncio.get_event_loop().time()
