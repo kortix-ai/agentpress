@@ -512,6 +512,9 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
         agent_gen = run_agent(thread_id, stream=True, 
                       thread_manager=thread_manager)
         
+        # Collect all responses to save to database
+        all_responses = []
+        
         async for response in agent_gen:
             # Check if stop signal received
             if stop_signal_received:
@@ -521,12 +524,13 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
             # Store response in memory
             if agent_run_id in active_agent_runs:
                 active_agent_runs[agent_run_id].append(response)
+                all_responses.append(response)
                 total_responses += 1
             
-            # Periodically log progress for long-running agents
-            if total_responses % 100 == 0:
-                duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-                logger.info(f"Agent run {agent_run_id} still running after {duration:.1f}s, processed {total_responses} responses (instance: {instance_id})")
+            # # Periodically log progress for long-running agents
+            # if total_responses % 100 == 0:
+            #     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            #     logger.info(f"Agent run {agent_run_id} still running after {duration:.1f}s, processed {total_responses} responses (instance: {instance_id})")
             
         # Signal all done if we weren't stopped
         if not stop_signal_received:
@@ -535,11 +539,13 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
             
             # Add completion message to the stream
             if agent_run_id in active_agent_runs:
-                active_agent_runs[agent_run_id].append({
+                completion_message = {
                     "type": "status",
                     "status": "completed",
                     "message": "Agent run completed successfully"
-                })
+                }
+                active_agent_runs[agent_run_id].append(completion_message)
+                all_responses.append(completion_message)
             
             # Update the agent run status in the database
             completion_timestamp = datetime.now(timezone.utc).isoformat()
@@ -549,7 +555,8 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
                 try:
                     update_result = await client.table('agent_runs').update({
                         "status": "completed",
-                        "completed_at": completion_timestamp
+                        "completed_at": completion_timestamp,
+                        "responses": json.dumps(all_responses)
                     }).eq("id", agent_run_id).execute()
                     
                     if hasattr(update_result, 'data') and update_result.data:
@@ -597,11 +604,16 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
         
         # Add error message to the stream
         if agent_run_id in active_agent_runs:
-            active_agent_runs[agent_run_id].append({
+            error_response = {
                 "type": "status",
                 "status": "error",
                 "message": error_message
-            })
+            }
+            active_agent_runs[agent_run_id].append(error_response)
+            if 'all_responses' in locals():
+                all_responses.append(error_response)
+            else:
+                all_responses = [error_response]  # Initialize if not exists
         
         # Update the agent run with the error - with retry
         completion_timestamp = datetime.now(timezone.utc).isoformat()
@@ -611,7 +623,8 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
                 update_result = await client.table('agent_runs').update({
                     "status": "failed",
                     "error": f"{error_message}\n{traceback_str}",
-                    "completed_at": completion_timestamp
+                    "completed_at": completion_timestamp,
+                    "responses": json.dumps(all_responses if 'all_responses' in locals() else [])
                 }).eq("id", agent_run_id).execute()
                 
                 if hasattr(update_result, 'data') and update_result.data:
@@ -668,5 +681,3 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
             logger.warning(f"Error deleting active run key: {str(e)}")
                 
         logger.info(f"Agent run background task fully completed for: {agent_run_id} (instance: {instance_id})")
-
-

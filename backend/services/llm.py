@@ -210,7 +210,7 @@ async def make_llm_api_call(
     for attempt in range(MAX_RETRIES):
         try:
             logger.debug(f"Attempt {attempt + 1}/{MAX_RETRIES}")
-            logger.debug(f"API request parameters: {json.dumps(params, indent=2)}")
+            # logger.debug(f"API request parameters: {json.dumps(params, indent=2)}")
             
             response = await litellm.acompletion(**params)
             logger.info(f"Successfully received API response from {model_name}")
