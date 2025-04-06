@@ -60,7 +60,7 @@ Current development environment workspace state:
             native_tool_calling=False,
             execute_tools=True,
             execute_on_stream=True,
-            tool_execution_strategy="parallel",
+            tool_execution_strategy="sequential",
             xml_adding_strategy="user_message"
         )
     )

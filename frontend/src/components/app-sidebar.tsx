@@ -43,10 +43,6 @@ interface ApiThread {
   user_id: string;
   created_at: string;
   updated_at: string;
-  messages: Array<{
-    role: string;
-    content: string;
-  }>;
 }
 
 function useProjectsAndThreads(user: User | null) {
@@ -332,10 +328,8 @@ const ThreadItem = React.memo(({
   const threadPath = `/projects/${projectId}/threads/${thread.thread_id}`;
   const isActive = pathname === threadPath;
   
-  // Get first message content for thread title or use placeholder
-  const threadTitle = thread.messages && thread.messages.length > 0 
-    ? thread.messages[0].content 
-    : 'New Conversation';
+  // Use thread ID for the title
+  const threadTitle = 'Conversation ' + thread.thread_id.slice(0, 8);
 
   return (
     <motion.li 
