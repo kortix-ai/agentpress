@@ -82,4 +82,5 @@ def get_system_prompt():
     '''
     Returns the system prompt with XML tool usage instructions.
     '''
-    return SYSTEM_PROMPT + RESPONSE_FORMAT
+    return SYSTEM_PROMPT 
+#+ RESPONSE_FORMAT
