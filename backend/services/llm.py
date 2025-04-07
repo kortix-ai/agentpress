@@ -19,6 +19,7 @@ import litellm
 from utils.logger import logger
 
 # litellm.set_verbose=True
+litellm.modify_params=True
 
 # Constants
 MAX_RETRIES = 3
@@ -311,4 +312,3 @@ if __name__ == "__main__":
         print("\n✅ integration test completed successfully!")
     else:
         print("\n❌ Bedrock integration test failed!")
-

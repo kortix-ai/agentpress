@@ -94,8 +94,8 @@ async def test_streaming_tool_call():
     """Test tool calling with streaming to observe behavior."""
     # Setup conversation
     messages = [
-        {"role": "system", "content": "You are a helpful assistant with access to file management tools."},
-        {"role": "user", "content": "Create an HTML file named hello.html with a simple Hello World message."}
+        {"role": "system", "content": "You are a helpful assistant with access to file management tools. YOU ALWAYS USE MULTIPLE TOOL FUNCTION CALLS AT ONCE. YOU NEVER USE ONE TOOL FUNCTION CALL AT A TIME."},
+        {"role": "user", "content": "Create 10 random files with different extensions and content."}
     ]
     
     print("\n=== Testing streaming tool call ===\n")
@@ -105,10 +105,10 @@ async def test_streaming_tool_call():
         print("Sending streaming request...")
         stream_response = await make_llm_api_call(
             messages=messages,
-            model_name="gpt-4o",
+            model_name="anthropic/claude-3-5-sonnet-latest",
             temperature=0.0,
             tools=[CREATE_FILE_SCHEMA],
-            tool_choice={"type": "function", "function": {"name": "create_file"}},
+            tool_choice="auto",
             stream=True
         )
         
@@ -123,10 +123,12 @@ async def test_streaming_tool_call():
         
         # Storage for accumulated tool calls
         tool_calls = []
+        last_chunk = None  # Variable to store the last chunk
         
         # Process each chunk
         async for chunk in stream_response:
             chunk_count += 1
+            last_chunk = chunk # Keep track of the last chunk
             
             # Print chunk number and type
             print(f"\n--- Chunk {chunk_count} ---")
@@ -203,6 +205,24 @@ async def test_streaming_tool_call():
                     print(f"Error parsing arguments: {str(e)}")
         else:
             print("\nNo tool calls accumulated from streaming response.")
+
+        # --- Added logging for last chunk and finish reason ---
+        finish_reason = None
+        if last_chunk:
+            try:
+                if hasattr(last_chunk, 'choices') and last_chunk.choices:
+                    finish_reason = last_chunk.choices[0].finish_reason
+                last_chunk_data = last_chunk.model_dump() if hasattr(last_chunk, 'model_dump') else vars(last_chunk)
+                print("\n--- Last Chunk Received ---")
+                print(f"Finish Reason: {finish_reason}")
+                print(f"Raw Last Chunk Data: {json.dumps(last_chunk_data, indent=2)}")
+            except Exception as log_ex:
+                print("\n--- Error logging last chunk ---")
+                print(f"Error: {log_ex}")
+                print(f"Last Chunk (repr): {repr(last_chunk)}")
+        else:
+            print("\n--- No last chunk recorded ---")
+        # --- End added logging ---
     
     except Exception as e:
         logger.error(f"Error in streaming test: {str(e)}", exc_info=True)

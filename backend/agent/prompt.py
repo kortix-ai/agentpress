@@ -22,7 +22,6 @@ Remember:
 5. Focus on providing accurate, helpful information
 6. Consider context and user needs in your responses
 7. Handle ambiguity gracefully by asking clarifying questions when needed
-8. ISSUE ONLY ONE SINGLE XML TOOL CALL AT A TIME - complete one action before proceeding to the next
 
 <available_tools>
 You have access to these tools through XML-based tool calling:
@@ -38,11 +37,11 @@ You have access to these tools through XML-based tool calling:
 
 """
 
+
+#Wait for each action to complete before proceeding to the next one.
 RESPONSE_FORMAT = """
 <response_format>
 RESPONSE FORMAT – STRICTLY Output XML tags for tool calling
-
-You must only use ONE tool call at a time. Wait for each action to complete before proceeding to the next one.
 
 <create-file file_path="path/to/file">
 file contents here
@@ -82,5 +81,5 @@ def get_system_prompt():
     '''
     Returns the system prompt with XML tool usage instructions.
     '''
-    return SYSTEM_PROMPT 
+    return SYSTEM_PROMPT
 #+ RESPONSE_FORMAT
