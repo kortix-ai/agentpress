@@ -144,6 +144,7 @@ class ThreadManager:
         llm_max_tokens: Optional[int] = None,
         processor_config: Optional[ProcessorConfig] = None,
         tool_choice: ToolChoice = "auto",
+        native_max_auto_continues: int = 25,
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Run a conversation thread with LLM integration and tool execution.
         
@@ -157,6 +158,8 @@ class ThreadManager:
             llm_max_tokens: Maximum tokens in the LLM response
             processor_config: Configuration for the response processor
             tool_choice: Tool choice preference ("auto", "required", "none")
+            native_max_auto_continues: Maximum number of automatic continuations when 
+                                      finish_reason="tool_calls" (0 disables auto-continue)
             
         Returns:
             An async generator yielding response chunks or error dict
@@ -164,162 +167,153 @@ class ThreadManager:
         
         logger.info(f"Starting thread execution for thread {thread_id}")
         logger.debug(f"Parameters: model={llm_model}, temperature={llm_temperature}, max_tokens={llm_max_tokens}")
+        logger.debug(f"Auto-continue: max={native_max_auto_continues}")
         
-        try:
-            # 1. Get messages from thread for LLM call
-            messages = await self.get_messages(thread_id)
-            
-            # 2. Prepare messages for LLM call + add temporary message if it exists
-            prepared_messages = [system_prompt]
-            
-            # Find the last user message index
-            last_user_index = -1
-            for i, msg in enumerate(messages):
-                if msg.get('role') == 'user':
-                    last_user_index = i
-            
-            # Insert temporary message before the last user message if it exists
-            if temporary_message and last_user_index >= 0:
-                prepared_messages.extend(messages[:last_user_index])
-                prepared_messages.append(temporary_message)
-                prepared_messages.extend(messages[last_user_index:])
-                logger.debug("Added temporary message before the last user message")
-            else:
-                # If no user message or no temporary message, just add all messages
-                prepared_messages.extend(messages)
-                if temporary_message:
-                    prepared_messages.append(temporary_message)
-                    logger.debug("Added temporary message to the end of prepared messages")
-
-            # 3. Create or use processor config
-            if processor_config is None:
-                processor_config = ProcessorConfig()
-            
-            logger.debug(f"Processor config: XML={processor_config.xml_tool_calling}, Native={processor_config.native_tool_calling}, " 
-                   f"Execute tools={processor_config.execute_tools}, Strategy={processor_config.tool_execution_strategy}")
-
-            # # Check if native_tool_calling is enabled and throw an error if it is
-            # if processor_config.native_tool_calling:
-            #     error_message = "Native tool calling is not supported in this version"
-            #     logger.error(error_message)
-            #     return {
-            #         "status": "error",
-            #         "message": error_message
-            #     }
-
-            # 4. Prepare tools for LLM call
-            openapi_tool_schemas = None
-            if processor_config.native_tool_calling:
-                openapi_tool_schemas = self.tool_registry.get_openapi_schemas()
-                logger.debug(f"Retrieved {len(openapi_tool_schemas) if openapi_tool_schemas else 0} OpenAPI tool schemas")
-
-            # 5. Make LLM API call - removed agent run tracking
-            logger.info("Making LLM API call")
+        # Control whether we need to auto-continue due to tool_calls finish reason
+        auto_continue = True
+        auto_continue_count = 0
+        
+        # Define inner function to handle a single run
+        async def _run_once(temp_msg=None):
             try:
-                llm_response = await make_llm_api_call(
-                    prepared_messages,
-                    llm_model,
-                    temperature=llm_temperature,
-                    max_tokens=llm_max_tokens,
-                    tools=openapi_tool_schemas,
-                    tool_choice=tool_choice if processor_config.native_tool_calling else None,
-                    stream=stream
-                )
-                logger.debug("Successfully received raw LLM API response stream/object")
-
-                # # --- BEGIN ADDED DEBUG LOGGING ---
-                # async def logging_stream_wrapper(response_stream):
-                #     stream_ended = False
-                #     final_chunk_metadata = None
-                #     last_chunk = None # Store the last received chunk
-                #     try:
-                #         chunk_count = 0
-                #         async for chunk in response_stream:
-                #             chunk_count += 1
-                #             last_chunk = chunk # Keep track of the last chunk
-
-                #             # Try to access potential finish reason or metadata directly from chunk
-                #             finish_reason = None
-                #             if hasattr(chunk, 'choices') and chunk.choices and hasattr(chunk.choices[0], 'finish_reason'):
-                #                 finish_reason = chunk.choices[0].finish_reason
-                            
-                #             logger.debug(f"--> Raw Chunk {chunk_count}: Type={type(chunk)}, FinishReason={finish_reason}, Content={getattr(chunk.choices[0].delta, 'content', None)}, ToolCalls={getattr(chunk.choices[0].delta, 'tool_calls', None)}")
-
-                #             # Store metadata if it contains finish_reason
-                #             if finish_reason:
-                #                 final_chunk_metadata = {"finish_reason": finish_reason}
-                #                 logger.info(f"--> Raw Stream: Detected finish_reason='{finish_reason}' in chunk {chunk_count}")
-
-                #             yield chunk
-                #         stream_ended = True
-                #         logger.info(f"--> Raw Stream: Finished iterating naturally after {chunk_count} chunks.")
-                #     except Exception as e:
-                #         logger.error(f"--> Raw Stream: Error during iteration: {str(e)}", exc_info=True)
-                #         stream_ended = True # Assume ended on error
-                #         raise
-                #     finally:
-                #         if not stream_ended:
-                #              logger.warning("--> Raw Stream: Exited wrapper unexpectedly (maybe client stopped iterating?)")
-                        
-                #         # Log the entire last chunk received
-                #         if last_chunk:
-                #              try:
-                #                  # Try converting to dict if it's an object with model_dump
-                #                  last_chunk_data = last_chunk.model_dump() if hasattr(last_chunk, 'model_dump') else vars(last_chunk)
-                #                  logger.info(f"--> Raw Stream: Last Raw Chunk Received: {last_chunk_data}")
-                #              except Exception as log_ex:
-                #                  logger.warning(f"--> Raw Stream: Could not serialize last chunk for logging: {log_ex}")
-                #                  logger.info(f"--> Raw Stream: Last Raw Chunk (repr): {repr(last_chunk)}")
-                #         else:
-                #              logger.warning("--> Raw Stream: No chunks were received or stored.")
-
-                #         # Attempt to get final metadata if stream has an attribute for it (depends on litellm/provider)
-                #         final_metadata = getattr(response_stream, 'response_metadata', {})
-                #         if final_chunk_metadata: # Prioritize finish_reason found in-stream
-                #              final_metadata.update(final_chunk_metadata)
-                #         logger.info(f"--> Raw Stream: Final Metadata (if available): {final_metadata}")
-
-                # # Wrap the stream only if it's streaming mode
-                # if stream and hasattr(raw_llm_response, '__aiter__'):
-                #      llm_response = logging_stream_wrapper(raw_llm_response)
-                #      logger.debug("Wrapped raw LLM stream with logging wrapper.")
-                # else:
-                #      # If not streaming, just use the raw response (might be a dict/object)
-                #      llm_response = raw_llm_response
-                #      logger.debug("Not wrapping non-streaming LLM response.")
-                # # --- END ADDED DEBUG LOGGING ---
-
-            except Exception as e:
-                logger.error(f"Failed to make LLM API call: {str(e)}", exc_info=True)
-                raise
-
-            # 6. Process LLM response using the ResponseProcessor
-            if stream:
-                logger.info("Processing streaming response")
-                response_generator = self.response_processor.process_streaming_response(
-                    llm_response=llm_response,
-                    thread_id=thread_id,
-                    config=processor_config
-                )
+                # Ensure processor_config is available in this scope
+                nonlocal processor_config
                 
-                # Return the generator directly without agent run updates
-                return response_generator
-            else:
-                logger.info("Processing non-streaming response")
+                # Use a default config if none was provided
+                if processor_config is None:
+                    processor_config = ProcessorConfig()
+                
+                # 1. Get messages from thread for LLM call
+                messages = await self.get_messages(thread_id)
+                
+                # 2. Prepare messages for LLM call + add temporary message if it exists
+                prepared_messages = [system_prompt]
+                
+                # Find the last user message index
+                last_user_index = -1
+                for i, msg in enumerate(messages):
+                    if msg.get('role') == 'user':
+                        last_user_index = i
+                
+                # Insert temporary message before the last user message if it exists
+                if temp_msg and last_user_index >= 0:
+                    prepared_messages.extend(messages[:last_user_index])
+                    prepared_messages.append(temp_msg)
+                    prepared_messages.extend(messages[last_user_index:])
+                    logger.debug("Added temporary message before the last user message")
+                else:
+                    # If no user message or no temporary message, just add all messages
+                    prepared_messages.extend(messages)
+                    if temp_msg:
+                        prepared_messages.append(temp_msg)
+                        logger.debug("Added temporary message to the end of prepared messages")
+
+                # 3. Create or use processor config - this is now redundant since we handle it above
+                # but kept for consistency and clarity
+                logger.debug(f"Processor config: XML={processor_config.xml_tool_calling}, Native={processor_config.native_tool_calling}, " 
+                       f"Execute tools={processor_config.execute_tools}, Strategy={processor_config.tool_execution_strategy}")
+
+                # 4. Prepare tools for LLM call
+                openapi_tool_schemas = None
+                if processor_config.native_tool_calling:
+                    openapi_tool_schemas = self.tool_registry.get_openapi_schemas()
+                    logger.debug(f"Retrieved {len(openapi_tool_schemas) if openapi_tool_schemas else 0} OpenAPI tool schemas")
+
+                # 5. Make LLM API call
+                logger.info("Making LLM API call")
                 try:
-                    response = await self.response_processor.process_non_streaming_response(
+                    llm_response = await make_llm_api_call(
+                        prepared_messages,
+                        llm_model,
+                        temperature=llm_temperature,
+                        max_tokens=llm_max_tokens,
+                        tools=openapi_tool_schemas,
+                        tool_choice=tool_choice if processor_config.native_tool_calling else None,
+                        stream=stream
+                    )
+                    logger.debug("Successfully received raw LLM API response stream/object")
+
+                except Exception as e:
+                    logger.error(f"Failed to make LLM API call: {str(e)}", exc_info=True)
+                    raise
+
+                # 6. Process LLM response using the ResponseProcessor
+                if stream:
+                    logger.info("Processing streaming response")
+                    response_generator = self.response_processor.process_streaming_response(
                         llm_response=llm_response,
                         thread_id=thread_id,
                         config=processor_config
                     )
-                    return response
-                except Exception as e:
-                    logger.error(f"Error in non-streaming response: {str(e)}", exc_info=True)
-                    raise
-          
-        except Exception as e:
-            logger.error(f"Error in run_thread: {str(e)}", exc_info=True)
-            return {
-                "status": "error",
-                "message": str(e)
-            }
+                    
+                    return response_generator
+                else:
+                    logger.info("Processing non-streaming response")
+                    try:
+                        response = await self.response_processor.process_non_streaming_response(
+                            llm_response=llm_response,
+                            thread_id=thread_id,
+                            config=processor_config
+                        )
+                        return response
+                    except Exception as e:
+                        logger.error(f"Error in non-streaming response: {str(e)}", exc_info=True)
+                        raise
+              
+            except Exception as e:
+                logger.error(f"Error in run_thread: {str(e)}", exc_info=True)
+                return {
+                    "status": "error",
+                    "message": str(e)
+                }
+        
+        # Define a wrapper generator that handles auto-continue logic
+        async def auto_continue_wrapper():
+            nonlocal auto_continue, auto_continue_count
+            
+            while auto_continue and (native_max_auto_continues == 0 or auto_continue_count < native_max_auto_continues):
+                # Reset auto_continue for this iteration
+                auto_continue = False
+                
+                # Run the thread once
+                response_gen = await _run_once(temporary_message if auto_continue_count == 0 else None)
+                
+                # Handle error responses
+                if isinstance(response_gen, dict) and "status" in response_gen and response_gen["status"] == "error":
+                    yield response_gen
+                    return
+                
+                # Process each chunk
+                async for chunk in response_gen:
+                    # Check if this is a finish reason chunk with tool_calls
+                    if chunk.get('type') == 'finish' and chunk.get('finish_reason') == 'tool_calls':
+                        # Only auto-continue if enabled (max > 0)
+                        if native_max_auto_continues > 0:
+                            logger.info(f"Detected finish_reason='tool_calls', auto-continuing ({auto_continue_count + 1}/{native_max_auto_continues})")
+                            auto_continue = True
+                            auto_continue_count += 1
+                            # Don't yield the finish chunk to avoid confusing the client
+                            continue
+                    
+                    # Otherwise just yield the chunk normally
+                    yield chunk
+                
+                # If not auto-continuing, we're done
+                if not auto_continue:
+                    break
+                
+            # If we've reached the max auto-continues, log a warning
+            if auto_continue and auto_continue_count >= native_max_auto_continues:
+                logger.warning(f"Reached maximum auto-continue limit ({native_max_auto_continues}), stopping.")
+                yield {
+                    "type": "content", 
+                    "content": f"\n[Agent reached maximum auto-continue limit of {native_max_auto_continues}]"
+                }
+        
+        # If auto-continue is disabled (max=0), just run once
+        if native_max_auto_continues == 0:
+            logger.info("Auto-continue is disabled (native_max_auto_continues=0)")
+            return await _run_once(temporary_message)
+        
+        # Otherwise return the auto-continue wrapper generator
+        return auto_continue_wrapper()

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None):
+async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None, native_max_auto_continues: int = 25):
     """Run the development agent with specified configuration."""
     
     if not thread_manager:
@@ -66,7 +66,8 @@ Current development environment workspace state:
             execute_on_stream=True,
             tool_execution_strategy="parallel",
             xml_adding_strategy="user_message"
-        )
+        ),
+        native_max_auto_continues=native_max_auto_continues
     )
         
     if isinstance(response, dict) and "status" in response and response["status"] == "error":
@@ -75,7 +76,6 @@ Current development environment workspace state:
         
     async for chunk in response:
         yield chunk
-    
 
 async def test_agent():
     """Test function to run the agent with a sample query"""
@@ -132,7 +132,7 @@ async def test_agent():
         current_response = ""
         tool_call_counter = 0  # Track number of tool calls
         
-        async for chunk in run_agent(thread_id=thread_id, stream=True, thread_manager=thread_manager):
+        async for chunk in run_agent(thread_id=thread_id, stream=True, thread_manager=thread_manager, native_max_auto_continues=25):
             chunk_counter += 1
             
             if chunk.get('type') == 'content':
@@ -180,6 +180,10 @@ async def test_agent():
                         if current_response:
                             print("\nContinuing response:", flush=True)
                             print(current_response, end='', flush=True)
+            elif chunk.get('type') == 'finish':
+                # Just log finish reason to console but don't show to user
+                finish_reason = chunk.get('finish_reason', 'unknown')
+                print(f"\n[Debug] Received finish_reason: {finish_reason}")
         
         print("\n" + "="*50)
         print(f"✅ Agent completed. Processed {chunk_counter} chunks.")
