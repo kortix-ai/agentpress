@@ -4,7 +4,6 @@ import uuid
 from agentpress.thread_manager import ThreadManager
 from agent.tools.files_tool import FilesTool
 from agent.tools.terminal_tool import TerminalTool
-from agent.tools.wait_tool import WaitTool
 # from agent.tools.search_tool import CodeSearchTool
 from typing import Optional
 from agent.prompt import get_system_prompt
@@ -23,7 +22,6 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
     print("Adding tools to thread manager...")
     thread_manager.add_tool(FilesTool)
     thread_manager.add_tool(TerminalTool)
-    thread_manager.add_tool(WaitTool)
     # thread_manager.add_tool(CodeSearchTool)
     
     system_message = {
@@ -31,7 +29,12 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
         "content": get_system_prompt()
     }
 
-    model_name = "bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0" #groq/deepseek-r1-distill-llama-70b
+    model_name = "anthropic/claude-3-5-sonnet-latest" 
+    
+    #anthropic/claude-3-7-sonnet-latest
+    #openai/gpt-4o
+    #groq/deepseek-r1-distill-llama-70b
+    #bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0
 
     files_tool = FilesTool()
 
@@ -55,12 +58,13 @@ Current development environment workspace state:
         llm_model=model_name,
         llm_temperature=0.1,
         llm_max_tokens=8000,
+        tool_choice="any",
         processor_config=ProcessorConfig(
             xml_tool_calling=False,
             native_tool_calling=True,
             execute_tools=True,
             execute_on_stream=True,
-            tool_execution_strategy="sequential",
+            tool_execution_strategy="parallel",
             xml_adding_strategy="user_message"
         )
     )

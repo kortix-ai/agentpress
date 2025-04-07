@@ -58,7 +58,7 @@ class ThreadManager:
 
         Args:
             thread_id: The ID of the thread to add the message to.
-            type: The type of the message (e.g., 'text', 'image_url', 'tool_call').
+            type: The type of the message (e.g., 'text', 'image_url', 'tool_call', 'tool', 'user', 'assistant').
             content: The content of the message. Can be a dictionary, list, or string.
                      It will be stored as JSONB in the database.
             is_llm_message: Flag indicating if the message originated from the LLM.
@@ -115,7 +115,18 @@ class ThreadManager:
                         logger.error(f"Failed to parse message: {item}")
                 else:
                     messages.append(item)
-                    
+
+            # Ensure tool_calls have properly formatted function arguments
+            for message in messages:
+                if message.get('tool_calls'):
+                    for tool_call in message['tool_calls']:
+                        if isinstance(tool_call, dict) and 'function' in tool_call:
+                            # Ensure function.arguments is a string
+                            if 'arguments' in tool_call['function'] and not isinstance(tool_call['function']['arguments'], str):
+                                # Log and fix the issue
+                                logger.warning(f"Found non-string arguments in tool_call, converting to string")
+                                tool_call['function']['arguments'] = json.dumps(tool_call['function']['arguments'])
+
             return messages
             
         except Exception as e:
@@ -214,7 +225,70 @@ class ThreadManager:
                     tool_choice=tool_choice if processor_config.native_tool_calling else None,
                     stream=stream
                 )
-                logger.debug("Successfully received LLM API response")
+                logger.debug("Successfully received raw LLM API response stream/object")
+
+                # # --- BEGIN ADDED DEBUG LOGGING ---
+                # async def logging_stream_wrapper(response_stream):
+                #     stream_ended = False
+                #     final_chunk_metadata = None
+                #     last_chunk = None # Store the last received chunk
+                #     try:
+                #         chunk_count = 0
+                #         async for chunk in response_stream:
+                #             chunk_count += 1
+                #             last_chunk = chunk # Keep track of the last chunk
+
+                #             # Try to access potential finish reason or metadata directly from chunk
+                #             finish_reason = None
+                #             if hasattr(chunk, 'choices') and chunk.choices and hasattr(chunk.choices[0], 'finish_reason'):
+                #                 finish_reason = chunk.choices[0].finish_reason
+                            
+                #             logger.debug(f"--> Raw Chunk {chunk_count}: Type={type(chunk)}, FinishReason={finish_reason}, Content={getattr(chunk.choices[0].delta, 'content', None)}, ToolCalls={getattr(chunk.choices[0].delta, 'tool_calls', None)}")
+
+                #             # Store metadata if it contains finish_reason
+                #             if finish_reason:
+                #                 final_chunk_metadata = {"finish_reason": finish_reason}
+                #                 logger.info(f"--> Raw Stream: Detected finish_reason='{finish_reason}' in chunk {chunk_count}")
+
+                #             yield chunk
+                #         stream_ended = True
+                #         logger.info(f"--> Raw Stream: Finished iterating naturally after {chunk_count} chunks.")
+                #     except Exception as e:
+                #         logger.error(f"--> Raw Stream: Error during iteration: {str(e)}", exc_info=True)
+                #         stream_ended = True # Assume ended on error
+                #         raise
+                #     finally:
+                #         if not stream_ended:
+                #              logger.warning("--> Raw Stream: Exited wrapper unexpectedly (maybe client stopped iterating?)")
+                        
+                #         # Log the entire last chunk received
+                #         if last_chunk:
+                #              try:
+                #                  # Try converting to dict if it's an object with model_dump
+                #                  last_chunk_data = last_chunk.model_dump() if hasattr(last_chunk, 'model_dump') else vars(last_chunk)
+                #                  logger.info(f"--> Raw Stream: Last Raw Chunk Received: {last_chunk_data}")
+                #              except Exception as log_ex:
+                #                  logger.warning(f"--> Raw Stream: Could not serialize last chunk for logging: {log_ex}")
+                #                  logger.info(f"--> Raw Stream: Last Raw Chunk (repr): {repr(last_chunk)}")
+                #         else:
+                #              logger.warning("--> Raw Stream: No chunks were received or stored.")
+
+                #         # Attempt to get final metadata if stream has an attribute for it (depends on litellm/provider)
+                #         final_metadata = getattr(response_stream, 'response_metadata', {})
+                #         if final_chunk_metadata: # Prioritize finish_reason found in-stream
+                #              final_metadata.update(final_chunk_metadata)
+                #         logger.info(f"--> Raw Stream: Final Metadata (if available): {final_metadata}")
+
+                # # Wrap the stream only if it's streaming mode
+                # if stream and hasattr(raw_llm_response, '__aiter__'):
+                #      llm_response = logging_stream_wrapper(raw_llm_response)
+                #      logger.debug("Wrapped raw LLM stream with logging wrapper.")
+                # else:
+                #      # If not streaming, just use the raw response (might be a dict/object)
+                #      llm_response = raw_llm_response
+                #      logger.debug("Not wrapping non-streaming LLM response.")
+                # # --- END ADDED DEBUG LOGGING ---
+
             except Exception as e:
                 logger.error(f"Failed to make LLM API call: {str(e)}", exc_info=True)
                 raise
