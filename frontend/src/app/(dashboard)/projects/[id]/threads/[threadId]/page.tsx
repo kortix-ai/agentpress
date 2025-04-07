@@ -19,6 +19,15 @@ interface ApiMessage {
   type?: 'content' | 'tool_call';
   name?: string;
   arguments?: string;
+  tool_call?: {
+    id: string;
+    function: {
+      name: string;
+      arguments: string;
+    };
+    type: string;
+    index: number;
+  };
 }
 
 interface ApiAgentRun {
@@ -47,6 +56,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const [agentStatus, setAgentStatus] = useState<'idle' | 'running' | 'paused'>('idle');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState('');
+  const [toolCallData, setToolCallData] = useState<{id?: string, name?: string, arguments?: string, index?: number} | null>(null);
   
   const streamCleanupRef = useRef<(() => void) | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -89,6 +99,15 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
             message?: string;
             name?: string;
             arguments?: string;
+            tool_call?: {
+              id: string;
+              function: {
+                name: string;
+                arguments: string;
+              };
+              type: string;
+              index: number;
+            };
           } | null = null;
           
           // Handle data: prefix format (SSE standard format)
@@ -107,6 +126,9 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                   // Direct access verification - forcing immediate state update
                   // This will execute regardless of the normal flow
                   console.log(`[PAGE] 🚨 FORCE VERIFYING completion status for run: ${runId || 'unknown'}`);
+                  
+                  // Reset tool call data on completion
+                  setToolCallData(null);
                   
                   // Immediately mark as not streaming to update UI
                   setIsStreaming(false);
@@ -204,8 +226,31 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                 return;
               }
               
+              // Handle tool call chunks with data: prefix
+              if (jsonData?.type === 'content' && jsonData?.tool_call) {
+                console.log('[PAGE] Processing prefixed tool call chunk:', jsonData.tool_call);
+                
+                const { id, function: toolFunction, type, index } = jsonData.tool_call;
+                
+                // Update tool call data - accumulate arguments
+                setToolCallData(prev => ({
+                  id,
+                  name: toolFunction?.name,
+                  arguments: prev && prev.id === id ? 
+                    (prev.arguments || '') + (toolFunction?.arguments || '') : 
+                    toolFunction?.arguments,
+                  index
+                }));
+                
+                // Don't update streamContent directly for tool calls
+                return;
+              }
+              
               // Handle regular content with data: prefix
               if (jsonData?.type === 'content' && jsonData?.content) {
+                // Reset tool call data when switching to content
+                setToolCallData(null);
+                
                 // For regular content, just append to the existing content
                 setStreamContent(prev => prev + jsonData?.content);
                 console.log('[PAGE] Added content from prefixed data:', jsonData?.content.substring(0, 30) + '...');
@@ -246,6 +291,9 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                   // Direct access verification - forcing immediate state update
                   console.log(`[PAGE] 🚨 FORCE VERIFYING completion status for standard message: ${runId || 'unknown'}`);
                   
+                  // Reset tool call data
+                  setToolCallData(null);
+                  
                   // Immediately mark as not streaming to update UI
                   setIsStreaming(false);
                   setAgentStatus('idle');
@@ -282,10 +330,27 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
             }
             
             // Skip empty messages
-            if (!jsonData?.content && !jsonData?.arguments) return;
+            if (!jsonData?.content && !jsonData?.arguments && !jsonData?.tool_call) return;
             
             // Handle different message types
-            if (jsonData?.type === 'tool_call') {
+            if (jsonData?.type === 'content' && jsonData?.tool_call) {
+              console.log('[PAGE] Processing tool call chunk:', jsonData.tool_call);
+              
+              const { id, function: toolFunction, type, index } = jsonData.tool_call;
+              
+              // Update tool call data - accumulate arguments
+              setToolCallData(prev => ({
+                id,
+                name: toolFunction?.name,
+                arguments: prev && prev.id === id ? 
+                  (prev.arguments || '') + (toolFunction?.arguments || '') : 
+                  toolFunction?.arguments,
+                index
+              }));
+              
+              // Don't update streamContent directly for tool calls
+              return;
+            } else if (jsonData?.type === 'tool_call') {
               const toolContent = jsonData.name 
                 ? `Tool: ${jsonData.name}\n${jsonData.arguments || ''}`
                 : jsonData.arguments || '';
@@ -294,6 +359,9 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
               console.log('[PAGE] Added tool call content:', toolContent.substring(0, 30) + '...');
             } else if (jsonData?.type === 'content' && jsonData?.content) {
+              // Reset tool call data when switching to content
+              setToolCallData(null);
+              
               // For regular content, just append to the existing content
               setStreamContent(prev => prev + jsonData?.content);
               console.log('[PAGE] Added content:', jsonData?.content.substring(0, 30) + '...');
@@ -326,6 +394,9 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
         // Immediately set UI state to idle
         setAgentStatus('idle');
         setIsStreaming(false);
+        
+        // Reset tool call data
+        setToolCallData(null);
         
         try {
           console.log(`[PAGE] Checking final status for agent run ${runId}`);
@@ -847,8 +918,27 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                       <div className="whitespace-pre-wrap break-words">
                         {message.type === 'tool_call' ? (
                           <div className="font-mono text-xs">
-                            <div className="text-muted-foreground">Tool: {message.name}</div>
-                            <div className="mt-1">{message.arguments}</div>
+                            <div className="flex items-center gap-2 mb-1 text-muted-foreground">
+                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10">
+                                <div className="h-2 w-2 rounded-full bg-primary"></div>
+                              </div>
+                              <span>Tool: {message.name}</span>
+                            </div>
+                            <div className="mt-1 p-3 bg-secondary/20 rounded-md overflow-x-auto">
+                              {message.arguments}
+                            </div>
+                          </div>
+                        ) : message.role === 'tool' ? (
+                          <div className="font-mono text-xs">
+                            <div className="flex items-center gap-2 mb-1 text-muted-foreground">
+                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-success/10">
+                                <div className="h-2 w-2 rounded-full bg-success"></div>
+                              </div>
+                              <span>Tool Result: {message.name}</span>
+                            </div>
+                            <div className="mt-1 p-3 bg-success/5 rounded-md">
+                              {message.content}
+                            </div>
                           </div>
                         ) : (
                           message.content
@@ -865,7 +955,21 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                   >
                     <div className="max-w-[85%] rounded-lg bg-muted px-4 py-3 text-sm">
                       <div className="whitespace-pre-wrap break-words">
-                        {streamContent}
+                        {toolCallData ? (
+                          <div className="font-mono text-xs">
+                            <div className="flex items-center gap-2 mb-1 text-muted-foreground">
+                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10">
+                                <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
+                              </div>
+                              <span>Tool: {toolCallData.name}</span>
+                            </div>
+                            <div className="mt-1 p-3 bg-secondary/20 rounded-md overflow-x-auto">
+                              {toolCallData.arguments || ''}
+                            </div>
+                          </div>
+                        ) : (
+                          streamContent
+                        )}
                         {isStreaming && (
                           <span className="inline-flex items-center ml-0.5">
                             <span 
