@@ -529,6 +529,12 @@ class ResponseProcessor:
             # Tool execution counter
             tool_index = 0
             
+            # Extract finish_reason if available
+            finish_reason = None
+            if hasattr(llm_response, 'choices') and llm_response.choices and hasattr(llm_response.choices[0], 'finish_reason'):
+                finish_reason = llm_response.choices[0].finish_reason
+                logger.info(f"Detected finish_reason in non-streaming response: {finish_reason}")
+            
             if hasattr(llm_response, 'choices') and llm_response.choices:
                 response_message = llm_response.choices[0].message if hasattr(llm_response.choices[0], 'message') else None
                 
@@ -607,6 +613,10 @@ class ResponseProcessor:
                     
                     # Increment tool index for next tool
                     tool_index += 1
+                    
+            # Finally, if we detected a finish reason, yield it
+            if finish_reason:
+                yield {"type": "finish", "finish_reason": finish_reason}
                     
         except Exception as e:
             logger.error(f"Error processing response: {str(e)}", exc_info=True)
