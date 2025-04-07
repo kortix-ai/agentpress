@@ -58,7 +58,7 @@ Current development environment workspace state:
         llm_model=model_name,
         llm_temperature=0.1,
         llm_max_tokens=8000,
-        tool_choice="any",
+        tool_choice="auto",
         processor_config=ProcessorConfig(
             xml_tool_calling=False,
             native_tool_calling=True,
@@ -101,9 +101,7 @@ async def test_agent():
         print(f"Error creating thread: {str(e)}")
         return
         
-    print("\n" + "="*50)
-    print(f"🤖 Agent Thread Created: {thread_id}")
-    print("="*50 + "\n")
+    print(f"\n🤖 Agent Thread Created: {thread_id}\n")
     
     # Interactive message input loop
     while True:
@@ -123,10 +121,7 @@ async def test_agent():
             is_llm_message=True
         )
         
-        # Run the agent and print results
-        print("\n" + "="*50)
-        print("🔄 Running agent...")
-        print("="*50 + "\n")
+        print("\n🔄 Running agent...\n")
         
         chunk_counter = 0
         current_response = ""
@@ -135,65 +130,75 @@ async def test_agent():
         async for chunk in run_agent(thread_id=thread_id, stream=True, thread_manager=thread_manager, native_max_auto_continues=25):
             chunk_counter += 1
             
-            if chunk.get('type') == 'content':
-                current_response += chunk['content']
+            if chunk.get('type') == 'content' and 'content' in chunk:
+                current_response += chunk.get('content', '')
                 # Print the response as it comes in
-                print(chunk['content'], end='', flush=True)
+                print(chunk.get('content', ''), end='', flush=True)
             elif chunk.get('type') == 'tool_result':
-                print("\n\n" + "="*50)
-                print(f"🛠️ Tool Result: {chunk.get('function_name', 'Unknown Tool')}")
-                print(f"📝 {chunk.get('result', chunk)}")
-                print("="*50 + "\n")
-            elif chunk.get('type') == 'tool_call_chunk':
+                # Add timestamp and format tool result nicely
+                tool_name = chunk.get('function_name', 'Tool')
+                result = chunk.get('result', '')
+                print(f"\n\n🛠️  TOOL RESULT [{tool_name}] → {result}")
+            elif chunk.get('type') == 'tool_call':
                 # Display native tool call chunks as they arrive
                 tool_call = chunk.get('tool_call', {})
                 
                 # Check if it's a meaningful part of the tool call to display
-                if tool_call.get('function', {}).get('arguments'):
-                    args = tool_call.get('function', {}).get('arguments', '')
+                args = tool_call.get('function', {}).get('arguments', '')
+                
+                # Only show when we have substantial arguments or a function name
+                should_display = (
+                    len(args) > 3 or  # More than just '{}'
+                    tool_call.get('function', {}).get('name')  # Or we have a name
+                )
+                
+                if should_display:
+                    tool_call_counter += 1
+                    tool_name = tool_call.get('function', {}).get('name', 'Building...')
                     
-                    # Only show when we have substantial arguments or a function name
-                    should_display = (
-                        len(args) > 3 or  # More than just '{}'
-                        tool_call.get('function', {}).get('name')  # Or we have a name
-                    )
+                    # Print tool call header with counter and tool name
+                    print(f"\n🔧 TOOL CALL #{tool_call_counter} [{tool_name}]")
                     
-                    if should_display:
-                        tool_call_counter += 1
-                        print("\n" + "-"*50)
-                        print(f"🔧 Tool Call #{tool_call_counter}: {tool_call.get('function', {}).get('name', 'Building...')}")
-                        
-                        # Try to parse and pretty print the arguments if they're JSON
-                        try:
-                            # Check if it's complete JSON or just a fragment
-                            if args.strip().startswith('{') and args.strip().endswith('}'):
-                                args_obj = json.loads(args)
-                                print(f"📋 Arguments: {json.dumps(args_obj, indent=2)}")
-                            else:
-                                print(f"📋 Arguments (partial): {args}")
-                        except json.JSONDecodeError:
-                            print(f"📋 Arguments (building): {args}")
-                            
-                        print("-"*50)
-                        
-                        # Return to the current content display
-                        if current_response:
-                            print("\nContinuing response:", flush=True)
-                            print(current_response, end='', flush=True)
+                    # Try to parse and pretty print the arguments if they're JSON
+                    try:
+                        # Check if it's complete JSON or just a fragment
+                        if args.strip().startswith('{') and args.strip().endswith('}'):
+                            args_obj = json.loads(args)
+                            # Only print non-empty args to reduce clutter
+                            if args_obj and args_obj != {}:
+                                # Format JSON with nice indentation and color indicators for readability
+                                print(f"  ARGS: {json.dumps(args_obj, indent=2)}")
+                        else:
+                            # Only print if there's actual content to show
+                            if args.strip():
+                                print(f"  ARGS: {args}")
+                    except json.JSONDecodeError:
+                        if args.strip():
+                            print(f"  ARGS: {args}")
+                    
+                    # Add a separator for visual clarity
+                    print("  " + "-" * 40)
+                    
+                    # Return to the current content display
+                    if current_response:
+                        print("\nContinuing response:", flush=True)
+                        print(current_response, end='', flush=True)
+            elif chunk.get('type') == 'tool_status':
+                # Log tool status changes
+                status = chunk.get('status', '')
+                function_name = chunk.get('function_name', '')
+                if status and function_name:
+                    status_emoji = "✅" if status == "completed" else "⏳" if status == "started" else "❌"
+                    print(f"\n{status_emoji} TOOL {status.upper()}: {function_name}")
             elif chunk.get('type') == 'finish':
                 # Just log finish reason to console but don't show to user
-                finish_reason = chunk.get('finish_reason', 'unknown')
-                print(f"\n[Debug] Received finish_reason: {finish_reason}")
+                finish_reason = chunk.get('finish_reason', '')
+                if finish_reason:
+                    print(f"\n📌 Finished: {finish_reason}")
         
-        print("\n" + "="*50)
-        print(f"✅ Agent completed. Processed {chunk_counter} chunks.")
-        if tool_call_counter > 0:
-            print(f"🔧 Found {tool_call_counter} native tool calls.")
-        print("="*50 + "\n")
+        print(f"\n\n✅ Agent run completed with {tool_call_counter} tool calls")
     
-    print("\n" + "="*50)
-    print("👋 Test completed. Goodbye!")
-    print("="*50 + "\n")
+    print("\n👋 Test completed. Goodbye!")
 
 if __name__ == "__main__":
     import asyncio

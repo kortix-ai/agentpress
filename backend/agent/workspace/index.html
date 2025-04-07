@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Website</title>
+    <title>Creative Design Studio</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <header>
         <nav>
-            <div class="logo">MyWebsite</div>
-            <ul class="nav-links">
+            <div class="logo">Creative Studio</div>
+            <ul>
                 <li><a href="#home">Home</a></li>
-                <li><a href="#about">About</a></li>
                 <li><a href="#services">Services</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="#portfolio">Portfolio</a></li>
                 <li><a href="#contact">Contact</a></li>
             </ul>
         </nav>
@@ -21,49 +22,104 @@
 
     <main>
         <section id="home" class="hero">
-            <h1>Welcome to Our Website</h1>
-            <p>Discover amazing content and services</p>
-            <button class="cta-button">Get Started</button>
+            <h1>Welcome to Creative Design Studio</h1>
+            <p class="tagline">We bring your digital dreams to life</p>
+            <a href="#contact" class="cta-button">Get Started</a>
         </section>
 
-        <section id="about" class="about">
-            <h2>About Us</h2>
-            <p>We are a passionate team dedicated to creating amazing web experiences.</p>
-        </section>
-
-        <section id="services" class="services">
+        <section id="services">
             <h2>Our Services</h2>
-            <div class="service-cards">
-                <div class="card">
+            <div class="services-grid">
+                <div class="service-card">
                     <h3>Web Design</h3>
-                    <p>Beautiful and responsive websites</p>
+                    <p>Beautiful, responsive websites that engage your audience</p>
                 </div>
-                <div class="card">
-                    <h3>Development</h3>
-                    <p>Custom web applications</p>
+                <div class="service-card">
+                    <h3>Branding</h3>
+                    <p>Unique brand identity that sets you apart</p>
                 </div>
-                <div class="card">
-                    <h3>SEO</h3>
-                    <p>Search engine optimization</p>
+                <div class="service-card">
+                    <h3>Digital Marketing</h3>
+                    <p>Strategic campaigns that drive results</p>
                 </div>
             </div>
         </section>
 
-        <section id="contact" class="contact">
+        <section id="about">
+            <h2>About Us</h2>
+            <div class="about-content">
+                <p>We are a passionate team of designers and developers dedicated to creating exceptional digital experiences. With years of experience in the industry, we understand what it takes to make your brand stand out.</p>
+                <div class="stats">
+                    <div class="stat-item">
+                        <span class="number">100+</span>
+                        <span class="label">Projects Completed</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="number">50+</span>
+                        <span class="label">Happy Clients</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="number">5+</span>
+                        <span class="label">Years Experience</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="portfolio">
+            <h2>Our Work</h2>
+            <div class="portfolio-grid">
+                <div class="portfolio-item">Project 1</div>
+                <div class="portfolio-item">Project 2</div>
+                <div class="portfolio-item">Project 3</div>
+                <div class="portfolio-item">Project 4</div>
+            </div>
+        </section>
+
+        <section id="contact">
             <h2>Contact Us</h2>
-            <form id="contact-form">
-                <input type="text" placeholder="Name" required>
-                <input type="email" placeholder="Email" required>
-                <textarea placeholder="Your message" required></textarea>
-                <button type="submit">Send Message</button>
-            </form>
+            <div class="contact-container">
+                <form class="contact-form">
+                    <input type="text" placeholder="Your Name" required>
+                    <input type="email" placeholder="Your Email" required>
+                    <textarea placeholder="Your Message" required></textarea>
+                    <button type="submit" class="submit-button">Send Message</button>
+                </form>
+                <div class="contact-info">
+                    <p>Email: info@creativestudio.com</p>
+                    <p>Phone: (555) 123-4567</p>
+                    <p>Address: 123 Creative Street, Design City</p>
+                </div>
+            </div>
         </section>
     </main>
 
     <footer>
-        <p>&copy; 2024 MyWebsite. All rights reserved.</p>
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4>Creative Studio</h4>
+                <p>Creating digital excellence since 2019</p>
+            </div>
+            <div class="footer-section">
+                <h4>Quick Links</h4>
+                <ul>
+                    <li><a href="#home">Home</a></li>
+                    <li><a href="#services">Services</a></li>
+                    <li><a href="#portfolio">Portfolio</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h4>Connect With Us</h4>
+                <div class="social-links">
+                    <a href="#">Facebook</a>
+                    <a href="#">Twitter</a>
+                    <a href="#">Instagram</a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2024 Creative Design Studio. All rights reserved.</p>
+        </div>
     </footer>
-
-    <script src="script.js"></script>
 </body>
 </html>

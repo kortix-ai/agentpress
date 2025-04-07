@@ -208,7 +208,7 @@ class ResponseProcessor:
                         
                         # Yield the chunk data
                         yield {
-                            "type": "tool_call_chunk", 
+                            "type": "content", 
                             "tool_call": tool_call_data
                         }
                         
