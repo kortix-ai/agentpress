@@ -36,6 +36,9 @@ You have access to these tools through XML-based tool calling:
 - idle: A special tool to indicate you have completed all tasks and are entering idle state
 </available_tools>
 
+"""
+
+RESPONSE_FORMAT = """
 <response_format>
 RESPONSE FORMAT – STRICTLY Output XML tags for tool calling
 
@@ -79,4 +82,4 @@ def get_system_prompt():
     '''
     Returns the system prompt with XML tool usage instructions.
     '''
-    return SYSTEM_PROMPT
+    return SYSTEM_PROMPT + RESPONSE_FORMAT
