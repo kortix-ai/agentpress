@@ -191,6 +191,7 @@ async def make_llm_api_call(
         LLMError: For other API-related errors
     """
     logger.info(f"Making LLM API call to model: {model_name}")
+
     params = prepare_params(
         messages=messages,
         model_name=model_name,

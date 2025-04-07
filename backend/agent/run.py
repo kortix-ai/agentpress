@@ -31,7 +31,9 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
         "content": get_system_prompt()
     }
 
-    model_name = "bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0" #groq/deepseek-r1-distill-llama-70b
+    model_name = "openai/gpt-4o" 
+    #bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0
+    #groq/deepseek-r1-distill-llama-70b
 
     files_tool = FilesTool()
 
@@ -56,11 +58,11 @@ Current development environment workspace state:
         llm_temperature=0.1,
         llm_max_tokens=8000,
         processor_config=ProcessorConfig(
-            xml_tool_calling=False,
-            native_tool_calling=True,
+            xml_tool_calling=True,
+            native_tool_calling=False,
             execute_tools=True,
             execute_on_stream=True,
-            tool_execution_strategy="sequential",
+            tool_execution_strategy="parallel",
             xml_adding_strategy="user_message"
         )
     )

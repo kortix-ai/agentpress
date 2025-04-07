@@ -172,108 +172,109 @@ class ResponseProcessor:
                                         
                                         # Immediately continue processing more chunks
                     
-                    # Process native tool calls
-                    if config.native_tool_calling and delta and hasattr(delta, 'tool_calls') and delta.tool_calls:
-                        for tool_call in delta.tool_calls:
-                            # Yield the raw tool call chunk directly to the stream
-                            # Safely extract tool call data even if model_dump isn't available
-                            tool_call_data = {}
+                # Process native tool calls
+                if config.native_tool_calling and delta and hasattr(delta, 'tool_calls') and delta.tool_calls:
+                    for tool_call in delta.tool_calls:
+                        # Yield the raw tool call chunk directly to the stream
+                        # Safely extract tool call data even if model_dump isn't available
+                        tool_call_data = {}
+                        
+                        if hasattr(tool_call, 'model_dump'):
+                            # Use model_dump if available (OpenAI client)
+                            tool_call_data = tool_call.model_dump()
+                        else:
+                            # Manual extraction if model_dump not available
+                            if hasattr(tool_call, 'id'):
+                                tool_call_data['id'] = tool_call.id
+                            if hasattr(tool_call, 'index'):
+                                tool_call_data['index'] = tool_call.index
+                            if hasattr(tool_call, 'type'):
+                                tool_call_data['type'] = tool_call.type
+                            if hasattr(tool_call, 'function'):
+                                tool_call_data['function'] = {}
+                                if hasattr(tool_call.function, 'name'):
+                                    tool_call_data['function']['name'] = tool_call.function.name
+                                if hasattr(tool_call.function, 'arguments'):
+                                    # Ensure arguments is a string
+                                    tool_call_data['function']['arguments'] = tool_call.function.arguments if isinstance(tool_call.function.arguments, str) else json.dumps(tool_call.function.arguments)
+                        
+                        # Yield the chunk data
+                        yield {
+                            "type": "tool_call_chunk", 
+                            "tool_call": tool_call_data
+                        }
+                        
+                        # Log the tool call chunk for debugging
+                        # logger.debug(f"Yielded native tool call chunk: {tool_call_data}")
+                        
+                        if not hasattr(tool_call, 'function'):
+                            continue
                             
-                            if hasattr(tool_call, 'model_dump'):
-                                # Use model_dump if available (OpenAI client)
-                                tool_call_data = tool_call.model_dump()
-                            else:
-                                # Manual extraction if model_dump not available
-                                if hasattr(tool_call, 'id'):
-                                    tool_call_data['id'] = tool_call.id
-                                if hasattr(tool_call, 'index'):
-                                    tool_call_data['index'] = tool_call.index
-                                if hasattr(tool_call, 'type'):
-                                    tool_call_data['type'] = tool_call.type
-                                if hasattr(tool_call, 'function'):
-                                    tool_call_data['function'] = {}
-                                    if hasattr(tool_call.function, 'name'):
-                                        tool_call_data['function']['name'] = tool_call.function.name
-                                    if hasattr(tool_call.function, 'arguments'):
-                                        tool_call_data['function']['arguments'] = tool_call.function.arguments
-                            
-                            # Yield the chunk data
-                            yield {
-                                "type": "tool_call_chunk", 
-                                "tool_call": tool_call_data
+                        idx = tool_call.index if hasattr(tool_call, 'index') else 0
+                        
+                        # Initialize or update tool call in buffer
+                        if idx not in tool_calls_buffer:
+                            tool_calls_buffer[idx] = {
+                                'id': tool_call.id if hasattr(tool_call, 'id') and tool_call.id else str(uuid.uuid4()),
+                                'type': 'function',
+                                'function': {
+                                    'name': tool_call.function.name if hasattr(tool_call.function, 'name') and tool_call.function.name else None,
+                                    'arguments': ''
+                                }
+                            }
+                        
+                        current_tool = tool_calls_buffer[idx]
+                        if hasattr(tool_call, 'id') and tool_call.id:
+                            current_tool['id'] = tool_call.id
+                        if hasattr(tool_call.function, 'name') and tool_call.function.name:
+                            current_tool['function']['name'] = tool_call.function.name
+                        if hasattr(tool_call.function, 'arguments') and tool_call.function.arguments:
+                            current_tool['function']['arguments'] += tool_call.function.arguments
+                        
+                        # Check if we have a complete tool call
+                        has_complete_tool_call = False
+                        if (current_tool['id'] and 
+                            current_tool['function']['name'] and 
+                            current_tool['function']['arguments']):
+                            try:
+                                json.loads(current_tool['function']['arguments'])
+                                has_complete_tool_call = True
+                            except json.JSONDecodeError:
+                                pass
+                        
+                        if has_complete_tool_call and config.execute_tools and config.execute_on_stream:
+                            # Execute this tool call
+                            tool_call_data = {
+                                "function_name": current_tool['function']['name'],
+                                "arguments": json.loads(current_tool['function']['arguments']),
+                                "id": current_tool['id']
                             }
                             
-                            # Log the tool call chunk for debugging
-                            logger.debug(f"Yielded native tool call chunk: {tool_call_data}")
+                            # Create a context for this tool execution
+                            context = self._create_tool_context(
+                                tool_call=tool_call_data,
+                                tool_index=tool_index
+                            )
                             
-                            if not hasattr(tool_call, 'function'):
-                                continue
-                                
-                            idx = tool_call.index if hasattr(tool_call, 'index') else 0
+                            # Yield tool execution start message
+                            yield self._yield_tool_started(context)
                             
-                            # Initialize or update tool call in buffer
-                            if idx not in tool_calls_buffer:
-                                tool_calls_buffer[idx] = {
-                                    'id': tool_call.id if hasattr(tool_call, 'id') and tool_call.id else str(uuid.uuid4()),
-                                    'type': 'function',
-                                    'function': {
-                                        'name': tool_call.function.name if hasattr(tool_call.function, 'name') and tool_call.function.name else None,
-                                        'arguments': ''
-                                    }
-                                }
+                            # Start tool execution as a background task
+                            execution_task = asyncio.create_task(self._execute_tool(tool_call_data))
                             
-                            current_tool = tool_calls_buffer[idx]
-                            if hasattr(tool_call, 'id') and tool_call.id:
-                                current_tool['id'] = tool_call.id
-                            if hasattr(tool_call.function, 'name') and tool_call.function.name:
-                                current_tool['function']['name'] = tool_call.function.name
-                            if hasattr(tool_call.function, 'arguments') and tool_call.function.arguments:
-                                current_tool['function']['arguments'] += tool_call.function.arguments
+                            # Store the task for later retrieval 
+                            pending_tool_executions.append({
+                                "task": execution_task,
+                                "tool_call": tool_call_data,
+                                "tool_index": tool_index,
+                                "context": context
+                            })
                             
-                            # Check if we have a complete tool call
-                            has_complete_tool_call = False
-                            if (current_tool['id'] and 
-                                current_tool['function']['name'] and 
-                                current_tool['function']['arguments']):
-                                try:
-                                    json.loads(current_tool['function']['arguments'])
-                                    has_complete_tool_call = True
-                                except json.JSONDecodeError:
-                                    pass
+                            # Increment the tool index
+                            tool_index += 1
                             
-                            if has_complete_tool_call and config.execute_tools and config.execute_on_stream:
-                                # Execute this tool call
-                                tool_call_data = {
-                                    "function_name": current_tool['function']['name'],
-                                    "arguments": json.loads(current_tool['function']['arguments']),
-                                    "id": current_tool['id']
-                                }
-                                
-                                # Create a context for this tool execution
-                                context = self._create_tool_context(
-                                    tool_call=tool_call_data,
-                                    tool_index=tool_index
-                                )
-                                
-                                # Yield tool execution start message
-                                yield self._yield_tool_started(context)
-                                
-                                # Start tool execution as a background task
-                                execution_task = asyncio.create_task(self._execute_tool(tool_call_data))
-                                
-                                # Store the task for later retrieval 
-                                pending_tool_executions.append({
-                                    "task": execution_task,
-                                    "tool_call": tool_call_data,
-                                    "tool_index": tool_index,
-                                    "context": context
-                                })
-                                
-                                # Increment the tool index
-                                tool_index += 1
-                                
-                                # Immediately continue processing more chunks
-                
+                            # Immediately continue processing more chunks
+            
                 # Check for completed tool executions
                 completed_executions = []
                 for i, execution in enumerate(pending_tool_executions):
@@ -542,7 +543,7 @@ class ResponseProcessor:
                                     "type": "function",
                                     "function": {
                                         "name": tool_call.function.name,
-                                        "arguments": tool_call.function.arguments
+                                        "arguments": tool_call.function.arguments if isinstance(tool_call.function.arguments, str) else json.dumps(tool_call.function.arguments)
                                     }
                                 })
             
@@ -1001,7 +1002,48 @@ class ResponseProcessor:
     ):
         """Add a tool result to the thread based on the specified format."""
         try:
-            # Always add results as user or assistant messages, never as 'tool' role
+            # Check if this is a native function call (has id field)
+            if "id" in tool_call:
+                # Format as a proper tool message according to OpenAI spec
+                function_name = tool_call.get("function_name", "")
+                
+                # Format the tool result content - tool role needs string content
+                if isinstance(result, str):
+                    content = result
+                elif hasattr(result, 'output'):
+                    # If it's a ToolResult object
+                    if isinstance(result.output, dict) or isinstance(result.output, list):
+                        # If output is already a dict or list, convert to JSON string
+                        content = json.dumps(result.output)
+                    else:
+                        # Otherwise just use the string representation
+                        content = str(result.output)
+                else:
+                    # Fallback to string representation of the whole result
+                    content = str(result)
+                
+                logger.info(f"Formatted tool result content: {content[:100]}...")
+                
+                # Create the tool response message with proper format
+                tool_message = {
+                    "role": "tool",
+                    "tool_call_id": tool_call["id"],
+                    "name": function_name,
+                    "content": content
+                }
+                
+                logger.info(f"Adding native tool result for tool_call_id={tool_call['id']} with role=tool")
+                
+                # Add as a tool message
+                await self.add_message(
+                    thread_id=thread_id,
+                    type="tool",  # Special type for tool responses
+                    content=tool_message,
+                    is_llm_message=True
+                )
+                return
+            
+            # For XML and other non-native tools, continue with the original logic
             # Determine message role based on strategy
             result_role = "user" if strategy == "user_message" else "assistant"
             
@@ -1040,7 +1082,6 @@ class ResponseProcessor:
             except Exception as e2:
                 logger.error(f"Failed even with fallback message: {str(e2)}", exc_info=True)
 
-
     def _format_xml_tool_result(self, tool_call: Dict[str, Any], result: ToolResult) -> str:
         """Format a tool result as an XML tag or plain text.
         
@@ -1059,7 +1100,6 @@ class ResponseProcessor:
         # Non-XML tool, just return the function result
         function_name = tool_call["function_name"]
         return f"Result for {function_name}: {str(result)}"
-
 
     # At class level, define a method for yielding tool results
     def _yield_tool_result(self, context: ToolExecutionContext) -> Dict[str, Any]:

@@ -58,7 +58,7 @@ class ThreadManager:
 
         Args:
             thread_id: The ID of the thread to add the message to.
-            type: The type of the message (e.g., 'text', 'image_url', 'tool_call').
+            type: The type of the message (e.g., 'text', 'image_url', 'tool_call', 'tool', 'user', 'assistant').
             content: The content of the message. Can be a dictionary, list, or string.
                      It will be stored as JSONB in the database.
             is_llm_message: Flag indicating if the message originated from the LLM.
@@ -115,7 +115,18 @@ class ThreadManager:
                         logger.error(f"Failed to parse message: {item}")
                 else:
                     messages.append(item)
-                    
+
+            # Ensure tool_calls have properly formatted function arguments
+            for message in messages:
+                if message.get('tool_calls'):
+                    for tool_call in message['tool_calls']:
+                        if isinstance(tool_call, dict) and 'function' in tool_call:
+                            # Ensure function.arguments is a string
+                            if 'arguments' in tool_call['function'] and not isinstance(tool_call['function']['arguments'], str):
+                                # Log and fix the issue
+                                logger.warning(f"Found non-string arguments in tool_call, converting to string")
+                                tool_call['function']['arguments'] = json.dumps(tool_call['function']['arguments'])
+
             return messages
             
         except Exception as e:
