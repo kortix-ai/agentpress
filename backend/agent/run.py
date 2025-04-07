@@ -56,8 +56,8 @@ Current development environment workspace state:
         llm_temperature=0.1,
         llm_max_tokens=8000,
         processor_config=ProcessorConfig(
-            xml_tool_calling=True,
-            native_tool_calling=False,
+            xml_tool_calling=False,
+            native_tool_calling=True,
             execute_tools=True,
             execute_on_stream=True,
             tool_execution_strategy="sequential",
@@ -126,6 +126,7 @@ async def test_agent():
         
         chunk_counter = 0
         current_response = ""
+        tool_call_counter = 0  # Track number of tool calls
         
         async for chunk in run_agent(thread_id=thread_id, stream=True, thread_manager=thread_manager):
             chunk_counter += 1
@@ -139,9 +140,47 @@ async def test_agent():
                 print(f"🛠️ Tool Result: {chunk.get('function_name', 'Unknown Tool')}")
                 print(f"📝 {chunk.get('result', chunk)}")
                 print("="*50 + "\n")
+            elif chunk.get('type') == 'tool_call_chunk':
+                # Display native tool call chunks as they arrive
+                tool_call = chunk.get('tool_call', {})
+                
+                # Check if it's a meaningful part of the tool call to display
+                if tool_call.get('function', {}).get('arguments'):
+                    args = tool_call.get('function', {}).get('arguments', '')
+                    
+                    # Only show when we have substantial arguments or a function name
+                    should_display = (
+                        len(args) > 3 or  # More than just '{}'
+                        tool_call.get('function', {}).get('name')  # Or we have a name
+                    )
+                    
+                    if should_display:
+                        tool_call_counter += 1
+                        print("\n" + "-"*50)
+                        print(f"🔧 Tool Call #{tool_call_counter}: {tool_call.get('function', {}).get('name', 'Building...')}")
+                        
+                        # Try to parse and pretty print the arguments if they're JSON
+                        try:
+                            # Check if it's complete JSON or just a fragment
+                            if args.strip().startswith('{') and args.strip().endswith('}'):
+                                args_obj = json.loads(args)
+                                print(f"📋 Arguments: {json.dumps(args_obj, indent=2)}")
+                            else:
+                                print(f"📋 Arguments (partial): {args}")
+                        except json.JSONDecodeError:
+                            print(f"📋 Arguments (building): {args}")
+                            
+                        print("-"*50)
+                        
+                        # Return to the current content display
+                        if current_response:
+                            print("\nContinuing response:", flush=True)
+                            print(current_response, end='', flush=True)
         
         print("\n" + "="*50)
         print(f"✅ Agent completed. Processed {chunk_counter} chunks.")
+        if tool_call_counter > 0:
+            print(f"🔧 Found {tool_call_counter} native tool calls.")
         print("="*50 + "\n")
     
     print("\n" + "="*50)

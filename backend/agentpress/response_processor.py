@@ -175,6 +175,37 @@ class ResponseProcessor:
                     # Process native tool calls
                     if config.native_tool_calling and delta and hasattr(delta, 'tool_calls') and delta.tool_calls:
                         for tool_call in delta.tool_calls:
+                            # Yield the raw tool call chunk directly to the stream
+                            # Safely extract tool call data even if model_dump isn't available
+                            tool_call_data = {}
+                            
+                            if hasattr(tool_call, 'model_dump'):
+                                # Use model_dump if available (OpenAI client)
+                                tool_call_data = tool_call.model_dump()
+                            else:
+                                # Manual extraction if model_dump not available
+                                if hasattr(tool_call, 'id'):
+                                    tool_call_data['id'] = tool_call.id
+                                if hasattr(tool_call, 'index'):
+                                    tool_call_data['index'] = tool_call.index
+                                if hasattr(tool_call, 'type'):
+                                    tool_call_data['type'] = tool_call.type
+                                if hasattr(tool_call, 'function'):
+                                    tool_call_data['function'] = {}
+                                    if hasattr(tool_call.function, 'name'):
+                                        tool_call_data['function']['name'] = tool_call.function.name
+                                    if hasattr(tool_call.function, 'arguments'):
+                                        tool_call_data['function']['arguments'] = tool_call.function.arguments
+                            
+                            # Yield the chunk data
+                            yield {
+                                "type": "tool_call_chunk", 
+                                "tool_call": tool_call_data
+                            }
+                            
+                            # Log the tool call chunk for debugging
+                            logger.debug(f"Yielded native tool call chunk: {tool_call_data}")
+                            
                             if not hasattr(tool_call, 'function'):
                                 continue
                                 
@@ -988,9 +1019,9 @@ class ResponseProcessor:
             }
             await self.add_message(
                 thread_id=thread_id, 
-                type=result_role if result_role == "assistant" else "user",
+                type="tool",
                 content=result_message,
-                is_llm_message=(result_role == "assistant")
+                is_llm_message=True
             )
         except Exception as e:
             logger.error(f"Error adding tool result: {str(e)}", exc_info=True)
@@ -1002,7 +1033,7 @@ class ResponseProcessor:
                 }
                 await self.add_message(
                     thread_id=thread_id, 
-                    type="user", 
+                    type="tool", 
                     content=fallback_message,
                     is_llm_message=True
                 )
