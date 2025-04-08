@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
-import { ArrowDown, CheckCircle, Copy, Share, ThumbsDown, ThumbsUp, Terminal, FileText, Search, MessageSquare, Loader2, File, Trash2, Edit, FolderOpen } from 'lucide-react';
+import { ArrowDown, CheckCircle, Copy, Share, ThumbsDown, ThumbsUp, Terminal, FileText, Search, MessageSquare, Loader2, File, Trash2, Edit, FolderOpen, PlusCircle } from 'lucide-react';
 import { addUserMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
 import { toast } from 'sonner';
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1501,7 +1501,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                                         const filePath = args.target_file || args.file_path;
                                         if (filePath) {
                                           const fileName = filePath.split('/').pop();
-                                          return <>Deleting file: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                          return <>Deleting file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
                                         }
                                       }
                                       
@@ -1646,8 +1646,22 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
           </div>
         </div>
 
-        <div className="absolute inset-x-0 bottom-0 border-t bg-background/80 backdrop-blur-sm z-50">
-          <div className="mx-auto max-w-3xl px-6 py-4">
+        <div className="absolute inset-x-0 bottom-0 bg-background z-50">
+          <div className="mx-auto max-w-4xl px-6 mb-4">
+            {/* Connector component above chat input */}
+            <div className="flex items-center justify-center rounded-t-md border-t border-x border-zinc-200 mx-2 pt-3 pb-1 relative">
+              {/* Zinc rectangle button that extends above the connector */}
+              <div className="absolute left-5 -top-17 h-20 w-36 bg-zinc-200 rounded-md border border-zinc-300 flex items-center justify-center cursor-pointer hover:bg-zinc-300 transition-colors">
+                <PlusCircle className="h-6 w-6 text-zinc-600" />
+              </div>
+              
+              <div className="flex space-x-2">
+                <div className="h-1 w-8 rounded-full bg-zinc-200"></div>
+                <div className="h-1 w-12 rounded-full bg-muted-foreground/30"></div>
+                <div className="h-1 w-8 rounded-full bg-muted-foreground/20"></div>
+              </div>
+            </div>
+            
             <ChatInput
               value={newMessage}
               onChange={setNewMessage}
