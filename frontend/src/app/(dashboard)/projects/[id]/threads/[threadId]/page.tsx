@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
-import { ArrowDown, CheckCircle, Copy } from 'lucide-react';
+import { ArrowDown, CheckCircle, Copy, Share, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { addUserMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
 import { toast } from 'sonner';
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1096,11 +1096,11 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                     className={`flex message-container ${message.role === 'user' ? 'justify-end' : 'justify-start'} relative ${editingMessageIndex !== null && index > editingMessageIndex ? 'z-0' : 'z-20'}`}
                   >
                     <div 
-                      className={`${message.role === 'user' ? 'max-w-[85%]' : 'max-w-full'} rounded-lg px-4 py-3 text-sm ${
+                      className={`${message.role === 'user' ? 'max-w-[85%]' : 'max-w-full'} rounded-md px-4 py-3 text-sm ${
                         message.role === 'user' 
                           ? 'bg-zinc-50 text-zinc-800 border border-zinc-100 relative mb-10' 
                           : ''
-                      } ${message.role === 'user' ? 'group hover:ring-2 hover:ring-zinc-200 transition-all duration-200' : ''}`}
+                      } ${message.role === 'user' ? 'group hover:ring-2 hover:ring-zinc-200 transition-all duration-200' : 'group'}`}
                       onMouseEnter={() => {
                         if (message.role === 'user') {
                           console.log('Hovering over user message:', message.content);
@@ -1120,6 +1120,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                           <span className="text-xs text-zinc-500">Copy</span>
                         </button>
                       )}
+                      
                       {editingMessageIndex === index ? (
                         <div className="flex flex-col">
                           <textarea
@@ -1187,7 +1188,58 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                               </div>
                             </div>
                           ) : (
-                            message.content
+                            <>
+                              {message.content}
+                              {/* Add reaction icons for assistant messages */}
+                              {message.role === 'assistant' && (
+                                <div className={`flex justify-end mt-2 mb-1 pt-1 gap-2 ${index === messages.length - 1 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Handle thumbs up
+                                      toast.success('Response rated as helpful');
+                                    }}
+                                    className="p-1 rounded-md hover:bg-zinc-100 transition-colors duration-200"
+                                    title="Helpful"
+                                  >
+                                    <ThumbsUp className="h-3.5 w-3.5 text-zinc-400 hover:text-zinc-600" />
+                                  </button>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Handle thumbs down
+                                      toast.info('Response rated as not helpful');
+                                    }}
+                                    className="p-1 rounded-md hover:bg-zinc-100 transition-colors duration-200"
+                                    title="Not helpful"
+                                  >
+                                    <ThumbsDown className="h-3.5 w-3.5 text-zinc-400 hover:text-zinc-600" />
+                                  </button>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Copy assistant message
+                                      copyToClipboard(message.content);
+                                    }}
+                                    className="p-1 rounded-md hover:bg-zinc-100 transition-colors duration-200"
+                                    title="Copy response"
+                                  >
+                                    <Copy className="h-3.5 w-3.5 text-zinc-400 hover:text-zinc-600" />
+                                  </button>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Handle share
+                                      toast.info('Sharing options coming soon');
+                                    }}
+                                    className="p-1 rounded-md hover:bg-zinc-100 transition-colors duration-200"
+                                    title="Share"
+                                  >
+                                    <Share className="h-3.5 w-3.5 text-zinc-400 hover:text-zinc-600" />
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
