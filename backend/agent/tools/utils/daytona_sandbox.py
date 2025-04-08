@@ -3,9 +3,12 @@ import requests
 from time import sleep
 
 from daytona_sdk import Daytona, DaytonaConfig, CreateSandboxParams, SessionExecuteRequest
+from dotenv import load_dotenv
 
 from agentpress.tool import Tool
 from utils.logger import logger
+
+load_dotenv()
 
 config = DaytonaConfig(
     api_key=os.getenv("DAYTONA_API_KEY"),
@@ -15,7 +18,7 @@ config = DaytonaConfig(
 daytona = Daytona(config)
 
 
-sandbox_api = b'''
+sandbox_browser_api = b'''
 import traceback
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -145,6 +148,57 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
 '''
 
+sandbox_website_server = b'''
+import os
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import uvicorn
+import logging
+import logging.handlers
+
+# Configure logging
+log_dir = "/var/log/kortix"
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, "website_server.log")
+
+logger = logging.getLogger("website_server")
+logger.setLevel(logging.INFO)
+
+# Create rotating file handler
+file_handler = logging.handlers.RotatingFileHandler(
+    log_file, 
+    maxBytes=10485760,  # 10MB
+    backupCount=5
+)
+file_handler.setFormatter(
+    logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+)
+logger.addHandler(file_handler)
+
+app = FastAPI()
+
+# Create site directory if it doesn't exist
+site_dir = "/workspace/site"
+os.makedirs(site_dir, exist_ok=True)
+
+# Mount the static files directory
+app.mount("/", StaticFiles(directory=site_dir, html=True), name="site")
+
+@app.get("/health")
+async def health_check():
+    status = {
+        "status": "healthy"
+    }
+    logger.debug(f"Health check: {status}")
+    return status
+
+if __name__ == "__main__":
+    logger.info("Starting website server")
+    uvicorn.run(app, host="0.0.0.0", port=8080)
+'''
+
+
 def create_sandbox(password: str):
     sandbox = daytona.create(CreateSandboxParams(
         image="adamcohenhillel/kortix-browser-use:0.0.1",
@@ -182,13 +236,18 @@ def create_sandbox(password: str):
             8080   # HTTP website port
         ]
     ))
-    sandbox.fs.upload_file(sandbox.get_user_root_dir() + "/app.py", sandbox_api)
-    sandbox.process.create_session('kortix_browser_use_api')
-    rsp = sandbox.process.execute_session_command('kortix_browser_use_api', SessionExecuteRequest(
-        command="python " + sandbox.get_user_root_dir() + "/app.py",
+    sandbox.fs.upload_file(sandbox.get_user_root_dir() + "/browser_api.py", sandbox_browser_api)
+    sandbox.fs.upload_file(sandbox.get_user_root_dir() + "/website_server.py", sandbox_website_server)
+    sandbox.process.create_session('sandbox_browser_api')
+    sandbox.process.create_session('sandbox_website_server')
+    rsp = sandbox.process.execute_session_command('sandbox_browser_api', SessionExecuteRequest(
+        command="python " + sandbox.get_user_root_dir() + "/browser_api.py",
         var_async=True
     ))
-    
+    rsp2 = sandbox.process.execute_session_command('sandbox_website_server', SessionExecuteRequest(
+        command="python " + sandbox.get_user_root_dir() + "/website_server.py",
+        var_async=True
+    ))
     times = 0
     success = False
     api_url = sandbox.get_preview_link(8000)
@@ -208,6 +267,7 @@ def create_sandbox(password: str):
         raise Exception("API call failed")
     
     logger.info(f"Executed command {rsp}")
+    logger.info(f"Executed command {rsp2}")
     logger.info(f"Created kortix_browser_use_api session `kortix_browser_use_api`")
     return sandbox
 
@@ -231,5 +291,5 @@ class SandboxToolsBase(Tool):
         
         print("\033[95m***")
         print(self.sandbox.get_preview_link(6080))
+        print(self.sandbox.get_preview_link(8080))
         print("***\033[0m")
-  

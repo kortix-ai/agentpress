@@ -3,8 +3,9 @@ import json
 import uuid
 from agentpress.thread_manager import ThreadManager
 from agent.tools.files_tool import FilesTool
-from agent.tools.sb_browse_tool import SandboxTool
-from agent.tools.terminal_tool import TerminalTool
+from agent.tools.sb_browse_tool import SandboxBrowseTool
+from agent.tools.sb_shell_tool import SandboxShellTool
+from agent.tools.sb_website_tool import SandboxWebsiteTool
 # from agent.tools.search_tool import CodeSearchTool
 from typing import Optional
 from agent.prompt import get_system_prompt
@@ -22,16 +23,19 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
         thread_manager = ThreadManager()
     
     if True: # todo: change to of not sandbox running
-        sandbox = create_sandbox(TEMP_PASSWORD)
+        sandbox = create_sandbox("vvv")
         sandbox_id = sandbox.id
+        sandbox_password = "vvv"
+    else:
+        sandbox_id = "sandbox-01efaaa5"
         sandbox_password = "vvv"
 
     print("Adding tools to thread manager...")
     # thread_manager.add_tool(FilesTool)
     # thread_manager.add_tool(TerminalTool)
     # thread_manager.add_tool(CodeSearchTool)
-    thread_manager.add_tool(SandboxTool, sandbox_id=sandbox_id, password=sandbox_password)
-
+    # thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_password)
+    thread_manager.add_tool(SandboxWebsiteTool, sandbox_id=sandbox_id, password=sandbox_password)
     system_message = {
         "role": "system",
         "content": get_system_prompt()
