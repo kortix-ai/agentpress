@@ -909,10 +909,10 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                     className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div 
-                      className={`max-w-[85%] rounded-lg px-4 py-3 text-sm ${
+                      className={`${message.role === 'user' ? 'max-w-[85%]' : 'max-w-full'} rounded-lg px-4 py-3 text-sm ${
                         message.role === 'user' 
                           ? 'bg-primary text-primary-foreground' 
-                          : 'bg-muted'
+                          : ''
                       }`}
                     >
                       <div className="whitespace-pre-wrap break-words">
@@ -953,7 +953,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                     ref={latestMessageRef}
                     className="flex justify-start"
                   >
-                    <div className="max-w-[85%] rounded-lg bg-muted px-4 py-3 text-sm">
+                    <div className="max-w-full rounded-lg px-4 py-3 text-sm">
                       <div className="whitespace-pre-wrap break-words">
                         {toolCallData ? (
                           <div className="font-mono text-xs">
@@ -994,7 +994,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                 
                 {agentStatus === 'running' && !streamContent && (
                   <div className="flex justify-start">
-                    <div className="flex items-center gap-1.5 rounded-lg bg-muted px-4 py-3">
+                    <div className="flex items-center gap-1.5 rounded-lg px-4 py-3 max-w-full">
                       <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse" />
                       <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-150" />
                       <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-300" />
