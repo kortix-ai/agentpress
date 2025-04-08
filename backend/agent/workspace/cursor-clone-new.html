@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cursor Clone</title>
+    <style>
+        /* Base styles */
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+        }
+
+        /* Interactive elements */
+        .btn {
+            padding: 10px 20px;
+            background: #4ecdc4;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            margin: 10px;
+        }
+
+        .card {
+            background: #2a2a2a;
+            padding: 20px;
+            margin: 10px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        /* Cursor styles */
+        .cursor {
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 107, 107, 0.2);
+            border: 2px solid #ff6b6b;
+            border-radius: 50%;
+            position: fixed;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            transition: width 0.2s, height 0.2s;
+            z-index: 9999;
+            mix-blend-mode: difference;
+        }
+
+        .cursor-clone {
+            width: 40px;
+            height: 40px;
+            border: 1px solid rgba(78, 205, 196, 0.3);
+            border-radius: 50%;
+            position: fixed;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 9998;
+        }
+
+        .cursor-trail {
+            width: 8px;
+            height: 8px;
+            background: rgba(255, 107, 107, 0.1);
+            border-radius: 50%;
+            position: fixed;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 9997;
+        }
+
+        /* Cursor states */
+        .cursor.hover {
+            width: 30px;
+            height: 30px;
+            background: rgba(78, 205, 196, 0.2);
+            border-color: #4ecdc4;
+        }
+
+        .cursor.click {
+            width: 15px;
+            height: 15px;
+            background: rgba(255, 107, 107, 0.4);
+        }
+
+        /* Hide default cursor */
+        * {
+            cursor: none !important;
+        }
+
+        @media (max-width: 768px) {
+            .cursor, .cursor-clone, .cursor-trail {
+                display: none;
+            }
+            * {
+                cursor: auto !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Cursor Clone Demo</h1>
+    <p>Move your mouse around to see the effect!</p>
+
+    <button class="btn">Hover Me</button>
+    <div class="card" data-cursor="interactive">Interactive Card</div>
+
+    <script>
+        class CursorClone {
+            constructor() {
+                // Create cursor elements
+                this.cursor = this.createCursorElement('cursor');
+                this.cursorClone = this.createCursorElement('cursor-clone');
+                
+                // Create trails
+                this.trails = [];
+                this.trailCount = 5;
+                this.createTrails();
+
+                // Initialize positions
+                this.mouseX = 0;
+                this.mouseY = 0;
+                this.cursorX = 0;
+                this.cursorY = 0;
+                this.cloneX = 0;
+                this.cloneY = 0;
+
+                // Settings
+                this.smoothing = 8;
+                this.cloneDelay = 0.5;
+                
+                this.init();
+            }
+
+            createCursorElement(className) {
+                const element = document.createElement('div');
+                element.className = className;
+                document.body.appendChild(element);
+                return element;
+            }
+
+            createTrails() {
+                for (let i = 0; i < this.trailCount; i++) {
+                    const trail = this.createCursorElement('cursor-trail');
+                    trail.style.opacity = 1 - (i / this.trailCount);
+                    this.trails.push({
+                        element: trail,
+                        x: 0,
+                        y: 0,
+                        delay: i * 2
+                    });
+                }
+            }
+
+            init() {
+                // Mouse movement
+                document.addEventListener('mousemove', (e) => {
+                    this.mouseX = e.clientX;
+                    this.mouseY = e.clientY;
+                });
+
+                // Click effects
+                document.addEventListener('mousedown', () => {
+                    this.cursor.classList.add('click');
+                    this.cursorClone.classList.add('click');
+                });
+
+                document.addEventListener('mouseup', () => {
+                    this.cursor.classList.remove('click');
+                    this.cursorClone.classList.remove('click');
+                });
+
+                // Hover effects
+                const interactiveElements = 'button, .btn, [data-cursor="interactive"]';
+                
+                document.addEventListener('mouseover', (e) => {
+                    if (e.target.matches(interactiveElements)) {
+                        this.cursor.classList.add('hover');
+                        this.cursorClone.classList.add('hover');
+                    }
+                });
+
+                document.addEventListener('mouseout', (e) => {
+                    if (e.target.matches(interactiveElements)) {
+                        this.cursor.classList.remove('hover');
+                        this.cursorClone.classList.remove('hover');
+                    }
+                });
+
+                // Start animation
+                this.animate();
+            }
+
+            animate() {
+                // Smooth cursor movement
+                this.cursorX += (this.mouseX - this.cursorX) / this.smoothing;
+                this.cursorY += (this.mouseY - this.cursorY) / this.smoothing;
+
+                // Clone follows with delay
+                this.cloneX += (this.cursorX - this.cloneX) * this.cloneDelay;
+                this.cloneY += (this.cursorY - this.cloneY) * this.cloneDelay;
+
+                // Update positions
+                this.cursor.style.transform = `translate(${this.cursorX}px, ${this.cursorY}px)`;
+                this.cursorClone.style.transform = `translate(${this.cloneX}px, ${this.cloneY}px)`;
+
+                // Update trails
+                this.updateTrails();
+
+                requestAnimationFrame(() => this.animate());
+            }
+
+            updateTrails() {
+                this.trails.forEach((trail, index) => {
+                    const progress = index / this.trailCount;
+                    const trailX = this.cursorX + (this.cloneX - this.cursorX) * progress;
+                    const trailY = this.cursorY + (this.cloneY - this.cursorY) * progress;
+                    
+                    trail.x += (trailX - trail.x) / (this.smoothing + trail.delay);
+                    trail.y += (trailY - trail.y) / (this.smoothing + trail.delay);
+                    
+                    trail.element.style.transform = `translate(${trail.x}px, ${trail.y}px)`;
+                });
+            }
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            new CursorClone();
+        });
+    </script>
+</body>
+</html>

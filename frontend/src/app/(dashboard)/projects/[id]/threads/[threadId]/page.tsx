@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
-import { ArrowDown, CheckCircle, Copy, Share, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ArrowDown, CheckCircle, Copy, Share, ThumbsDown, ThumbsUp, Terminal, FileText, Search, MessageSquare, Loader2, File } from 'lucide-react';
 import { addUserMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
 import { toast } from 'sonner';
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,6 +41,82 @@ interface ApiAgentRun {
   responses: ApiMessage[];
   error: string | null;
 }
+
+// Helper function to determine tool icon
+const getToolIcon = (toolName: string | undefined) => {
+  if (!toolName) return <File className="h-4 w-4" />;
+  
+  const toolNameLower = toolName.toLowerCase();
+  
+  if (toolNameLower.includes('terminal') || toolNameLower.includes('execute_command')) {
+    return <Terminal className="h-4 w-4" />;
+  } else if (toolNameLower.includes('file') || toolNameLower.includes('read') || toolNameLower.includes('write') || toolNameLower.includes('create')) {
+    return <FileText className="h-4 w-4" />;
+  } else if (toolNameLower.includes('search') || toolNameLower.includes('grep')) {
+    return <Search className="h-4 w-4" />;
+  } else if (toolNameLower.includes('message') || toolNameLower.includes('ask')) {
+    return <MessageSquare className="h-4 w-4" />;
+  } else {
+    return <File className="h-4 w-4" />; // Default icon
+  }
+};
+
+// Helper function to get friendly description of what the tool is doing
+const getToolDescription = (toolName: string | undefined, args: string | undefined) => {
+  if (!toolName) return "";
+  
+  const toolNameLower = toolName.toLowerCase();
+  let argObj: Record<string, unknown> = {};
+  
+  // Try to parse arguments as JSON if available
+  if (args) {
+    try {
+      argObj = JSON.parse(args);
+    } catch {
+      // If not valid JSON, use as is
+    }
+  }
+  
+  // Extract specific information based on tool type
+  if (toolNameLower.includes('execute_command')) {
+    const command = typeof argObj === 'object' && argObj.command ? String(argObj.command).substring(0, 30) : '';
+    return command || 'execute_command';
+  } else if (toolNameLower.includes('read_file')) {
+    const path = typeof argObj === 'object' && argObj.path ? String(argObj.path) : '';
+    const filename = path.split('/').pop() || path;
+    return filename || 'read_file';
+  } else if (toolNameLower.includes('write') || toolNameLower.includes('create_file')) {
+    const path = typeof argObj === 'object' && argObj.file_path 
+      ? String(argObj.file_path) 
+      : (typeof argObj === 'object' && argObj.path ? String(argObj.path) : '');
+    const filename = path.split('/').pop() || path;
+    return filename || 'create_file';
+  } else if (toolNameLower.includes('delete_file')) {
+    const path = typeof argObj === 'object' && argObj.file_path ? String(argObj.file_path) : '';
+    const filename = path.split('/').pop() || path;
+    return filename || 'delete_file';
+  } else if (toolNameLower.includes('grep_search')) {
+    const query = typeof argObj === 'object' && argObj.query ? String(argObj.query) : '';
+    return query || 'grep_search';
+  } else if (toolNameLower.includes('file_search')) {
+    const query = typeof argObj === 'object' && argObj.query ? String(argObj.query) : '';
+    return query || 'file_search';
+  } else if (toolNameLower.includes('list_dir')) {
+    const path = typeof argObj === 'object' && argObj.relative_workspace_path ? String(argObj.relative_workspace_path) : '';
+    return path || 'list_dir';
+  } else if (toolNameLower.includes('str_replace')) {
+    const path = typeof argObj === 'object' && argObj.file_path ? String(argObj.file_path) : '';
+    const filename = path.split('/').pop() || path;
+    return filename || 'str_replace';
+  } else if (toolNameLower.includes('message_ask_user')) {
+    return 'message_ask_user';
+  } else if (toolNameLower.includes('idle')) {
+    return 'idle';
+  } else {
+    // Just return a cleaned up version of the tool name
+    return toolName.replace(/_/g, ' ');
+  }
+};
 
 export default function ThreadPage({ params }: { params: Promise<ThreadParams> }) {
   const unwrappedParams = React.use(params);
@@ -239,7 +315,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               if (jsonData?.type === 'content' && jsonData?.tool_call) {
                 console.log('[PAGE] Processing prefixed tool call chunk:', jsonData.tool_call);
                 
-                const { id, function: toolFunction, type, index } = jsonData.tool_call;
+                const { id, function: toolFunction } = jsonData.tool_call;
                 
                 // Update tool call data - accumulate arguments
                 setToolCallData(prev => ({
@@ -247,8 +323,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                   name: toolFunction?.name,
                   arguments: prev && prev.id === id ? 
                     (prev.arguments || '') + (toolFunction?.arguments || '') : 
-                    toolFunction?.arguments,
-                  index
+                    toolFunction?.arguments
                 }));
                 
                 // Don't update streamContent directly for tool calls
@@ -345,7 +420,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
             if (jsonData?.type === 'content' && jsonData?.tool_call) {
               console.log('[PAGE] Processing tool call chunk:', jsonData.tool_call);
               
-              const { id, function: toolFunction, type, index } = jsonData.tool_call;
+              const { id, function: toolFunction } = jsonData.tool_call;
               
               // Update tool call data - accumulate arguments
               setToolCallData(prev => ({
@@ -353,8 +428,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                 name: toolFunction?.name,
                 arguments: prev && prev.id === id ? 
                   (prev.arguments || '') + (toolFunction?.arguments || '') : 
-                  toolFunction?.arguments,
-                index
+                  toolFunction?.arguments
               }));
               
               // Don't update streamContent directly for tool calls
@@ -581,7 +655,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       scrollToBottom();
       
       // Send to the API and start agent in parallel
-      const [messageResult, agentResult] = await Promise.all([
+      const [, agentResult] = await Promise.all([
         addUserMessage(threadId, userMessage.content),
         startAgent(threadId)
       ]);
@@ -1180,14 +1254,19 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                         >
                           {message.type === 'tool_call' ? (
                             <div className="font-mono text-xs">
-                              <div className="flex items-center gap-2 mb-1 text-muted-foreground">
-                                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10">
-                                  <div className="h-2 w-2 rounded-full bg-primary"></div>
+                              <div className="mt-1 p-3 bg-secondary/20 rounded-md overflow-hidden">
+                                {/* Action line with icon */}
+                                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200/30 text-muted-foreground">
+                                  <div className="flex items-center justify-center">
+                                    {getToolIcon(message.name)}
+                                  </div>
+                                  <span>{getToolDescription(message.name, message.arguments)}</span>
                                 </div>
-                                <span>Tool: {message.name}</span>
-                              </div>
-                              <div className="mt-1 p-3 bg-secondary/20 rounded-md overflow-x-auto">
-                                {message.arguments}
+
+                                {/* Arguments */}
+                                <div className="overflow-x-auto">
+                                  {message.arguments}
+                                </div>
                               </div>
                             </div>
                           ) : message.role === 'tool' ? (
@@ -1271,15 +1350,38 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                       <div className="whitespace-pre-wrap break-words">
                         {toolCallData ? (
                           <div className="font-mono text-xs">
-                            <div className="flex items-center gap-2 mb-1 text-muted-foreground">
-                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10">
-                                <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
+                            <div className="mt-1 p-3 bg-secondary/0 rounded-md overflow-hidden relative border border-zinc-100">
+                              {/* Metallic pulse overlay */}
+                              <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
+                                <div 
+                                  className="h-full w-40 absolute top-0 left-0" 
+                                  style={{ 
+                                    animation: 'toolPulse 3s linear infinite',
+                                    background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%)',
+                                    mixBlendMode: 'overlay',
+                                    zIndex: 20
+                                  }}
+                                />
                               </div>
-                              <span>Tool: {toolCallData.name}</span>
+                              
+                              {/* Tool execution status with clear indication of what's running */}
+                              <div className="flex items-center gap-2 text-sm">
+                                <div className="flex items-center">
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary mr-2" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="font-normal text-zinc-500">{toolCallData.name || "Executing tool"}</span>
+                                  <span className="text-muted-foreground">{getToolDescription(toolCallData.name, toolCallData.arguments)}</span>
+                                </div>
+                              </div>
                             </div>
-                            <div className="mt-1 p-3 bg-secondary/20 rounded-md overflow-x-auto">
-                              {toolCallData.arguments || ''}
-                            </div>
+                            
+                            <style jsx global>{`
+                              @keyframes toolPulse {
+                                0% { transform: translateX(-100%); }
+                                100% { transform: translateX(400%); }
+                              }
+                            `}</style>
                           </div>
                         ) : (
                           streamContent

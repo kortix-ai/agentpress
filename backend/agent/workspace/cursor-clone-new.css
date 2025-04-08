@@ -1,0 +1,148 @@
+/* Base styles */
+body {
+    margin: 0;
+    padding: 20px;
+    background: #1a1a1a;
+    color: #ffffff;
+    font-family: Arial, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* Demo content styles */
+.demo-content {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.interactive-elements {
+    margin: 40px 0;
+    display: flex;
+    gap: 20px;
+}
+
+.btn {
+    padding: 10px 20px;
+    background: #4ecdc4;
+    border: none;
+    border-radius: 5px;
+    color: white;
+    cursor: none;
+}
+
+.link {
+    color: #ff6b6b;
+    text-decoration: none;
+    padding: 10px;
+}
+
+.demo-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-top: 40px;
+}
+
+.card {
+    background: #2a2a2a;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+/* Cursor styles */
+.cursor-main {
+    width: 20px;
+    height: 20px;
+    background: rgba(255, 107, 107, 0.2);
+    border: 2px solid #ff6b6b;
+    border-radius: 50%;
+    position: fixed;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    transition: width 0.2s, height 0.2s, background 0.2s;
+    z-index: 9999;
+    mix-blend-mode: difference;
+}
+
+.cursor-clone {
+    width: 40px;
+    height: 40px;
+    background: rgba(78, 205, 196, 0.1);
+    border: 1px solid rgba(78, 205, 196, 0.3);
+    border-radius: 50%;
+    position: fixed;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    transition: width 0.3s, height 0.3s;
+    z-index: 9998;
+}
+
+.cursor-trail {
+    width: 10px;
+    height: 10px;
+    background: rgba(255, 107, 107, 0.1);
+    border-radius: 50%;
+    position: fixed;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    z-index: 9997;
+}
+
+/* Cursor states */
+.cursor-main.hover {
+    width: 30px;
+    height: 30px;
+    background: rgba(78, 205, 196, 0.2);
+    border-color: #4ecdc4;
+}
+
+.cursor-clone.hover {
+    width: 60px;
+    height: 60px;
+    border-color: rgba(78, 205, 196, 0.5);
+}
+
+.cursor-main.click {
+    width: 15px;
+    height: 15px;
+    background: rgba(255, 107, 107, 0.4);
+    transition: all 0.1s;
+}
+
+.cursor-clone.click {
+    width: 30px;
+    height: 30px;
+    transition: all 0.1s;
+}
+
+.cursor-main.text {
+    width: 3px;
+    height: 25px;
+    background: #ff6b6b;
+    border: none;
+    border-radius: 0;
+}
+
+/* Hide default cursor */
+* {
+    cursor: none !important;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .cursor-main,
+    .cursor-clone,
+    .cursor-trail {
+        display: none;
+    }
+    
+    * {
+        cursor: auto !important;
+    }
+    
+    .demo-cards {
+        grid-template-columns: 1fr;
+    }
+}

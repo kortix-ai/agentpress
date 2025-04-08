@@ -1,0 +1,107 @@
+/* Base cursor styles */
+.cursor-main,
+.cursor-clone,
+.cursor-trail {
+    position: fixed;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    transition: width 0.2s, height 0.2s, background 0.2s, opacity 0.3s;
+    will-change: transform;
+}
+
+/* Main cursor */
+.cursor-main {
+    width: 20px;
+    height: 20px;
+    background: rgba(255, 107, 107, 0.2);
+    border: 2px solid #ff6b6b;
+    border-radius: 50%;
+    mix-blend-mode: difference;
+}
+
+/* Clone cursor */
+.cursor-clone {
+    width: 40px;
+    height: 40px;
+    background: rgba(78, 205, 196, 0.1);
+    border: 1px solid rgba(78, 205, 196, 0.4);
+    border-radius: 50%;
+}
+
+/* Trail effect */
+.cursor-trail {
+    width: 8px;
+    height: 8px;
+    background: rgba(255, 107, 107, 0.1);
+    border-radius: 50%;
+    mix-blend-mode: difference;
+}
+
+/* Interactive states */
+.cursor-main.hover,
+.cursor-clone.hover {
+    width: 40px;
+    height: 40px;
+    background: rgba(78, 205, 196, 0.2);
+    border-color: #4ecdc4;
+}
+
+.cursor-main.click,
+.cursor-clone.click {
+    width: 15px;
+    height: 15px;
+    background: rgba(255, 107, 107, 0.5);
+    transition: all 0.1s ease;
+}
+
+/* Text input state */
+.cursor-main.text {
+    width: 3px;
+    height: 25px;
+    background: #ff6b6b;
+    border: none;
+    border-radius: 0;
+}
+
+.cursor-clone.text {
+    opacity: 0;
+}
+
+/* Hide default cursor */
+* {
+    cursor: none !important;
+}
+
+/* Interactive elements hover state */
+a:hover,
+button:hover,
+[data-cursor="interactive"]:hover {
+    cursor: none;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .cursor-main,
+    .cursor-clone,
+    .cursor-trail {
+        display: none;
+    }
+    
+    * {
+        cursor: auto !important;
+    }
+}
+
+/* Smooth transitions */
+@media (prefers-reduced-motion: no-preference) {
+    .cursor-main,
+    .cursor-clone,
+    .cursor-trail {
+        transition: width 0.2s ease-out,
+                    height 0.2s ease-out,
+                    background-color 0.2s ease-out,
+                    border-color 0.2s ease-out,
+                    opacity 0.2s ease-out;
+    }
+}
