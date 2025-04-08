@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semiconductor Waveform Viewer</title>
+    <style>
+        :root {
+            --primary-color: #2196F3;
+            --grid-color: #2c3e50;
+            --background: #1a1a1a;
+            --text-color: #ecf0f1;
+            --control-bg: #34495e;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: var(--background);
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .waveform-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 300px;
+            display: block;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            background: var(--control-bg);
+            padding: 15px;
+            border-radius: 6px;
+        }
+
+        .control-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 1em;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        select, input[type="range"], input[type="number"] {
+            width: 100%;
+            margin-bottom: 10px;
+            background: var(--background);
+            color: var(--text-color);
+            border: 1px solid #456;
+            border-radius: 4px;
+            padding: 5px;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 8px;
+            background: #456;
+            border-radius: 4px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .measurement-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .cursor-info {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 5px;
+            border-radius: 3px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="waveform-container">
+            <div class="canvas-wrapper">
+                <canvas id="waveformCanvas"></canvas>
+                <div class="measurement-overlay" id="measurements"></div>
+                <div class="cursor-info" id="cursorInfo"></div>
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <h3>Waveform Type</h3>
+                    <select id="waveformType">
+                        <option value="voltage">Voltage</option>
+                        <option value="current">Current</option>
+                        <option value="digital">Digital Signal</option>
+                        <option value="pwm">PWM</option>
+                        <option value="mosfet">MOSFET Characteristics</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <h3>Time Scale</h3>
+                    <input type="range" id="timeScale" min="0.1" max="10" step="0.1" value="1">
+                    <label>Time/div: <span id="timeScaleValue">1</span> ms</label>
+                </div>
+
+                <div class="control-group">
+                    <h3>Amplitude</h3>
+                    <input type="range" id="amplitude" min="0.1" max="5" step="0.1" value="1">
+                    <label>V/div: <span id="amplitudeValue">1</span> V</label>
+                </div>
+
+                <div class="control-group">
+                    <h3>Frequency</h3>
+                    <input type="range" id="frequency" min="1" max="1000" value="100">
+                    <label>Freq: <span id="frequencyValue">100</span> Hz</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('waveformCanvas');
+        const ctx = canvas.getContext('2d');
+        const measurements = document.getElementById('measurements');
+        const cursorInfo = document.getElementById('cursorInfo');
+
+        // Controls
+        const waveformType = document.getElementById('waveformType');
+        const timeScale = document.getElementById('timeScale');
+        const amplitude = document.getElementById('amplitude');
+        const frequency = document.getElementById('frequency');
+
+        // Display values
+        const timeScaleValue = document.getElementById('timeScaleValue');
+        const amplitudeValue = document.getElementById('amplitudeValue');
+        const frequencyValue = document.getElementById('frequencyValue');
+
+        let animationId;
+        let time = 0;
+        let mouseX = 0;
+        let mouseY = 0;
+
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+
+        function drawGrid() {
+            const gridSize = 50;
+            ctx.strokeStyle = var(--grid-color);
+            ctx.lineWidth = 0.5;
+
+            // Vertical lines
+            for (let x = 0; x <= canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+
+            // Horizontal lines
+            for (let y = 0; y <= canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        function drawVoltageWaveform(t) {
+            const freq = parseFloat(frequency.value);
+            const amp = parseFloat(amplitude.value);
+            const timeScaleFactor = parseFloat(timeScale.value);
+            
+            ctx.beginPath();
+            ctx.strokeStyle = '#2196F3';
+            ctx.lineWidth = 2;
+
+            for (let x = 0; x < canvas.width; x++) {
+                const time = (x / canvas.width) * (2 * Math.PI) * freq * timeScaleFactor;
+                const y = (canvas.height / 2) + Math.sin(time + t) * (canvas.height / 4) * amp;
+                
+                if (x === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+        }
+
+        function drawCurrentWaveform(t) {
+            const freq = parseFloat(frequency.value);
+            const amp = parseFloat(amplitude.value);
+            const timeScaleFactor = parseFloat(timeScale.value);
+            
+            ctx.beginPath();
+            ctx.strokeStyle = '#4CAF50';
+            ctx.lineWidth = 2;
+
+            for (let x = 0; x < canvas.width; x++) {
+                const time = (x / canvas.width) * (2 * Math.PI) * freq * timeScaleFactor;
+                const y = (canvas.height / 2) + 
+                    (Math.sin(time + t) * 0.8 + Math.sin(3 * (time + t)) * 0.2) * 
+                    (canvas.height / 4) * amp;
+                
+                if (x === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+        }
+
+        function drawDigitalSignal(t) {
+            const freq = parseFloat(frequency.value);
+            const amp = parseFloat(amplitude.value);
+            const timeScaleFactor = parseFloat(timeScale.value);
+            
+            ctx.beginPath();
+            ctx.strokeStyle = '#FF5722';
+            ctx.lineWidth = 2;
+
+            let lastY = canvas.height * 0.25;
+            
+            for (let x = 0; x < canvas.width; x++) {
+                const time = (x / canvas.width) * freq * timeScaleFactor;
+                const value = Math.floor(time + t) % 2;
+                const y = value === 0 ? canvas.height * 0.75 : canvas.height * 0.25;
+                
+                ctx.lineTo(x, lastY);
+                ctx.lineTo(x, y);
+                lastY = y;
+            }
+            ctx.stroke();
+        }
+
+        function updateMeasurements() {
+            const freq = parseFloat(frequency.value);
+            const period = 1000 / freq;
+            const amp = parseFloat(amplitude.value);
+            
+            measurements.innerHTML = `
+                Frequency: ${freq.toFixed(1)} Hz<br>
+                Period: ${period.toFixed(2)} ms<br>
+                Amplitude: ${amp.toFixed(2)} V<br>
+                Time/div: ${timeScale.value} ms
+            `;
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGrid();
+
+            switch(waveformType.value) {
+                case 'voltage':
+                    drawVoltageWaveform(time);
+                    break;
+                case 'current':
+                    drawCurrentWaveform(time);
+                    break;
+                case 'digital':
+                    drawDigitalSignal(time);
+                    break;
+            }
+
+            time += 0.01;
+            updateMeasurements();
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // Event Listeners
+        window.addEventListener('resize', resizeCanvas);
+        
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+
+            cursorInfo.style.display = 'block';
+            cursorInfo.style.left = (mouseX + 10) + 'px';
+            cursorInfo.style.top = (mouseY + 10) + 'px';
+            
+            const timeValue = (mouseX / canvas.width) * parseFloat(timeScale.value) * 10;
+            const voltageValue = ((canvas.height / 2 - mouseY) / (canvas.height / 4)) * parseFloat(amplitude.value);
+            
+            cursorInfo.textContent = `
+                Time: ${timeValue.toFixed(2)} ms
+                Value: ${voltageValue.toFixed(2)} V
+            `;
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            cursorInfo.style.display = 'none';
+        });
+
+        // Control event listeners
+        timeScale.addEventListener('input', () => {
+            timeScaleValue.textContent = timeScale.value;
+        });
+
+        amplitude.addEventListener('input', () => {
+            amplitudeValue.textContent = amplitude.value;
+        });
+
+        frequency.addEventListener('input', () => {
+            frequencyValue.textContent = frequency.value;
+        });
+
+        // Initialize
+        resizeCanvas();
+        animate();
+    </script>
+</body>
+</html>
