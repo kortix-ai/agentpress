@@ -1,28 +1,33 @@
-class CustomCursor {
+class CursorClone {
     constructor() {
         // Create main cursor
         this.cursor = document.createElement('div');
-        this.cursor.className = 'cursor';
+        this.cursor.className = 'cursor-main';
         document.body.appendChild(this.cursor);
 
-        // Initialize trail elements
+        // Create cursor clone
+        this.cursorClone = document.createElement('div');
+        this.cursorClone.className = 'cursor-clone';
+        document.body.appendChild(this.cursorClone);
+
+        // Create trails
         this.trails = [];
         this.trailCount = 5;
         this.createTrails();
 
-        // Mouse position
+        // Initialize positions
         this.mouseX = 0;
         this.mouseY = 0;
         this.cursorX = 0;
         this.cursorY = 0;
+        this.cloneX = 0;
+        this.cloneY = 0;
 
-        // Smoothing factor (1 = no smoothing, higher = more smoothing)
+        // Settings
         this.smoothing = 8;
-
-        // Interactive elements
-        this.hoverElements = 'a, button, .btn, [data-cursor="pointer"]';
-        this.textElements = 'input, textarea, [contenteditable="true"]';
-
+        this.cloneDelay = 100;
+        this.cloneDistance = 20;
+        
         this.init();
     }
 
@@ -42,41 +47,41 @@ class CustomCursor {
     }
 
     init() {
-        // Mouse move event
+        // Mouse movement
         document.addEventListener('mousemove', (e) => {
             this.mouseX = e.clientX;
             this.mouseY = e.clientY;
         });
 
-        // Click animation
+        // Click effects
         document.addEventListener('mousedown', () => {
             this.cursor.classList.add('click');
+            this.cursorClone.classList.add('click');
         });
 
         document.addEventListener('mouseup', () => {
             this.cursor.classList.remove('click');
+            this.cursorClone.classList.remove('click');
         });
 
         // Hover effects
+        const interactiveElements = 'a, button, input, textarea, [data-cursor="interactive"]';
+        
         document.addEventListener('mouseover', (e) => {
-            if (e.target.matches(this.hoverElements)) {
+            if (e.target.matches(interactiveElements)) {
                 this.cursor.classList.add('hover');
-            }
-            if (e.target.matches(this.textElements)) {
-                this.cursor.classList.add('text');
+                this.cursorClone.classList.add('hover');
             }
         });
 
         document.addEventListener('mouseout', (e) => {
-            if (e.target.matches(this.hoverElements)) {
+            if (e.target.matches(interactiveElements)) {
                 this.cursor.classList.remove('hover');
-            }
-            if (e.target.matches(this.textElements)) {
-                this.cursor.classList.remove('text');
+                this.cursorClone.classList.remove('hover');
             }
         });
 
-        // Start animation loop
+        // Start animation
         this.animate();
     }
 
@@ -85,40 +90,34 @@ class CustomCursor {
         this.cursorX += (this.mouseX - this.cursorX) / this.smoothing;
         this.cursorY += (this.mouseY - this.cursorY) / this.smoothing;
 
-        // Update main cursor position
-        this.cursor.style.transform = `translate(${this.cursorX}px, ${this.cursorY}px)`;
+        // Clone follows with delay
+        const angle = Math.atan2(this.mouseY - this.cursorY, this.mouseX - this.cursorX);
+        const targetCloneX = this.cursorX + Math.cos(angle) * this.cloneDistance;
+        const targetCloneY = this.cursorY + Math.sin(angle) * this.cloneDistance;
 
-        // Update trail positions with delay
+        this.cloneX += (targetCloneX - this.cloneX) / (this.smoothing * 1.5);
+        this.cloneY += (targetCloneY - this.cloneY) / (this.smoothing * 1.5);
+
+        // Update positions
+        this.cursor.style.transform = `translate(${this.cursorX}px, ${this.cursorY}px)`;
+        this.cursorClone.style.transform = `translate(${this.cloneX}px, ${this.cloneY}px)`;
+
+        // Update trails
         this.trails.forEach((trail, index) => {
-            trail.x += (this.mouseX - trail.x) / (this.smoothing + trail.delay);
-            trail.y += (this.mouseY - trail.y) / (this.smoothing + trail.delay);
+            const trailX = this.cursorX + (this.cloneX - this.cursorX) * (index / this.trailCount);
+            const trailY = this.cursorY + (this.cloneY - this.cursorY) * (index / this.trailCount);
+            
+            trail.x += (trailX - trail.x) / (this.smoothing + trail.delay);
+            trail.y += (trailY - trail.y) / (this.smoothing + trail.delay);
+            
             trail.element.style.transform = `translate(${trail.x}px, ${trail.y}px)`;
         });
 
-        // Continue animation loop
         requestAnimationFrame(() => this.animate());
-    }
-
-    // Method to add custom hover effect for specific elements
-    addCustomHover(selector, className) {
-        document.addEventListener('mouseover', (e) => {
-            if (e.target.matches(selector)) {
-                this.cursor.classList.add(className);
-            }
-        });
-
-        document.addEventListener('mouseout', (e) => {
-            if (e.target.matches(selector)) {
-                this.cursor.classList.remove(className);
-            }
-        });
     }
 }
 
-// Initialize cursor when DOM is loaded
+// Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    const cursor = new CustomCursor();
-
-    // Example of adding custom hover effect
-    cursor.addCustomHover('.special-element', 'special-hover');
+    new CursorClone();
 });

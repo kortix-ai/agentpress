@@ -1,33 +1,32 @@
 /* Main cursor */
-.cursor {
+.custom-cursor {
     width: 20px;
     height: 20px;
-    background: rgba(255, 107, 107, 0.2);
+    background: rgba(255, 107, 107, 0.3);
     border: 2px solid #ff6b6b;
     border-radius: 50%;
     position: fixed;
     pointer-events: none;
     transform: translate(-50%, -50%);
-    transition: width 0.3s, height 0.3s, background-color 0.3s;
+    transition: width 0.2s, height 0.2s, background 0.2s;
     z-index: 9999;
-    mix-blend-mode: difference;
 }
 
-/* Cursor trail effect */
+/* Trailing cursor effect */
 .cursor-trail {
-    width: 8px;
-    height: 8px;
-    background: rgba(255, 107, 107, 0.15);
+    width: 10px;
+    height: 10px;
+    background: rgba(255, 107, 107, 0.2);
     border-radius: 50%;
     position: fixed;
     pointer-events: none;
     transform: translate(-50%, -50%);
-    transition: opacity 0.5s ease;
+    transition: opacity 0.5s;
     z-index: 9998;
 }
 
-/* Interactive states */
-.cursor.hover {
+/* Hover effects */
+.custom-cursor.hover {
     width: 40px;
     height: 40px;
     background: rgba(78, 205, 196, 0.2);
@@ -35,18 +34,11 @@
     mix-blend-mode: difference;
 }
 
-.cursor.click {
-    width: 16px;
-    height: 16px;
-    background: rgba(255, 107, 107, 0.4);
-    transition: all 0.1s ease;
-}
-
-.cursor.text {
-    width: 3px;
-    height: 24px;
-    background: #ff6b6b;
-    border: none;
+.custom-cursor.click {
+    width: 10px;
+    height: 10px;
+    background: rgba(255, 107, 107, 0.8);
+    transition: all 0.1s;
 }
 
 /* Hide default cursor */
@@ -56,7 +48,7 @@
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-    .cursor,
+    .custom-cursor,
     .cursor-trail {
         display: none;
     }
