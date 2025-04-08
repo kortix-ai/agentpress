@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Angry Birds Clone</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #87CEEB;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: linear-gradient(#87CEEB, #90EE90);
+        }
+        #score {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-family: Arial, sans-serif;
+            color: white;
+            text-shadow: 2px 2px 2px rgba(0,0,0,0.5);
+        }
+        #restart {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="score">Score: 0</div>
+    <button id="restart">Restart Game</button>
+    <script>
+        class AngryBirdsGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.scoreElement = document.getElementById('score');
+                this.restartButton = document.getElementById('restart');
+                
+                this.canvas.width = 800;
+                this.canvas.height = 600;
+                
+                this.score = 0;
+                this.gameOver = false;
+                
+                // Slingshot properties
+                this.slingshot = {
+                    x: 150,
+                    y: 400,
+                    radius: 5
+                };
+                
+                // Bird properties
+                this.bird = {
+                    x: this.slingshot.x,
+                    y: this.slingshot.y,
+                    radius: 15,
+                    velocityX: 0,
+                    velocityY: 0,
+                    dragging: false,
+                    launched: false
+                };
+                
+                // Physics properties
+                this.gravity = 0.5;
+                this.elasticity = 0.7;
+                this.dragStrength = 0.05;
+                
+                // Targets (blocks)
+                this.targets = this.createTargets();
+                
+                this.setupEventListeners();
+                this.gameLoop();
+            }
+            
+            createTargets() {
+                const targets = [];
+                // Create some random targets
+                for (let i = 0; i < 5; i++) {
+                    targets.push({
+                        x: 600 + Math.random() * 100,
+                        y: 300 + i * 50,
+                        width: 40,
+                        height: 40,
+                        hit: false
+                    });
+                }
+                return targets;
+            }
+            
+            setupEventListeners() {
+                this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+                this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
+                this.restartButton.addEventListener('click', () => this.restartGame());
+            }
+            
+            handleMouseDown(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                const distance = Math.sqrt(
+                    Math.pow(mouseX - this.bird.x, 2) + 
+                    Math.pow(mouseY - this.bird.y, 2)
+                );
+                
+                if (distance < this.bird.radius && !this.bird.launched) {
+                    this.bird.dragging = true;
+                }
+            }
+            
+            handleMouseMove(e) {
+                if (this.bird.dragging) {
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.bird.x = e.clientX - rect.left;
+                    this.bird.y = e.clientY - rect.top;
+                    
+                    // Limit drag distance
+                    const dx = this.bird.x - this.slingshot.x;
+                    const dy = this.bird.y - this.slingshot.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance > 100) {
+                        const angle = Math.atan2(dy, dx);
+                        this.bird.x = this.slingshot.x + Math.cos(angle) * 100;
+                        this.bird.y = this.slingshot.y + Math.sin(angle) * 100;
+                    }
+                }
+            }
+            
+            handleMouseUp() {
+                if (this.bird.dragging) {
+                    this.bird.dragging = false;
+                    this.bird.launched = true;
+                    
+                    // Calculate launch velocity based on distance from slingshot
+                    const dx = this.slingshot.x - this.bird.x;
+                    const dy = this.slingshot.y - this.bird.y;
+                    this.bird.velocityX = dx * this.dragStrength;
+                    this.bird.velocityY = dy * this.dragStrength;
+                }
+            }
+            
+            update() {
+                if (this.bird.launched && !this.bird.dragging) {
+                    // Apply physics
+                    this.bird.velocityY += this.gravity;
+                    this.bird.x += this.bird.velocityX;
+                    this.bird.y += this.bird.velocityY;
+                    
+                    // Check collisions with targets
+                    this.targets.forEach(target => {
+                        if (!target.hit && this.checkCollision(this.bird, target)) {
+                            target.hit = true;
+                            this.score += 100;
+                            this.scoreElement.textContent = `Score: ${this.score}`;
+                        }
+                    });
+                    
+                    // Check if bird is out of bounds
+                    if (this.bird.y > this.canvas.height || 
+                        this.bird.x > this.canvas.width || 
+                        this.bird.x < 0) {
+                        this.resetBird();
+                    }
+                }
+                
+                // Check if game is over
+                if (!this.gameOver && this.targets.every(target => target.hit)) {
+                    this.gameOver = true;
+                    this.restartButton.style.display = 'block';
+                }
+            }
+            
+            checkCollision(bird, target) {
+                return bird.x + bird.radius > target.x &&
+                       bird.x - bird.radius < target.x + target.width &&
+                       bird.y + bird.radius > target.y &&
+                       bird.y - bird.radius < target.y + target.height;
+            }
+            
+            resetBird() {
+                this.bird.x = this.slingshot.x;
+                this.bird.y = this.slingshot.y;
+                this.bird.velocityX = 0;
+                this.bird.velocityY = 0;
+                this.bird.launched = false;
+            }
+            
+            draw() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Draw ground
+                this.ctx.fillStyle = '#90EE90';
+                this.ctx.fillRect(0, 450, this.canvas.width, 150);
+                
+                // Draw slingshot
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.slingshot.x, this.slingshot.y);
+                this.ctx.lineTo(this.bird.x, this.bird.y);
+                this.ctx.strokeStyle = '#800000';
+                this.ctx.lineWidth = 5;
+                this.ctx.stroke();
+                
+                // Draw bird
+                this.ctx.beginPath();
+                this.ctx.arc(this.bird.x, this.bird.y, this.bird.radius, 0, Math.PI * 2);
+                this.ctx.fillStyle = '#FF0000';
+                this.ctx.fill();
+                
+                // Draw targets
+                this.targets.forEach(target => {
+                    this.ctx.fillStyle = target.hit ? '#666666' : '#8B4513';
+                    this.ctx.fillRect(target.x, target.y, target.width, target.height);
+                });
+            }
+            
+            gameLoop() {
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+            
+            restartGame() {
+                this.score = 0;
+                this.scoreElement.textContent = 'Score: 0';
+                this.targets = this.createTargets();
+                this.resetBird();
+                this.gameOver = false;
+                this.restartButton.style.display = 'none';
+            }
+        }
+        
+        // Start the game
+        new AngryBirdsGame();
+    </script>
+</body>
+</html>

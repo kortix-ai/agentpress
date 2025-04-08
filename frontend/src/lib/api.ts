@@ -93,6 +93,19 @@ export type Thread = {
 export type Message = {
   role: string;
   content: string;
+  type?: string;
+  name?: string;
+  arguments?: string;
+  tool_call?: {
+    id: string;
+    function: {
+      name: string;
+      arguments: string;
+    };
+    type: string;
+    index: number;
+  };
+  created_at?: string;
 }
 
 export type AgentRun = {
@@ -364,13 +377,17 @@ export const getMessages = async (threadId: string, hideToolMsgs: boolean = fals
           : msg.content;
           
         // Return in the format the app expects
-        return content;
+        return {
+          ...content,
+          created_at: msg.created_at
+        };
       } catch (e) {
         console.error('Error parsing message content:', e, msg);
         // Fallback for malformed messages
         return {
           role: msg.is_llm_message ? 'assistant' : 'user',
-          content: 'Error: Could not parse message content'
+          content: 'Error: Could not parse message content',
+          created_at: msg.created_at
         };
       }
     });

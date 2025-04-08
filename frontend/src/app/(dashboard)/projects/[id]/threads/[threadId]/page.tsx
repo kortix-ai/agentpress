@@ -17,7 +17,7 @@ interface ApiMessage {
   id?: string;
   role: string;
   content: string;
-  type?: 'content' | 'tool_call';
+  type?: 'content' | 'tool_call' | string;
   name?: string;
   arguments?: string;
   tool_call?: {
@@ -29,6 +29,7 @@ interface ApiMessage {
     type: string;
     index: number;
   };
+  created_at?: string;
 }
 
 interface ApiAgentRun {
@@ -1093,20 +1094,34 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                         latestMessageRef.current = el;
                       }
                     }}
-                    className={`flex message-container ${message.role === 'user' ? 'justify-end' : 'justify-start'} relative ${editingMessageIndex !== null && index > editingMessageIndex ? 'z-0' : 'z-20'}`}
+                    className={`flex flex-col message-container ${message.role === 'user' ? 'justify-end items-end' : 'justify-start'} relative ${editingMessageIndex !== null && index > editingMessageIndex ? 'z-0' : 'z-20'} ${message.role === 'user' ? 'group' : ''}`}
                   >
+                    {/* Add timestamp above for user messages - only visible on hover */}
+                    {message.role === 'user' && message.created_at && (
+                      <div className="text-xs text-zinc-400 mb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        {new Date(message.created_at).toLocaleString()}
+                      </div>
+                    )}
+                    
                     <div 
                       className={`${message.role === 'user' ? 'max-w-[85%]' : 'max-w-full'} rounded-md px-4 py-3 text-sm ${
                         message.role === 'user' 
                           ? 'bg-zinc-50 text-zinc-800 border border-zinc-100 relative mb-10' 
                           : ''
-                      } ${message.role === 'user' ? 'group hover:ring-2 hover:ring-zinc-200 transition-all duration-200' : 'group'}`}
+                      } ${message.role === 'user' ? 'hover:ring-2 hover:ring-zinc-200 transition-all duration-200' : 'group'}`}
                       onMouseEnter={() => {
                         if (message.role === 'user') {
                           console.log('Hovering over user message:', message.content);
                         }
                       }}
                     >
+                      {/* Keep timestamp inside for system messages, but not for user messages */}
+                      {message.created_at && message.role !== 'user' && (
+                        <div className="text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex justify-end mt-2">
+                          {new Date(message.created_at).toLocaleString()}
+                        </div>
+                      )}
+                      
                       {message.role === 'user' && (
                         <button 
                           onClick={(e) => {
