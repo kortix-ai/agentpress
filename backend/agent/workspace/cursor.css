@@ -1,0 +1,22 @@
+.cursor {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #ff6b6b;
+    border-radius: 50%;
+    position: fixed;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    transition: all 0.1s ease;
+    z-index: 9999;
+}
+
+.cursor.grow {
+    transform: translate(-50%, -50%) scale(2);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #4ecdc4;
+}
+
+/* Hide default cursor */
+* {
+    cursor: none;
+}

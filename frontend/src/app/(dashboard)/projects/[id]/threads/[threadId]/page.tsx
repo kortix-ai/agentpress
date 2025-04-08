@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, CheckCircle, Copy } from 'lucide-react';
 import { addUserMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
 import { toast } from 'sonner';
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +14,7 @@ import { ChatInput } from '@/components/chat-input';
 type ThreadParams = { id: string; threadId: string };
 
 interface ApiMessage {
+  id?: string;
   role: string;
   content: string;
   type?: 'content' | 'tool_call';
@@ -57,6 +58,11 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState('');
   const [toolCallData, setToolCallData] = useState<{id?: string, name?: string, arguments?: string, index?: number} | null>(null);
+  const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
+  const [editedContent, setEditedContent] = useState<string>('');
+  const editRef = useRef<HTMLTextAreaElement>(null);
+  const messageRefs = useRef<{[key: number]: HTMLDivElement | null}>({});
+  const [overlayTop, setOverlayTop] = useState<number | null>(null);
   
   const streamCleanupRef = useRef<(() => void) | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -70,6 +76,8 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const [buttonOpacity, setButtonOpacity] = useState(0);
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const hasInitiallyScrolled = useRef<boolean>(false);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleStreamAgent = useCallback(async (runId: string) => {
     // Clean up any existing stream
@@ -670,20 +678,45 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     return () => window.removeEventListener('resize', adjustHeight);
   }, [newMessage]);
 
-  // // Handle keyboard shortcuts
-  // const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-  //   // Send on Enter (without Shift)
-  //   if (e.key === 'Enter' && !e.shiftKey) {
-  //     e.preventDefault();
-      
-  //     if (newMessage.trim() && !isSending && agentStatus !== 'running') {
-  //       handleSubmitMessage(newMessage);
-  //     }
-  //   }
-  // };
+  // Handle keyboard shortcuts for edit mode - with memoized handlers
+  useEffect(() => {
+    // Create memoized versions of the handlers that don't change on re-render
+    const submitEdit = () => handleSubmitEdit();
+    const cancelEdit = () => handleCancelEdit();
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (editingMessageIndex !== null) {
+        // Submit on Ctrl+Enter or Cmd+Enter
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+          e.preventDefault();
+          submitEdit();
+        }
+        
+        // Cancel on Escape
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          cancelEdit();
+        }
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [editingMessageIndex]); // Only depends on whether we're editing
 
-  // Check if user has scrolled up from bottom
-  const handleScroll = () => {
+  // Throttle scroll events for better performance
+  const updateOverlayOnScroll = useCallback(() => {
+    if (editingMessageIndex !== null && messageRefs.current[editingMessageIndex]) {
+      const rect = messageRefs.current[editingMessageIndex]?.getBoundingClientRect();
+      const containerRect = messagesContainerRef.current?.getBoundingClientRect();
+      if (rect && containerRect) {
+        setOverlayTop(rect.bottom - containerRect.top);
+      }
+    }
+  }, [editingMessageIndex]);
+
+  // Optimized scroll handler with throttling
+  const handleScroll = useCallback(() => {
     if (!messagesContainerRef.current) return;
     
     const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
@@ -692,7 +725,40 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     setShowScrollButton(isScrolledUp);
     setButtonOpacity(isScrolledUp ? 1 : 0);
     setUserHasScrolled(isScrolledUp);
-  };
+    
+    // Set scrolling state
+    if (!isScrolling) {
+      setIsScrolling(true);
+    }
+    
+    // Clear any existing timer
+    if (scrollTimerRef.current) {
+      clearTimeout(scrollTimerRef.current);
+    }
+    
+    // Update overlay position during scrolling
+    if (editingMessageIndex !== null) {
+      updateOverlayOnScroll();
+    }
+    
+    // Set timer to detect when scrolling stops
+    scrollTimerRef.current = setTimeout(() => {
+      setIsScrolling(false);
+      // Final position update when scrolling stops
+      if (editingMessageIndex !== null) {
+        updateOverlayOnScroll();
+      }
+    }, 100);
+  }, [editingMessageIndex, isScrolling, updateOverlayOnScroll]);
+
+  // Clean up any scroll timers on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current);
+      }
+    };
+  }, []);
 
   // Scroll to bottom explicitly
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
@@ -799,6 +865,96 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     }
   }, [isStreaming, agentRunId, agentStatus]);
 
+  const handleEditMessage = (index: number) => {
+    // Only allow editing user messages
+    if (messages[index].role === 'user') {
+      setEditingMessageIndex(index);
+      setEditedContent(messages[index].content);
+      
+      // Set overlay position based on the bottom of the message
+      if (messageRefs.current[index]) {
+        const rect = messageRefs.current[index]?.getBoundingClientRect();
+        const containerRect = messagesContainerRef.current?.getBoundingClientRect();
+        if (rect && containerRect) {
+          setOverlayTop(rect.bottom - containerRect.top);
+        }
+      }
+    }
+  };
+
+  const handleSubmitEdit = async () => {
+    if (editingMessageIndex === null) return;
+    
+    try {
+      // Create updated messages array
+      const updatedMessages = [...messages];
+      updatedMessages[editingMessageIndex] = {
+        ...updatedMessages[editingMessageIndex],
+        content: editedContent
+      };
+      
+      // Update local state
+      setMessages(updatedMessages);
+      
+      // Clear editing state
+      setEditingMessageIndex(null);
+      setEditedContent('');
+      setOverlayTop(null);
+      
+      // Note: Here you would typically call an API to update the message on the server
+      // For example: await updateMessage(threadId, messages[editingMessageIndex].id, editedContent);
+      
+      toast.success('Message updated');
+    } catch (err) {
+      console.error('Error updating message:', err);
+      toast.error('Failed to update message');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageIndex(null);
+    setEditedContent('');
+    setOverlayTop(null);
+  };
+
+  // Focus the edit textarea when editing begins
+  useEffect(() => {
+    if (editingMessageIndex !== null && editRef.current) {
+      editRef.current.focus();
+    }
+  }, [editingMessageIndex]);
+
+  // Handle click outside to exit edit mode
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (editingMessageIndex !== null && 
+          editRef.current && 
+          !editRef.current.contains(e.target as Node) &&
+          !(e.target as Element).closest('.edit-actions')) {
+        handleCancelEdit();
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [editingMessageIndex]);
+
+  // Update overlay position if window is resized
+  useEffect(() => {
+    const updateOverlayPosition = () => {
+      if (editingMessageIndex !== null && messageRefs.current[editingMessageIndex]) {
+        const rect = messageRefs.current[editingMessageIndex]?.getBoundingClientRect();
+        const containerRect = messagesContainerRef.current?.getBoundingClientRect();
+        if (rect && containerRect) {
+          setOverlayTop(rect.bottom - containerRect.top);
+        }
+      }
+    };
+
+    window.addEventListener('resize', updateOverlayPosition);
+    return () => window.removeEventListener('resize', updateOverlayPosition);
+  }, [editingMessageIndex]);
+
   // Only show a full-screen loader on the very first load
   if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {
     return (
@@ -872,6 +1028,18 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
 
   // const projectName = project?.name || 'Loading...';
 
+  const copyToClipboard = (text: string) => {
+    console.log('Copying text:', text);
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        toast.success('Copied to clipboard');
+      })
+      .catch(err => {
+        console.error('Failed to copy text:', err);
+        toast.error('Failed to copy to clipboard');
+      });
+  };
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       {/* <div className="flex items-center justify-between border-b px-6 py-4">
@@ -901,49 +1069,128 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4 relative">
+                {/* Overlay when editing */}
+                {editingMessageIndex !== null && overlayTop !== null && (
+                  <div 
+                    className="absolute left-0 right-0 bottom-0 bg-background/60 z-10 transition-all duration-300"
+                    style={{
+                      top: `${overlayTop}px`
+                    }}
+                    onClick={handleCancelEdit} // Allow clicking the overlay to cancel
+                  />
+                )}
+                
                 {messages.map((message, index) => (
                   <div 
                     key={index} 
-                    ref={index === messages.length - 1 && message.role === 'assistant' ? latestMessageRef : null}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    ref={(el) => {
+                      // Store references to message elements
+                      messageRefs.current[index] = el;
+                      
+                      // Also maintain existing refs
+                      if (index === messages.length - 1 && message.role === 'assistant') {
+                        latestMessageRef.current = el;
+                      }
+                    }}
+                    className={`flex message-container ${message.role === 'user' ? 'justify-end' : 'justify-start'} relative ${editingMessageIndex !== null && index > editingMessageIndex ? 'z-0' : 'z-20'}`}
                   >
                     <div 
                       className={`${message.role === 'user' ? 'max-w-[85%]' : 'max-w-full'} rounded-lg px-4 py-3 text-sm ${
                         message.role === 'user' 
-                          ? 'bg-primary text-primary-foreground' 
+                          ? 'bg-primary text-primary-foreground relative mb-10' 
                           : ''
-                      }`}
+                      } ${message.role === 'user' ? 'group hover:ring-2 hover:ring-primary-foreground/20 transition-all duration-200' : ''}`}
+                      onMouseEnter={() => {
+                        if (message.role === 'user') {
+                          console.log('Hovering over user message:', message.content);
+                        }
+                      }}
                     >
-                      <div className="whitespace-pre-wrap break-words">
-                        {message.type === 'tool_call' ? (
-                          <div className="font-mono text-xs">
-                            <div className="flex items-center gap-2 mb-1 text-muted-foreground">
-                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10">
-                                <div className="h-2 w-2 rounded-full bg-primary"></div>
-                              </div>
-                              <span>Tool: {message.name}</span>
+                      {message.role === 'user' && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering edit
+                            copyToClipboard(message.content);
+                          }}
+                          className="absolute -bottom-8 right-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 py-1.5 px-3 rounded-md z-10 whitespace-nowrap flex items-center"
+                          title="Copy message"
+                        >
+                          <Copy className="h-3.5 w-3.5 text-zinc-500 mr-1" />
+                          <span className="text-xs text-zinc-500">Copy</span>
+                        </button>
+                      )}
+                      {editingMessageIndex === index ? (
+                        <div className="flex flex-col">
+                          <textarea
+                            ref={editRef}
+                            value={editedContent}
+                            onChange={(e) => setEditedContent(e.target.value)}
+                            className="bg-transparent border-none outline-none resize-none w-full text-primary-foreground"
+                            rows={Math.max(3, editedContent.split('\n').length)}
+                            placeholder="Edit your message..."
+                          />
+                          <div className="flex justify-between items-center gap-2 mt-2 pt-2 border-t border-primary-foreground/20 edit-actions">
+                            <div className="text-xs text-primary-foreground/70">
+                              Press Esc to cancel, Ctrl+Enter to submit
                             </div>
-                            <div className="mt-1 p-3 bg-secondary/20 rounded-md overflow-x-auto">
-                              {message.arguments}
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={handleCancelEdit}
+                                className="h-7 px-2 text-xs text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10"
+                              >
+                                Cancel
+                              </Button>
+                              <Button 
+                                size="sm"
+                                onClick={handleSubmitEdit}
+                                className="h-7 px-3 text-xs bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                                disabled={!editedContent.trim()}
+                              >
+                                <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                Update
+                              </Button>
                             </div>
                           </div>
-                        ) : message.role === 'tool' ? (
-                          <div className="font-mono text-xs">
-                            <div className="flex items-center gap-2 mb-1 text-muted-foreground">
-                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-success/10">
-                                <div className="h-2 w-2 rounded-full bg-success"></div>
+                        </div>
+                      ) : (
+                        <div 
+                          className={`whitespace-pre-wrap break-words ${
+                            message.role === 'user' ? 'cursor-pointer relative' : ''
+                          }`} 
+                          onClick={() => message.role === 'user' ? handleEditMessage(index) : null}
+                        >
+                          {message.type === 'tool_call' ? (
+                            <div className="font-mono text-xs">
+                              <div className="flex items-center gap-2 mb-1 text-muted-foreground">
+                                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10">
+                                  <div className="h-2 w-2 rounded-full bg-primary"></div>
+                                </div>
+                                <span>Tool: {message.name}</span>
                               </div>
-                              <span>Tool Result: {message.name}</span>
+                              <div className="mt-1 p-3 bg-secondary/20 rounded-md overflow-x-auto">
+                                {message.arguments}
+                              </div>
                             </div>
-                            <div className="mt-1 p-3 bg-success/5 rounded-md">
-                              {message.content}
+                          ) : message.role === 'tool' ? (
+                            <div className="font-mono text-xs">
+                              <div className="flex items-center gap-2 mb-1 text-muted-foreground">
+                                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-success/10">
+                                  <div className="h-2 w-2 rounded-full bg-success"></div>
+                                </div>
+                                <span>Tool Result: {message.name}</span>
+                              </div>
+                              <div className="mt-1 p-3 bg-success/5 rounded-md">
+                                {message.content}
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          message.content
-                        )}
-                      </div>
+                          ) : (
+                            message.content
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1026,7 +1273,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
           </div>
         </div>
 
-        <div className="absolute inset-x-0 bottom-0 border-t bg-background/80 backdrop-blur-sm">
+        <div className="absolute inset-x-0 bottom-0 border-t bg-background/80 backdrop-blur-sm z-50">
           <div className="mx-auto max-w-3xl px-6 py-4">
             <ChatInput
               value={newMessage}
