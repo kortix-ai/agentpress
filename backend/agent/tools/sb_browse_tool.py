@@ -7,9 +7,8 @@ from utils.logger import logger
 
 
 # TODO: might want to be more granular with the tool names:
-# browser_view - View content of the current browser page. Use for checking the latest state of previously opened pages.
-# browser_navigate - Navigate browser to specified URL. Use when accessing new pages is needed.
-# browser_restart - Restart browser and navigate to specified URL. Use when browser state needs to be reset.
+
+
 # browser_click - Click on elements in the current browser page. Use when clicking page elements is needed.
 # browser_input - Overwrite text in editable elements on the current browser page. Use when filling content in input fields.
 # browser_move_mouse - Move cursor to specified position on the current browser page. Use when simulating user mouse movement.
@@ -17,6 +16,11 @@ from utils.logger import logger
 # browser_select_option - Select specified option from dropdown list element in the current browser page. Use when selecting dropdown menu options.
 # browser_scroll_up - Scroll up the current browser page. Use when viewing content above or returning to page top.
 # browser_scroll_down - Scroll down the current browser page. Use when viewing content below or jumping to page bottom.
+
+
+# browser_view - View content of the current browser page. Use for checking the latest state of previously opened pages.
+# browser_navigate - Navigate browser to specified URL. Use when accessing new pages is needed.
+# browser_restart - Restart browser and navigate to specified URL. Use when browser state needs to be reset.
 # browser_console_exec - Execute JavaScript code in browser console. Use when custom scripts need to be executed.
 # browser_console_view - View browser console output. Use when checking JavaScript logs or debugging page errors.
 
