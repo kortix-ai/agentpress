@@ -1098,9 +1098,9 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                     <div 
                       className={`${message.role === 'user' ? 'max-w-[85%]' : 'max-w-full'} rounded-lg px-4 py-3 text-sm ${
                         message.role === 'user' 
-                          ? 'bg-primary text-primary-foreground relative mb-10' 
+                          ? 'bg-zinc-50 text-zinc-800 border border-zinc-100 relative mb-10' 
                           : ''
-                      } ${message.role === 'user' ? 'group hover:ring-2 hover:ring-primary-foreground/20 transition-all duration-200' : ''}`}
+                      } ${message.role === 'user' ? 'group hover:ring-2 hover:ring-zinc-200 transition-all duration-200' : ''}`}
                       onMouseEnter={() => {
                         if (message.role === 'user') {
                           console.log('Hovering over user message:', message.content);
@@ -1126,12 +1126,12 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                             ref={editRef}
                             value={editedContent}
                             onChange={(e) => setEditedContent(e.target.value)}
-                            className="bg-transparent border-none outline-none resize-none w-full text-primary-foreground"
+                            className="bg-transparent border-none outline-none resize-none w-full text-zinc-800"
                             rows={Math.max(3, editedContent.split('\n').length)}
                             placeholder="Edit your message..."
                           />
-                          <div className="flex justify-between items-center gap-2 mt-2 pt-2 border-t border-primary-foreground/20 edit-actions">
-                            <div className="text-xs text-primary-foreground/70">
+                          <div className="flex justify-between items-center gap-2 mt-2 pt-2 border-t border-zinc-200 edit-actions">
+                            <div className="text-xs text-zinc-500">
                               Press Esc to cancel, Ctrl+Enter to submit
                             </div>
                             <div className="flex items-center gap-1">
@@ -1139,14 +1139,14 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                                 size="sm"
                                 variant="ghost"
                                 onClick={handleCancelEdit}
-                                className="h-7 px-2 text-xs text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10"
+                                className="h-7 px-2 text-xs text-zinc-600 hover:text-zinc-800 hover:bg-zinc-200/50"
                               >
                                 Cancel
                               </Button>
                               <Button 
                                 size="sm"
                                 onClick={handleSubmitEdit}
-                                className="h-7 px-3 text-xs bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                                className="h-7 px-3 text-xs bg-zinc-800 text-white hover:bg-zinc-700"
                                 disabled={!editedContent.trim()}
                               >
                                 <CheckCircle className="h-3.5 w-3.5 mr-1" />
