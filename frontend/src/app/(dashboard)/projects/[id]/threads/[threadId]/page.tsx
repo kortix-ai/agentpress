@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
-import { ArrowDown, CheckCircle, Copy, Share, ThumbsDown, ThumbsUp, Terminal, FileText, Search, MessageSquare, Loader2, File } from 'lucide-react';
+import { ArrowDown, CheckCircle, Copy, Share, ThumbsDown, ThumbsUp, Terminal, FileText, Search, MessageSquare, Loader2, File, Trash2, Edit, FolderOpen } from 'lucide-react';
 import { addUserMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
 import { toast } from 'sonner';
 import { Skeleton } from "@/components/ui/skeleton";
@@ -231,125 +231,45 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                   
                   // Attempt to load fresh messages
                   if (threadId) {
-                    console.log('[PAGE] 🚨 Force fetching messages after completion');
-                    // Fire and forget - we don't need to await this
+                    console.log('[PAGE] 🚨 Loading fresh messages after run completion');
                     getMessages(threadId)
                       .then(updatedMsgs => {
-                        console.log('[PAGE] 🚨 Forcefully updated messages after completion');
+                        console.log('[PAGE] 🚨 Updated messages after run completion');
                         setMessages(updatedMsgs);
                         setStreamContent('');
                       })
-                      .catch(err => console.error('[PAGE] Failed force message update:', err));
+                      .catch(err => console.error('[PAGE] Failed run completion message update:', err));
                   }
                 } catch (forceErr) {
-                  console.error('[PAGE] Error in forced completion handling:', forceErr);
-                }
-                
-                // Continue with normal status verification
-                if (runId) {
-                  try {
-                    // Force the verification request and log its execution
-                    console.log(`[PAGE] ⚠️ EXPLICITLY verifying agent run status with backend for runId: ${runId}`);
-                    let agentStatusResult;
-                    try {
-                      agentStatusResult = await getAgentStatus(runId);
-                      console.log(`[PAGE] ✅ Backend agent status API response:`, agentStatusResult);
-                    } catch (statusError) {
-                      console.error(`[PAGE] ❌ Failed to get agent status from API:`, statusError);
-                      throw statusError;
-                    }
-                    
-                    // Ensure the stream is cleaned up first
-                    if (streamCleanupRef.current) {
-                      console.log('[PAGE] Explicitly cleaning up stream due to completion status');
-                      streamCleanupRef.current();
-                      streamCleanupRef.current = null;
-                    }
-                    
-                    // Log and fetch messages
-                    console.log('[PAGE] Fetching final messages after completion');
-                    let updatedMessages;
-                    try {
-                      updatedMessages = await getMessages(threadId);
-                      console.log('[PAGE] ✅ Successfully fetched messages:', updatedMessages.length);
-                    } catch (messagesError) {
-                      console.error('[PAGE] ❌ Failed to fetch messages:', messagesError);
-                      throw messagesError;
-                    }
-                    
-                    // Update messages
-                    setMessages(updatedMessages);
-                    
-                    // Clear streaming content after a tiny delay for smooth transition
-                    setTimeout(() => {
-                      console.log('[PAGE] Clearing streaming content');
-                      setStreamContent('');
-                    }, 50);
-                    
-                    // Set agent run ID to null to prevent lingering state
-                    setAgentRunId(null);
-                    console.log('[PAGE] ✅ Completion fully handled!');
-                    
-                  } catch (err) {
-                    console.error('[PAGE] Error verifying agent status:', err);
-                    // If verification fails, still mark as completed to avoid hanging UI
-                    setAgentStatus('idle');
-                    setIsStreaming(false);
-                    setAgentRunId(null);
-                    
-                    // Clear streaming content
-                    setStreamContent('');
-                  }
-                } else {
-                  console.warn('[PAGE] Received completion status but no runId is available');
-                  // Still update UI to avoid hanging
-                  setAgentStatus('idle');
-                  setIsStreaming(false);
-                  setAgentRunId(null);
+                  console.error('[PAGE] Error in run completion handling:', forceErr);
                 }
                 
                 return;
               }
               
-              // Handle tool call chunks with data: prefix
-              if (jsonData?.type === 'content' && jsonData?.tool_call) {
-                console.log('[PAGE] Processing prefixed tool call chunk:', jsonData.tool_call);
+              // Handle tool status messages
+              if (jsonData?.type === 'tool_status') {
+                console.log('[PAGE] Received tool status message:', jsonData);
                 
-                const { id, function: toolFunction } = jsonData.tool_call;
+                if (jsonData?.status === 'completed' || jsonData?.status === 'failed' || jsonData?.status === 'error') {
+                  console.log('[PAGE] Tool completed/failed/error, resetting toolCallData');
+                  // Reset tool call data when a tool execution completes
+                  setToolCallData(null);
+                }
                 
-                // Update tool call data - accumulate arguments
-                setToolCallData(prev => ({
-                  id,
-                  name: toolFunction?.name,
-                  arguments: prev && prev.id === id ? 
-                    (prev.arguments || '') + (toolFunction?.arguments || '') : 
-                    toolFunction?.arguments
-                }));
-                
-                // Don't update streamContent directly for tool calls
                 return;
               }
               
-              // Handle regular content with data: prefix
-              if (jsonData?.type === 'content' && jsonData?.content) {
-                // Reset tool call data when switching to content
+              // Handle tool result messages
+              if (jsonData?.type === 'tool_result') {
+                console.log('[PAGE] Received tool output message, resetting toolCallData');
                 setToolCallData(null);
                 
-                // For regular content, just append to the existing content
-                setStreamContent(prev => prev + jsonData?.content);
-                console.log('[PAGE] Added content from prefixed data:', jsonData?.content.substring(0, 30) + '...');
-                return;
-              }
-              
-              // Handle tool calls with data: prefix
-              if (jsonData?.type === 'tool_call') {
-                const toolContent = jsonData.name 
-                  ? `Tool: ${jsonData.name}\n${jsonData.arguments || ''}`
-                  : jsonData.arguments || '';
-                
-                // Update UI with tool call content
-                setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
-                console.log('[PAGE] Added tool call content from prefixed data:', toolContent.substring(0, 30) + '...');
+                // For tool output, also append to stream content
+                if (jsonData?.content) {
+                  setStreamContent(prev => prev + jsonData?.content);
+                  console.log('[PAGE] Added tool output content:', jsonData?.content.substring(0, 30) + '...');
+                }
                 return;
               }
             } catch (e) {
@@ -413,6 +333,19 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               return;
             }
             
+            // Handle tool output messages - reset toolCallData when we receive a tool output
+            if (jsonData && 'role' in jsonData && jsonData.role === 'tool') {
+              console.log('[PAGE] Received standard tool output message, resetting toolCallData');
+              setToolCallData(null);
+              
+              // For tool output, also append to stream content
+              if (jsonData?.content) {
+                setStreamContent(prev => prev + jsonData?.content);
+                console.log('[PAGE] Added standard tool output content:', jsonData?.content.substring(0, 30) + '...');
+              }
+              return;
+            }
+            
             // Skip empty messages
             if (!jsonData?.content && !jsonData?.arguments && !jsonData?.tool_call) return;
             
@@ -433,6 +366,17 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               
               // Don't update streamContent directly for tool calls
               return;
+            } else if (jsonData?.type === 'tool_status') {
+              // Handle tool status messages
+              console.log('[PAGE] Received tool status message:', jsonData);
+              
+              if (jsonData?.status === 'completed' || jsonData?.status === 'failed' || jsonData?.status === 'error') {
+                console.log('[PAGE] Tool completed/failed/error, resetting toolCallData');
+                // Reset tool call data when a tool execution completes
+                setToolCallData(null);
+              }
+              
+              return;
             } else if (jsonData?.type === 'tool_call') {
               const toolContent = jsonData.name 
                 ? `Tool: ${jsonData.name}\n${jsonData.arguments || ''}`
@@ -440,7 +384,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               
               // Update UI with tool call content
               setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
-              console.log('[PAGE] Added tool call content:', toolContent.substring(0, 30) + '...');
+              console.log('[PAGE] Added tool call content from prefixed data:', toolContent.substring(0, 30) + '...');
             } else if (jsonData?.type === 'content' && jsonData?.content) {
               // Reset tool call data when switching to content
               setToolCallData(null);
@@ -1270,16 +1214,173 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                               </div>
                             </div>
                           ) : message.role === 'tool' ? (
-                            <div className="font-mono text-xs">
-                              <div className="flex items-center gap-2 mb-1 text-muted-foreground">
-                                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-success/10">
-                                  <div className="h-2 w-2 rounded-full bg-success"></div>
-                                </div>
-                                <span>Tool Result: {message.name}</span>
-                              </div>
-                              <div className="mt-1 p-3 bg-success/5 rounded-md">
-                                {message.content}
-                              </div>
+                            <div className="font-mono text-xs inline-block max-w-full">
+                              {(() => {
+                                const toolNameLower = message.name?.toLowerCase() || '';
+                                
+                                // Try to parse tool output as JSON
+                                let jsonOutput = null;
+                                try {
+                                  jsonOutput = JSON.parse(message.content);
+                                } catch {
+                                  // Not JSON, continue with regular formatting
+                                }
+
+                                // File creation/write result
+                                if ((toolNameLower.includes('create_file') || toolNameLower.includes('write')) && message.content) {
+                                  const filePath = message.content.match(/Created file: (.*)/)?.[1] || 
+                                                  message.content.match(/Updated file: (.*)/)?.[1] ||
+                                                  message.content.match(/path: "(.*?)"/)?.[1];
+                                  const fileName = filePath?.split('/').pop();
+                                  
+                                  // Look for file content in the tool result
+                                  let fileContent = '';
+                                  if (jsonOutput?.output) {
+                                    fileContent = jsonOutput.output.includes('File created') ? 
+                                      message.content.split('\n').slice(1).join('\n') : jsonOutput.output;
+                                  }
+                                  
+                                  return (
+                                    <div className="mt-1 rounded-md overflow-hidden border border-success/20 inline-block">
+                                      <div className="flex items-center justify-between px-3 py-2 bg-success/10">
+                                        <div className="flex items-center gap-2">
+                                          <FileText className="h-4 w-4 text-success" />
+                                          <span className="font-normal text-success/90">File created successfully</span>
+                                        </div>
+                                        <span className="text-xs text-success/70 ml-3">{fileName}</span>
+                                      </div>
+                                      {fileContent && (
+                                        <div className="px-3 py-2 bg-white max-h-60 overflow-y-auto">
+                                          <pre className="text-xs text-slate-700">{fileContent}</pre>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                
+                                // Read file result
+                                else if (toolNameLower.includes('read_file') && message.content) {
+                                  const filePath = message.content.match(/Contents of file: (.*)/)?.[1] || 
+                                                message.content.match(/path: "(.*?)"/)?.[1];
+                                  const fileName = filePath?.split('/').pop();
+                                  
+                                  // Get file content - remove any "Contents of file:" prefix
+                                  const fileContent = message.content.includes('Contents of file:') ? 
+                                    message.content.split('\n').slice(1).join('\n') : message.content;
+                                  
+                                  return (
+                                    <div className="mt-1 rounded-md overflow-hidden border border-blue-200 inline-block">
+                                      <div className="flex items-center justify-between px-3 py-2 bg-blue-50">
+                                        <div className="flex items-center gap-2">
+                                          <FileText className="h-4 w-4 text-blue-500" />
+                                          <span className="font-normal text-blue-600">File contents</span>
+                                        </div>
+                                        <span className="text-xs text-blue-500 ml-3">{fileName}</span>
+                                      </div>
+                                      <div className="px-3 py-2 bg-white max-h-80 overflow-y-auto">
+                                        <pre className="text-xs text-slate-700">{fileContent}</pre>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                
+                                // Delete file result
+                                else if (toolNameLower.includes('delete_file') && message.content) {
+                                  const filePath = message.content.match(/Deleted file: (.*)/)?.[1] || 
+                                                message.content.match(/path: "(.*?)"/)?.[1];
+                                  const fileName = filePath?.split('/').pop();
+                                  
+                                  return (
+                                    <div className="mt-1 rounded-md overflow-hidden border border-orange-200 inline-block">
+                                      <div className="px-3 py-2 bg-orange-50">
+                                        <div className="flex items-center gap-2">
+                                          <Trash2 className="h-4 w-4 text-orange-500" />
+                                          <span className="font-normal text-orange-600">File deleted: {fileName}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                
+                                // Edit file result
+                                else if (toolNameLower.includes('edit_file') && message.content) {
+                                  const filePath = message.content.match(/Edited file: (.*)/)?.[1] || 
+                                                message.content.match(/path: "(.*?)"/)?.[1];
+                                  const fileName = filePath?.split('/').pop();
+                                  
+                                  return (
+                                    <div className="mt-1 rounded-md overflow-hidden border border-purple-200 inline-block">
+                                      <div className="flex items-center justify-between px-3 py-2 bg-purple-50">
+                                        <div className="flex items-center gap-2">
+                                          <Edit className="h-4 w-4 text-purple-500" />
+                                          <span className="font-normal text-purple-600">File edited successfully</span>
+                                        </div>
+                                        <span className="text-xs text-purple-500 ml-3">{fileName}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                
+                                // Terminal/command result
+                                else if ((toolNameLower.includes('command') || toolNameLower.includes('terminal')) && message.content) {
+                                  const commandOutput = message.content;
+                                  
+                                  return (
+                                    <div className="mt-1 rounded-md overflow-hidden border border-zinc-200 inline-block">
+                                      <div className="flex items-center px-3 py-2 bg-zinc-50">
+                                        <div className="flex items-center gap-2">
+                                          <Terminal className="h-4 w-4 text-zinc-600" />
+                                          <span className="font-normal text-zinc-700">Command output</span>
+                                        </div>
+                                      </div>
+                                      <div className="p-3 bg-black max-h-80 overflow-y-auto">
+                                        <pre className="text-xs text-green-400">{commandOutput}</pre>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                
+                                // Search results
+                                else if ((toolNameLower.includes('search') || toolNameLower.includes('grep')) && message.content) {
+                                  return (
+                                    <div className="mt-1 rounded-md overflow-hidden border border-amber-200 inline-block">
+                                      <div className="flex items-center px-3 py-2 bg-amber-50">
+                                        <div className="flex items-center gap-2">
+                                          <Search className="h-4 w-4 text-amber-600" />
+                                          <span className="font-normal text-amber-700">Search results</span>
+                                        </div>
+                                      </div>
+                                      <div className="p-3 bg-white max-h-80 overflow-y-auto">
+                                        <pre className="text-xs text-slate-700 whitespace-pre-wrap">{message.content}</pre>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                
+                                // List directory results
+                                else if (toolNameLower.includes('list_dir') && message.content) {
+                                  return (
+                                    <div className="mt-1 rounded-md overflow-hidden border border-teal-200 inline-block">
+                                      <div className="flex items-center px-3 py-2 bg-teal-50">
+                                        <div className="flex items-center gap-2">
+                                          <FolderOpen className="h-4 w-4 text-teal-600" />
+                                          <span className="font-normal text-teal-700">Directory contents</span>
+                                        </div>
+                                      </div>
+                                      <div className="p-3 bg-white max-h-80 overflow-y-auto">
+                                        <pre className="text-xs text-slate-700">{message.content}</pre>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                
+                                // Default tool result display
+                                return (
+                                  <div className="mt-1 p-3 bg-success/5 rounded-md inline-block">
+                                    <pre className="whitespace-pre-wrap">{message.content}</pre>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           ) : (
                             <>
@@ -1365,14 +1466,117 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                               </div>
                               
                               {/* Tool execution status with clear indication of what's running */}
-                              <div className="flex items-center gap-2 text-sm">
-                                <div className="flex items-center">
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary mr-2" />
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="font-normal text-zinc-500">{toolCallData.name || "Executing tool"}</span>
-                                  <span className="text-muted-foreground">{getToolDescription(toolCallData.name, toolCallData.arguments)}</span>
-                                </div>
+                              <div className="flex items-center gap-3 text-sm">
+                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                
+                                <span className="text-zinc-700">
+                                  {(() => {
+                                    // Enhanced tool description display with parsing for all tool types
+                                    if (!toolCallData.arguments) return "Processing...";
+                                    
+                                    try {
+                                      const args = JSON.parse(toolCallData.arguments);
+                                      
+                                      // Create/write file operation
+                                      if (toolCallData.name?.toLowerCase().includes('create_file') || 
+                                          toolCallData.name?.toLowerCase().includes('write')) {
+                                        const filePath = args.file_path || args.path;
+                                        if (filePath) {
+                                          const fileName = filePath.split('/').pop();
+                                          return <>Creating file: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                        }
+                                      }
+                                      
+                                      // Read file operation
+                                      else if (toolCallData.name?.toLowerCase().includes('read_file')) {
+                                        const filePath = args.target_file || args.path;
+                                        if (filePath) {
+                                          const fileName = filePath.split('/').pop();
+                                          return <>Reading file: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                        }
+                                      }
+                                      
+                                      // Delete file operation
+                                      else if (toolCallData.name?.toLowerCase().includes('delete_file')) {
+                                        const filePath = args.target_file || args.file_path;
+                                        if (filePath) {
+                                          const fileName = filePath.split('/').pop();
+                                          return <>Deleting file: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                        }
+                                      }
+                                      
+                                      // Edit file operation
+                                      else if (toolCallData.name?.toLowerCase().includes('edit_file')) {
+                                        const filePath = args.target_file;
+                                        if (filePath) {
+                                          const fileName = filePath.split('/').pop();
+                                          return <>Editing file: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                        }
+                                      }
+                                      
+                                      // Execute command
+                                      else if (toolCallData.name?.toLowerCase().includes('command') || 
+                                              toolCallData.name?.toLowerCase().includes('terminal')) {
+                                        const command = args.command;
+                                        if (command) {
+                                          return <>Running: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{command.substring(0, 40)}{command.length > 40 ? '...' : ''}</span></>;
+                                        }
+                                      }
+                                      
+                                      // Search operations
+                                      else if (toolCallData.name?.toLowerCase().includes('search') || 
+                                              toolCallData.name?.toLowerCase().includes('grep')) {
+                                        const query = args.query;
+                                        if (query) {
+                                          return <>Searching for: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{query.substring(0, 40)}{query.length > 40 ? '...' : ''}</span></>;
+                                        }
+                                      }
+                                      
+                                      // List directory
+                                      else if (toolCallData.name?.toLowerCase().includes('list_dir')) {
+                                        const path = args.relative_workspace_path;
+                                        if (path) {
+                                          return <>Listing directory <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{path}</span></>;
+                                        }
+                                      }
+                                    } catch {
+                                      // If JSON parsing fails, try regex approach for common patterns
+                                      if (toolCallData.arguments) {
+                                        const filePathMatch = toolCallData.arguments.match(/"(?:file_path|target_file|path)"\s*:\s*"([^"]+)"/);
+                                        if (filePathMatch && filePathMatch[1]) {
+                                          const filePath = filePathMatch[1];
+                                          const fileName = filePath.split('/').pop();
+                                          
+                                          if (toolCallData.name?.toLowerCase().includes('create') || 
+                                              toolCallData.name?.toLowerCase().includes('write')) {
+                                            return <>Creating file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                          } else if (toolCallData.name?.toLowerCase().includes('read')) {
+                                            return <>Reading file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                          } else if (toolCallData.name?.toLowerCase().includes('edit')) {
+                                            return <>Editing file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                          } else if (toolCallData.name?.toLowerCase().includes('delete')) {
+                                            return <>Deleting file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                          }
+                                          return <>Processing file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                        }
+                                        
+                                        const commandMatch = toolCallData.arguments.match(/"command"\s*:\s*"([^"]+)"/);
+                                        if (commandMatch && commandMatch[1]) {
+                                          const command = commandMatch[1];
+                                          return <>Running: <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{command.substring(0, 40)}{command.length > 40 ? '...' : ''}</span></>;
+                                        }
+                                      }
+                                    }
+                                    
+                                    // Fallback to the original getToolDescription with formatted output
+                                    const desc = getToolDescription(toolCallData.name, toolCallData.arguments);
+                                    const parts = desc.split(':');
+                                    if (parts.length > 1) {
+                                      return <>{parts[0]}: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{parts.slice(1).join(':')}</span></>;
+                                    }
+                                    return desc;
+                                  })()}
+                                </span>
                               </div>
                             </div>
                             
