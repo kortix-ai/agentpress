@@ -43,7 +43,8 @@ exa-py = "^1.9.1"
 e2b-code-interpreter = "^1.2.0"
 certifi = "^2024.2.2"
 python-ripgrep = "^0.0.6"
-boto3 = "^1.37.28"
+boto3-stubs = "^1.37.29"
+boto3 = "^1.37.29"
 
 [tool.poetry.scripts]
 agentpress = "agentpress.cli:main"
