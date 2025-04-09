@@ -59,7 +59,8 @@ class SandboxWebsiteTool(SandboxToolsBase):
     async def update_website_file(self, file_path: str, content: str, create_dirs: bool = True) -> ToolResult:
         print(f"\033[33mUpdating website file: {file_path}\033[0m")
         try:
-            site_dir = "/workspace/site"
+
+            site_dir = f"{self.workspace_path}/site"
             full_path = f"{site_dir}/{file_path}"
 
             # Create the site directory if it doesn't exist
