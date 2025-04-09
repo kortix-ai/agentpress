@@ -128,3 +128,54 @@
     height: 100%;
   }
 }
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 3s infinite linear;
+  background-size: 200% auto;
+}
+
+/* Brain gradient animation */
+@keyframes brainShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Add class to apply stroke animation */
+.animate-brain-gradient svg linearGradient {
+  animation: brainShimmer 3s infinite linear;
+}
+
+/* SUNA Text Styling */
+.suna-text {
+  font-family: var(--font-orbitron);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.suna-text-active {
+  font-family: var(--font-orbitron);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background-size: 200% auto;
+  animation: shimmer 3s infinite linear;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(to right, #94A3B8, #E2E8F0, #94A3B8);
+  text-shadow: 0 0 5px rgba(148, 163, 184, 0.3);
+}

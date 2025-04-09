@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { CreateProjectDialog } from "@/components/create-project-dialog"
 import { useRouter } from "next/navigation"
 import { User } from "@supabase/supabase-js"
+import { useAgentStatus } from "@/context/agent-status-context"
 
 // Import Spline dynamically with no SSR to avoid async issues in client component
 const Spline = dynamic(() => import('@splinetool/react-spline'), { 
@@ -376,6 +377,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const params = useParams()
   const currentProjectId = params?.id as string
+  const { isStreaming } = useAgentStatus()
   
   const { projects, threads, isLoading, addProject, addThread, loadThreadsForProject } = useProjectsAndThreads(user)
 
@@ -511,7 +513,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader className="border-b-0 h-14 px-4 py-3">
+      <SidebarHeader className="border-b-0 h-14 px-4 py-0">
         <Link href="/dashboard" className="flex items-center group">
           <motion.div 
             className="flex items-center"
@@ -519,12 +521,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             whileTap="tap"
             variants={sidebarLogoMotion}
           >
-            <div className="h-12 w-16 flex items-center justify-center">
+            <div className="h-12 w-14 flex items-center justify-center">
               <Spline
+                key="sidebar-spline"
                 scene="https://prod.spline.design/UBkdpJsne-eB6mDZ/scene.splinecode"
-                style={{ transform: 'scale(0.5)', transformOrigin: 'left' }}
+                style={{ transform: 'scale(0.4)', transformOrigin: 'left center' }}
               />
             </div>
+            <div className={`text-md -ml-[24px] ${
+              isStreaming 
+                ? 'suna-text-active bg-gradient-to-r from-gray-300 via-zinc-100 to-gray-300 animate-shimmer' 
+                : 'suna-text text-zinc-400'
+            }`}>SUNA</div>
           </motion.div>
         </Link>
       </SidebarHeader>

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
+import { useAgentStatus } from '@/context/agent-status-context';
 import { Button } from '@/components/ui/button';
 import { ArrowDown, File } from 'lucide-react';
 import { addUserMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns, getProject } from '@/lib/api';
@@ -124,6 +125,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const threadId = unwrappedParams.threadId;
   
   const { user, isLoading: isAuthLoading } = useAuth();
+  const { setIsStreaming: setGlobalIsStreaming, setAgentStatus: setGlobalAgentStatus } = useAgentStatus();
   const router = useRouter();
   const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -150,6 +152,20 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const hasInitiallyScrolled = useRef<boolean>(false);
   const [sandboxId, setSandboxId] = useState<string | null>(null);
   const [fileViewerOpen, setFileViewerOpen] = useState(false);
+
+  // Update global context when local state changes
+  useEffect(() => {
+    // Sync streaming state
+    setGlobalIsStreaming(isStreaming);
+    
+    // Sync agent status with compatible mapping
+    if (agentStatus === 'running') {
+      setGlobalAgentStatus('running');
+    } else {
+      // Map both 'idle' and 'paused' to global 'idle'
+      setGlobalAgentStatus('idle');
+    }
+  }, [isStreaming, agentStatus, setGlobalIsStreaming, setGlobalAgentStatus]);
 
   const handleStreamAgent = useCallback(async (runId: string) => {
     // Clean up any existing stream
@@ -1231,6 +1247,18 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                             }`} 
                             onClick={() => message.role === 'user' ? handleEditMessage(index) : null}
                           >
+                            {/* Add Kortix logo for assistant messages that are not tool calls */}
+                            {message.role === 'assistant' && message.type !== 'tool_call' && !message.tool_call && (
+                              <div className="flex items-center mb-4">
+                                <img 
+                                  src="/Kortix-Logo-Only.svg" 
+                                  alt="Kortix Logo" 
+                                  className="h-4 w-4 mr-1.5"
+                                />
+                                <span className="text-xs suna-text font-medium">SUNA</span>
+                              </div>
+                            )}
+                            
                             {message.type === 'tool_call' ? (
                               <div className="font-mono text-xs">
                                 <div className="mt-0.5 p-2 bg-secondary/20 rounded-md overflow-hidden">
@@ -1520,10 +1548,18 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                   
                   {agentStatus === 'running' && !streamContent && (
                     <div className="flex justify-start">
-                      <div className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 max-w-full">
-                        <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse" />
-                        <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-150" />
-                        <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-300" />
+                      <div className="flex items-center gap-2 rounded-lg px-4 py-2.5">
+                        <div className="relative animate-brain-gradient">
+                          <Brain className="h-4 w-4 mr-1 text-transparent" strokeWidth={1.5} style={{stroke: 'url(#brainGradient)'}} />
+                          <svg width="0" height="0">
+                            <linearGradient id="brainGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                              <stop offset="0%" stopColor="#d1d5db" />
+                              <stop offset="50%" stopColor="#f9fafb" />
+                              <stop offset="100%" stopColor="#d1d5db" />
+                            </linearGradient>
+                          </svg>
+                        </div>
+                        <span className="text-sm suna-text-active bg-gradient-to-r from-gray-300 via-zinc-100 to-gray-300 animate-shimmer">Thinking</span>
                       </div>
                     </div>
                   )}
@@ -1557,13 +1593,15 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               {/* Connector component above chat input */}
               <div className="flex items-center justify-center rounded-t-md border-t border-x border-zinc-200 mx-2 pt-3 pb-1 relative">
                 {/* Zinc rectangle button that extends above the connector */}
-                <div 
-                  className="absolute left-5 -top-17 h-20 w-36 bg-zinc-200 rounded-md border border-zinc-300 flex items-center justify-center cursor-pointer hover:bg-zinc-300 transition-colors"
-                  onClick={() => setIsSecondaryViewOpen(prev => !prev)}
-                >
-                  <PlusCircle className="h-6 w-6 text-zinc-600 mr-2" />
-                  <span className="text-sm text-zinc-600">{isSecondaryViewOpen ? 'Hide Panel' : 'Show Panel'}</span>
-                </div>
+                {!isSecondaryViewOpen && (
+                  <div 
+                    className="absolute left-5 -top-17 h-20 w-36 bg-zinc-200 rounded-md border border-zinc-300 flex items-center justify-center cursor-pointer hover:bg-zinc-300 transition-colors"
+                    onClick={() => setIsSecondaryViewOpen(prev => !prev)}
+                  >
+                    <PlusCircle className="h-6 w-6 text-zinc-600 mr-2" />
+                    <span className="text-sm text-zinc-600">Show Panel</span>
+                  </div>
+                )}
                 
                 <div className="flex space-x-2">
                   <div className="h-1 w-8 rounded-full bg-zinc-200"></div>
