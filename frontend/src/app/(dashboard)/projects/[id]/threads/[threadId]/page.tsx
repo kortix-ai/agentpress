@@ -9,7 +9,7 @@ import { addUserMessage, getMessages, startAgent, stopAgent, getAgentStatus, str
 import { toast } from 'sonner';
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChatInput } from '@/components/chat-input';
-import { SecondaryView } from '@/components/secondary-view';
+import SecondaryView, { ToolExecution } from '@/components/secondary-view';
 
 // Define a type for the params to make React.use() work properly
 type ThreadParams = { id: string; threadId: string };
@@ -135,7 +135,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const [agentStatus, setAgentStatus] = useState<'idle' | 'running' | 'paused'>('idle');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState('');
-  const [toolCallData, setToolCallData] = useState<{id?: string, name?: string, arguments?: string, index?: number} | null>(null);
+  const [toolCallData, setToolCallData] = useState<{id?: string, name?: string, arguments?: string, index?: number, status?: string, fileName?: string, language?: string} | null>(null);
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
   const [editedContent, setEditedContent] = useState<string>('');
   const editRef = useRef<HTMLTextAreaElement>(null);
@@ -157,6 +157,8 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const [isScrolling, setIsScrolling] = useState(false);
   const scrollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isSecondaryViewOpen, setIsSecondaryViewOpen] = useState(false);
+  const [selectedToolExecution, setSelectedToolExecution] = useState<ToolExecution | null>(null);
+  const [historicalToolExecutions, setHistoricalToolExecutions] = useState<ToolExecution[]>([]);
 
   const handleStreamAgent = useCallback(async (runId: string) => {
     // Clean up any existing stream
@@ -338,7 +340,44 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
             // Handle tool output messages - reset toolCallData when we receive a tool output
             if (jsonData && 'role' in jsonData && jsonData.role === 'tool') {
               console.log('[PAGE] Received standard tool output message, resetting toolCallData');
-              setToolCallData(null);
+              
+              // Parse file extension to determine language when receiving tool output
+              let language = 'plaintext';
+              let fileName = '';
+              
+              // Try to extract file info from content
+              if (jsonData?.content) {
+                // Try to detect a file path
+                const filePathMatch = jsonData.content.match(/Contents of file: (.+?)($|\n)/);
+                const fileCreatedMatch = jsonData.content.match(/(Created|Updated|Edited) file: (.+?)($|\n)/);
+                
+                if (filePathMatch && filePathMatch[1]) {
+                  fileName = filePathMatch[1].split('/').pop() || '';
+                } else if (fileCreatedMatch && fileCreatedMatch[2]) {
+                  fileName = fileCreatedMatch[2].split('/').pop() || '';
+                }
+                
+                // Determine language based on extension
+                if (fileName) {
+                  const ext = fileName.split('.').pop()?.toLowerCase();
+                  if (ext === 'js' || ext === 'jsx') language = 'javascript';
+                  else if (ext === 'ts' || ext === 'tsx') language = 'typescript';
+                  else if (ext === 'html' || ext === 'xml') language = 'html';
+                  else if (ext === 'css') language = 'css';
+                  else if (ext === 'md') language = 'markdown';
+                  else if (ext === 'json') language = 'json';
+                  else if (ext === 'py') language = 'python';
+                }
+              }
+              
+              // Set tool call data with the determined language before clearing it
+              // This ensures the language is properly tracked for the last tool output
+              setToolCallData(prev => prev ? { ...prev, language, fileName } : null);
+              
+              // Then clear the tool call data after a short delay
+              setTimeout(() => {
+                setToolCallData(null);
+              }, 500);
               
               // For tool output, also append to stream content
               if (jsonData?.content) {
@@ -357,16 +396,48 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               
               const { id, function: toolFunction } = jsonData.tool_call;
               
+              // Detect file paths and language from tool call
+              let fileName = '';
+              let language = 'plaintext';
+              
+              try {
+                // Try to parse arguments as they come in
+                // Sometimes they may be incomplete, so we handle errors gracefully
+                const partialArgs = toolFunction.arguments;
+                
+                // Look for common file path patterns
+                const filePathMatch = partialArgs.match(/"(file_path|target_file|path)":\s*"([^"]+)"/);
+                if (filePathMatch && filePathMatch[2]) {
+                  fileName = filePathMatch[2].split('/').pop() || '';
+                  
+                  // Determine language based on file extension
+                  const ext = fileName.split('.').pop()?.toLowerCase();
+                  if (ext === 'js' || ext === 'jsx') language = 'javascript';
+                  else if (ext === 'ts' || ext === 'tsx') language = 'typescript';
+                  else if (ext === 'html' || ext === 'xml') language = 'html';
+                  else if (ext === 'css') language = 'css';
+                  else if (ext === 'md') language = 'markdown';
+                  else if (ext === 'json') language = 'json';
+                  else if (ext === 'py') language = 'python';
+                  else language = 'plaintext'; // Default fallback
+                }
+              } catch {
+                // Ignore parsing errors for partial data
+                console.debug('[PAGE] Error parsing partial tool arguments');
+              }
+              
               // Update tool call data - accumulate arguments
               setToolCallData(prev => ({
                 id,
                 name: toolFunction?.name,
                 arguments: prev && prev.id === id ? 
                   (prev.arguments || '') + (toolFunction?.arguments || '') : 
-                  toolFunction?.arguments
+                  toolFunction?.arguments,
+                fileName,
+                language
               }));
               
-              // Don't update streamContent directly for tool calls
+              // Don't update streamContent directly for tool calls - they go to the secondary view
               return;
             } else if (jsonData?.type === 'tool_status') {
               // Handle tool status messages
@@ -375,23 +446,57 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               if (jsonData?.status === 'completed' || jsonData?.status === 'failed' || jsonData?.status === 'error') {
                 console.log('[PAGE] Tool completed/failed/error, resetting toolCallData');
                 // Reset tool call data when a tool execution completes
-                setToolCallData(null);
+                setToolCallData(prev => prev ? {...prev, status: jsonData?.status} : null);
+                
+                // After a short delay, clear the tool call data
+                setTimeout(() => {
+                  setToolCallData(null);
+                }, 1000);
               }
               
               return;
             } else if (jsonData?.type === 'tool_call') {
-              const toolContent = jsonData.name 
-                ? `Tool: ${jsonData.name}\n${jsonData.arguments || ''}`
-                : jsonData.arguments || '';
+              // Create proper tool call object for secondary view
+              if (jsonData?.name && jsonData?.arguments) {
+                setToolCallData(prev => {
+                  // If it's an update to the current tool, update arguments
+                  if (prev && !prev.id) {
+                    return {
+                      ...prev,
+                      id: String(Date.now()), // Generate an ID if none exists
+                      name: jsonData?.name || prev.name,
+                      arguments: jsonData?.arguments || ''
+                    };
+                  }
+                  // Otherwise create a new tool call
+                  return {
+                    id: String(Date.now()),
+                    name: jsonData?.name || '',
+                    arguments: jsonData?.arguments || '',
+                    status: 'running'
+                  };
+                });
+              }
+              
+              // For the main view, format the tool call as a message
+              const toolContent = jsonData?.name 
+                ? `Tool: ${jsonData?.name}\n${jsonData?.arguments || ''}`
+                : jsonData?.arguments || '';
               
               // Update UI with tool call content
               setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
               console.log('[PAGE] Added tool call content from prefixed data:', toolContent.substring(0, 30) + '...');
             } else if (jsonData?.type === 'content' && jsonData?.content) {
-              // Reset tool call data when switching to content
-              setToolCallData(null);
+              // Only reset tool call data if we're receiving regular content and no tool is currently active
+              // This prevents explanation text from interrupting a streaming tool display
+              if (!toolCallData || toolCallData.status === 'completed') {
+                console.log('[PAGE] Resetting tool call data for regular content');
+                setToolCallData(null);
+              } else {
+                console.log('[PAGE] Keeping tool call data active while receiving content', toolCallData);
+              }
               
-              // For regular content, just append to the existing content
+              // For regular content, just append to the existing content in main view
               setStreamContent(prev => prev + jsonData?.content);
               console.log('[PAGE] Added content:', jsonData?.content.substring(0, 30) + '...');
             }
@@ -976,6 +1081,103 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     return () => window.removeEventListener('resize', updateOverlayPosition);
   }, [editingMessageIndex]);
 
+  const handleToolClick = (message: ApiMessage) => {
+    let language = '';
+    
+    // Determine language for file operations
+    if (message.arguments) {
+      try {
+        const args = JSON.parse(message.arguments);
+        const path = args.file_path || args.target_file || args.path || '';
+        const fileName = path.split('/').pop() || '';
+        
+        if (fileName.endsWith('.js') || fileName.endsWith('.jsx')) language = 'javascript';
+        else if (fileName.endsWith('.ts') || fileName.endsWith('.tsx')) language = 'typescript';
+        else if (fileName.endsWith('.html') || fileName.endsWith('.xml')) language = 'html';
+        else if (fileName.endsWith('.css')) language = 'css';
+        else if (fileName.endsWith('.md')) language = 'markdown';
+        else if (fileName.endsWith('.json')) language = 'json';
+        else if (fileName.endsWith('.py')) language = 'python';
+      } catch (e) {
+        console.error('Error parsing arguments', e);
+      }
+    }
+    
+    // Create a tool execution object
+    const toolExecution: ToolExecution = {
+      id: message.id || String(Date.now()),
+      name: message.name || 'unknown',
+      status: 'completed' as const,
+      startTime: message.created_at ? new Date(message.created_at) : new Date(),
+      result: message.content || '',
+      language,
+      arguments: message.arguments ? JSON.parse(message.arguments as string) : undefined
+    };
+    
+    // Open secondary view if not already open
+    if (!isSecondaryViewOpen) {
+      setIsSecondaryViewOpen(true);
+    }
+    
+    // Set the selected tool
+    setSelectedToolExecution(toolExecution);
+  };
+
+  // Add this function to track tool executions for the secondary view
+  const addToolExecution = useCallback((toolData: {
+    id: string;
+    name: string;
+    content?: string;
+    arguments?: string;
+    status?: string;
+    language?: string;
+    fileName?: string;
+  }) => {
+    const toolExecution: ToolExecution = {
+      id: toolData.id,
+      name: toolData.name,
+      status: (toolData.status as 'running' | 'completed' | 'error') || 'running',
+      startTime: new Date(),
+      result: toolData.content || '',
+      language: toolData.language,
+      arguments: toolData.arguments ? JSON.parse(toolData.arguments) : undefined
+    };
+    
+    setHistoricalToolExecutions(prev => {
+      // Check if we already have this tool
+      const existingIndex = prev.findIndex(tool => tool.id === toolData.id);
+      if (existingIndex >= 0) {
+        // Update existing tool
+        const newTools = [...prev];
+        newTools[existingIndex] = {
+          ...prev[existingIndex],
+          status: toolExecution.status,
+          result: toolExecution.result || prev[existingIndex].result,
+          endTime: toolExecution.status === 'completed' ? new Date() : prev[existingIndex].endTime
+        };
+        return newTools;
+      } else {
+        // Add new tool
+        return [...prev, toolExecution];
+      }
+    });
+  }, []);
+
+  // When tool call data changes, track it as a tool execution
+  useEffect(() => {
+    if (toolCallData && toolCallData.id) {
+      addToolExecution({
+        id: toolCallData.id,
+        name: toolCallData.name || 'Unknown Tool',
+        content: streamContent,
+        arguments: toolCallData.arguments,
+        status: toolCallData.status || 'running',
+        language: toolCallData.language,
+        fileName: toolCallData.fileName
+      });
+    }
+  }, [toolCallData, addToolExecution, streamContent]);
+
   // Only show a full-screen loader on the very first load
   if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {
     return (
@@ -1092,7 +1294,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4 relative">
+                <div className="space-y-0 relative">
                   {/* Overlay when editing */}
                   {editingMessageIndex !== null && overlayTop !== null && (
                     <div 
@@ -1120,15 +1322,15 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                     >
                       {/* Add timestamp above for user messages - only visible on hover */}
                       {message.role === 'user' && message.created_at && (
-                        <div className="text-xs text-zinc-400 mb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <div className="text-xs text-zinc-400 mb-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                           {new Date(message.created_at).toLocaleString()}
                         </div>
                       )}
                       
                       <div 
-                        className={`${message.role === 'user' ? 'max-w-[85%]' : 'max-w-full'} rounded-md px-4 py-3 text-sm ${
+                        className={`${message.role === 'user' ? 'max-w-[85%]' : 'max-w-full'} rounded-md px-4 py-1 text-sm ${
                           message.role === 'user' 
-                            ? 'bg-zinc-50 text-zinc-800 border border-zinc-100 relative mb-10' 
+                            ? 'bg-zinc-50 text-zinc-800 border border-zinc-100 relative' 
                             : ''
                         } ${message.role === 'user' ? 'hover:ring-2 hover:ring-zinc-200 transition-all duration-200' : 'group'}`}
                         onMouseEnter={() => {
@@ -1137,26 +1339,14 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                           }
                         }}
                       >
-                        {/* Keep timestamp inside for system messages, but not for user messages */}
-                        {message.created_at && message.role !== 'user' && (
-                          <div className="text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex justify-end mt-2">
+                        {/* Keep timestamp inside for assistant messages only */}
+                        {message.created_at && message.role === 'assistant' && (
+                          <div className="text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex justify-end mt-1">
                             {new Date(message.created_at).toLocaleString()}
                           </div>
                         )}
                         
-                        {message.role === 'user' && (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation(); // Prevent triggering edit
-                              copyToClipboard(message.content);
-                            }}
-                            className="absolute -bottom-8 right-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 py-1.5 px-3 rounded-md z-10 whitespace-nowrap flex items-center"
-                            title="Copy message"
-                          >
-                            <Copy className="h-3.5 w-3.5 text-zinc-500 mr-1" />
-                            <span className="text-xs text-zinc-500">Copy</span>
-                          </button>
-                        )}
+                        {/* Copy button for user messages has been removed */}
                         
                         {editingMessageIndex === index ? (
                           <div className="flex flex-col">
@@ -1202,9 +1392,9 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                           >
                             {message.type === 'tool_call' ? (
                               <div className="font-mono text-xs">
-                                <div className="mt-1 p-3 bg-secondary/20 rounded-md overflow-hidden">
+                                <div className="mt-0.5 p-2 bg-secondary/20 rounded-md overflow-hidden">
                                   {/* Action line with icon */}
-                                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200/30 text-muted-foreground">
+                                  <div className="flex items-center gap-2 mb-1 pb-1 border-b border-gray-200/30 text-muted-foreground">
                                     <div className="flex items-center justify-center">
                                       {getToolIcon(message.name)}
                                     </div>
@@ -1218,180 +1408,211 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                                 </div>
                               </div>
                             ) : message.role === 'tool' ? (
-                              <div className="font-mono text-xs inline-block max-w-full">
-                                {(() => {
-                                  const toolNameLower = message.name?.toLowerCase() || '';
-                                  
-                                  // Try to parse tool output as JSON
-                                  let jsonOutput = null;
-                                  try {
-                                    jsonOutput = JSON.parse(message.content);
-                                  } catch {
-                                    // Not JSON, continue with regular formatting
-                                  }
-
-                                  // File creation/write result
-                                  if ((toolNameLower.includes('create_file') || toolNameLower.includes('write')) && message.content) {
-                                    const filePath = message.content.match(/Created file: (.*)/)?.[1] || 
-                                                    message.content.match(/Updated file: (.*)/)?.[1] ||
-                                                    message.content.match(/path: "(.*?)"/)?.[1];
-                                    const fileName = filePath?.split('/').pop();
+                              <div className="font-mono text-xs w-full relative group">
+                                {message.created_at && (
+                                  <div className="absolute -right-6 top-2 text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+                                    {new Date(message.created_at).toLocaleString()}
+                                  </div>
+                                )}
+                                <div className="inline-block max-w-full">
+                                  {(() => {
+                                    const toolNameLower = message.name?.toLowerCase() || '';
                                     
-                                    // Look for file content in the tool result
-                                    let fileContent = '';
-                                    if (jsonOutput?.output) {
-                                      fileContent = jsonOutput.output.includes('File created') ? 
-                                        message.content.split('\n').slice(1).join('\n') : jsonOutput.output;
+                                    // Try to parse tool output as JSON
+                                    let jsonOutput = null;
+                                    try {
+                                      jsonOutput = JSON.parse(message.content);
+                                    } catch {
+                                      // Not JSON, continue with regular formatting
+                                    }
+
+                                    // File creation/write result
+                                    if ((toolNameLower.includes('create_file') || toolNameLower.includes('write')) && message.content) {
+                                      const filePath = message.content.match(/Created file: (.*)/)?.[1] || 
+                                                      message.content.match(/Updated file: (.*)/)?.[1] ||
+                                                      message.content.match(/path: "(.*?)"/)?.[1];
+                                      const fileName = filePath?.split('/').pop();
+                                      
+                                      // Look for file content in the tool result
+                                      let fileContent = '';
+                                      if (jsonOutput?.output) {
+                                        fileContent = jsonOutput.output.includes('File created') ? 
+                                          message.content.split('\n').slice(1).join('\n') : jsonOutput.output;
+                                      }
+                                      
+                                      return (
+                                        <div 
+                                          className="mt-0 rounded-md overflow-hidden border border-success/20 inline-block cursor-pointer hover:border-success/40 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center justify-between px-2 py-2 bg-success/10">
+                                            <div className="flex items-center gap-2">
+                                              <FileText className="h-4 w-4 text-success" />
+                                              <span className="font-normal text-success/90">File created successfully</span>
+                                            </div>
+                                            <span className="text-xs text-success/70 ml-3">{fileName}</span>
+                                          </div>
+                                          {fileContent && (
+                                            <div className="px-3 py-2 bg-white max-h-60 overflow-y-auto">
+                                              <pre className="text-xs text-slate-700">{fileContent}</pre>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
                                     }
                                     
-                                    return (
-                                      <div className="mt-1 rounded-md overflow-hidden border border-success/20 inline-block">
-                                        <div className="flex items-center justify-between px-3 py-2 bg-success/10">
-                                          <div className="flex items-center gap-2">
-                                            <FileText className="h-4 w-4 text-success" />
-                                            <span className="font-normal text-success/90">File created successfully</span>
+                                    // Read file result
+                                    else if (toolNameLower.includes('read_file') && message.content) {
+                                      const filePath = message.content.match(/Contents of file: (.*)/)?.[1] || 
+                                                    message.content.match(/path: "(.*?)"/)?.[1];
+                                      const fileName = filePath?.split('/').pop() || filePath;
+                                      
+                                      // Get file content - remove any "Contents of file:" prefix
+                                      const fileContent = message.content.includes('Contents of file:') ? 
+                                        message.content.split('\n').slice(1).join('\n') : message.content;
+                                      
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-blue-200 inline-block cursor-pointer hover:border-blue-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center justify-between px-2 py-1.5 bg-blue-50">
+                                            <div className="flex items-center gap-2">
+                                              <FileText className="h-4 w-4 text-blue-500" />
+                                              <span className="font-normal text-blue-600">File contents</span>
+                                            </div>
+                                            <span className="text-xs text-blue-500 ml-3">{fileName}</span>
                                           </div>
-                                          <span className="text-xs text-success/70 ml-3">{fileName}</span>
-                                        </div>
-                                        {fileContent && (
                                           <div className="px-3 py-2 bg-white max-h-60 overflow-y-auto">
                                             <pre className="text-xs text-slate-700">{fileContent}</pre>
                                           </div>
-                                        )}
-                                      </div>
-                                    );
-                                  }
-                                  
-                                  // Read file result
-                                  else if (toolNameLower.includes('read_file') && message.content) {
-                                    const filePath = message.content.match(/Contents of file: (.*)/)?.[1] || 
-                                                  message.content.match(/path: "(.*?)"/)?.[1];
-                                    const fileName = filePath?.split('/').pop();
+                                        </div>
+                                      );
+                                    }
                                     
-                                    // Get file content - remove any "Contents of file:" prefix
-                                    const fileContent = message.content.includes('Contents of file:') ? 
-                                      message.content.split('\n').slice(1).join('\n') : message.content;
+                                    // Delete file result
+                                    else if (toolNameLower.includes('delete_file') && message.content) {
+                                      const filePath = message.content.match(/Deleted file: (.*)/)?.[1] || 
+                                                    message.content.match(/path: "(.*?)"/)?.[1];
+                                      const fileName = filePath?.split('/').pop() || filePath;
+                                      
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-orange-200 inline-block cursor-pointer hover:border-orange-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="px-2 py-1.5 bg-orange-50">
+                                            <div className="flex items-center gap-2">
+                                              <Trash2 className="h-4 w-4 text-orange-500" />
+                                              <span className="font-normal text-orange-600">File deleted: {fileName}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
                                     
-                                    return (
-                                      <div className="mt-1 rounded-md overflow-hidden border border-blue-200 inline-block">
-                                        <div className="flex items-center justify-between px-3 py-2 bg-blue-50">
-                                          <div className="flex items-center gap-2">
-                                            <FileText className="h-4 w-4 text-blue-500" />
-                                            <span className="font-normal text-blue-600">File contents</span>
+                                    // Edit file result
+                                    else if (toolNameLower.includes('edit_file') && message.content) {
+                                      const filePath = message.content.match(/Edited file: (.*)/)?.[1] || 
+                                                    message.content.match(/path: "(.*?)"/)?.[1];
+                                      const fileName = filePath?.split('/').pop() || filePath;
+                                      
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-purple-200 inline-block cursor-pointer hover:border-purple-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center justify-between px-2 py-1.5 bg-purple-50">
+                                            <div className="flex items-center gap-2">
+                                              <Edit className="h-4 w-4 text-purple-500" />
+                                              <span className="font-normal text-purple-600">File edited successfully</span>
+                                            </div>
+                                            <span className="text-xs text-purple-500 ml-3">{fileName}</span>
                                           </div>
-                                          <span className="text-xs text-blue-500 ml-3">{fileName}</span>
                                         </div>
-                                        <div className="px-3 py-2 bg-white max-h-80 overflow-y-auto">
-                                          <pre className="text-xs text-slate-700">{fileContent}</pre>
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-                                  
-                                  // Delete file result
-                                  else if (toolNameLower.includes('delete_file') && message.content) {
-                                    const filePath = message.content.match(/Deleted file: (.*)/)?.[1] || 
-                                                  message.content.match(/path: "(.*?)"/)?.[1];
-                                    const fileName = filePath?.split('/').pop();
+                                      );
+                                    }
                                     
-                                    return (
-                                      <div className="mt-1 rounded-md overflow-hidden border border-orange-200 inline-block">
-                                        <div className="px-3 py-2 bg-orange-50">
-                                          <div className="flex items-center gap-2">
-                                            <Trash2 className="h-4 w-4 text-orange-500" />
-                                            <span className="font-normal text-orange-600">File deleted: {fileName}</span>
+                                    // Terminal/command result
+                                    else if ((toolNameLower.includes('command') || toolNameLower.includes('terminal')) && message.content) {
+                                      const commandOutput = message.content;
+                                      
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-zinc-200 inline-block cursor-pointer hover:border-zinc-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center px-3 py-2 bg-zinc-50">
+                                            <div className="flex items-center gap-2">
+                                              <Terminal className="h-4 w-4 text-zinc-600" />
+                                              <span className="font-normal text-zinc-700">Command output</span>
+                                            </div>
+                                          </div>
+                                          <div className="p-2 bg-black max-h-80 overflow-y-auto">
+                                            <pre className="text-xs text-green-400">{commandOutput}</pre>
                                           </div>
                                         </div>
-                                      </div>
-                                    );
-                                  }
-                                  
-                                  // Edit file result
-                                  else if (toolNameLower.includes('edit_file') && message.content) {
-                                    const filePath = message.content.match(/Edited file: (.*)/)?.[1] || 
-                                                  message.content.match(/path: "(.*?)"/)?.[1];
-                                    const fileName = filePath?.split('/').pop();
+                                      );
+                                    }
                                     
-                                    return (
-                                      <div className="mt-1 rounded-md overflow-hidden border border-purple-200 inline-block">
-                                        <div className="flex items-center justify-between px-3 py-2 bg-purple-50">
-                                          <div className="flex items-center gap-2">
-                                            <Edit className="h-4 w-4 text-purple-500" />
-                                            <span className="font-normal text-purple-600">File edited successfully</span>
+                                    // Search results
+                                    else if ((toolNameLower.includes('search') || toolNameLower.includes('grep')) && message.content) {
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-amber-200 inline-block cursor-pointer hover:border-amber-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center px-2 py-1.5 bg-amber-50">
+                                            <div className="flex items-center gap-2">
+                                              <Search className="h-4 w-4 text-amber-600" />
+                                              <span className="font-normal text-amber-700">Search results</span>
+                                            </div>
                                           </div>
-                                          <span className="text-xs text-purple-500 ml-3">{fileName}</span>
+                                          <div className="p-2 bg-white max-h-60 overflow-y-auto">
+                                            <pre className="text-xs text-slate-700 whitespace-pre-wrap">{message.content}</pre>
+                                          </div>
                                         </div>
-                                      </div>
-                                    );
-                                  }
-                                  
-                                  // Terminal/command result
-                                  else if ((toolNameLower.includes('command') || toolNameLower.includes('terminal')) && message.content) {
-                                    const commandOutput = message.content;
+                                      );
+                                    }
                                     
-                                    return (
-                                      <div className="mt-1 rounded-md overflow-hidden border border-zinc-200 inline-block">
-                                        <div className="flex items-center px-3 py-2 bg-zinc-50">
-                                          <div className="flex items-center gap-2">
-                                            <Terminal className="h-4 w-4 text-zinc-600" />
-                                            <span className="font-normal text-zinc-700">Command output</span>
+                                    // List directory results
+                                    else if (toolNameLower.includes('list_dir') && message.content) {
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-teal-200 inline-block cursor-pointer hover:border-teal-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center px-2 py-1.5 bg-teal-50">
+                                            <div className="flex items-center gap-2">
+                                              <FolderOpen className="h-4 w-4 text-teal-600" />
+                                              <span className="font-normal text-teal-700">Directory contents</span>
+                                            </div>
+                                          </div>
+                                          <div className="p-2 bg-white max-h-60 overflow-y-auto">
+                                            <pre className="text-xs text-slate-700">{message.content}</pre>
                                           </div>
                                         </div>
-                                        <div className="p-3 bg-black max-h-80 overflow-y-auto">
-                                          <pre className="text-xs text-green-400">{commandOutput}</pre>
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-                                  
-                                  // Search results
-                                  else if ((toolNameLower.includes('search') || toolNameLower.includes('grep')) && message.content) {
+                                      );
+                                    }
+                                    
+                                    // Default tool result display
                                     return (
-                                      <div className="mt-1 rounded-md overflow-hidden border border-amber-200 inline-block">
-                                        <div className="flex items-center px-3 py-2 bg-amber-50">
-                                          <div className="flex items-center gap-2">
-                                            <Search className="h-4 w-4 text-amber-600" />
-                                            <span className="font-normal text-amber-700">Search results</span>
-                                          </div>
-                                        </div>
-                                        <div className="p-3 bg-white max-h-80 overflow-y-auto">
-                                          <pre className="text-xs text-slate-700 whitespace-pre-wrap">{message.content}</pre>
-                                        </div>
+                                      <div 
+                                        className="mt-0.5 p-2 bg-success/5 rounded-md inline-block cursor-pointer hover:bg-success/10 transition-all relative"
+                                        onClick={() => handleToolClick(message)}
+                                      >
+                                        <pre className="whitespace-pre-wrap">{message.content}</pre>
                                       </div>
                                     );
-                                  }
-                                  
-                                  // List directory results
-                                  else if (toolNameLower.includes('list_dir') && message.content) {
-                                    return (
-                                      <div className="mt-1 rounded-md overflow-hidden border border-teal-200 inline-block">
-                                        <div className="flex items-center px-3 py-2 bg-teal-50">
-                                          <div className="flex items-center gap-2">
-                                            <FolderOpen className="h-4 w-4 text-teal-600" />
-                                            <span className="font-normal text-teal-700">Directory contents</span>
-                                          </div>
-                                        </div>
-                                        <div className="p-3 bg-white max-h-80 overflow-y-auto">
-                                          <pre className="text-xs text-slate-700">{message.content}</pre>
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-                                  
-                                  // Default tool result display
-                                  return (
-                                    <div className="mt-1 p-3 bg-success/5 rounded-md inline-block">
-                                      <pre className="whitespace-pre-wrap">{message.content}</pre>
-                                    </div>
-                                  );
-                                })()}
+                                  })()}
+                                </div>
                               </div>
                             ) : (
                               <>
                                 {message.content}
                                 {/* Add reaction icons for assistant messages */}
                                 {message.role === 'assistant' && (
-                                  <div className={`flex justify-end mt-2 mb-1 pt-1 gap-2 ${index === messages.length - 1 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
+                                  <div className={`flex justify-end mt-1 pt-0.5 gap-2 ${index === messages.length - 1 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
                                     <button 
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -1451,11 +1672,11 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                       ref={latestMessageRef}
                       className="flex justify-start"
                     >
-                      <div className="max-w-full rounded-lg px-4 py-3 text-sm">
+                      <div className="max-w-full rounded-lg px-4 py-1 text-sm">
                         <div className="whitespace-pre-wrap break-words">
                           {toolCallData ? (
                             <div className="font-mono text-xs">
-                              <div className="mt-1 p-3 bg-secondary/0 rounded-md overflow-hidden relative border border-zinc-100">
+                              <div className="p-2 bg-secondary/0 rounded-md overflow-hidden relative border border-zinc-100">
                                 {/* Metallic pulse overlay */}
                                 <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
                                   <div 
@@ -1470,7 +1691,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                                 </div>
                                 
                                 {/* Tool execution status with clear indication of what's running */}
-                                <div className="flex items-center gap-3 text-sm">
+                                <div className="flex items-center gap-2 text-sm">
                                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
                                   
                                   <span className="text-zinc-700">
@@ -1618,7 +1839,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                   
                   {agentStatus === 'running' && !streamContent && (
                     <div className="flex justify-start">
-                      <div className="flex items-center gap-1.5 rounded-lg px-4 py-3 max-w-full">
+                      <div className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 max-w-full">
                         <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse" />
                         <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-150" />
                         <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-300" />
@@ -1688,7 +1909,28 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
         {/* Right side: Secondary View */}
         {isSecondaryViewOpen && (
           <div className="w-2/5 p-4 flex flex-col">
-            <SecondaryView />
+            <SecondaryView 
+              onClose={() => setIsSecondaryViewOpen(false)} 
+              selectedTool={selectedToolExecution || undefined}
+              toolExecutions={historicalToolExecutions}
+              activeToolId={toolCallData?.id || ''}
+              onSelectTool={(id) => {
+                // Find and select a specific tool execution
+                const tool = historicalToolExecutions.find(t => t.id === id);
+                if (tool) {
+                  setSelectedToolExecution(tool);
+                }
+              }}
+              streamingToolCall={toolCallData ? {
+                id: toolCallData.id || String(Date.now()),
+                name: toolCallData.name || '',
+                content: streamContent, // Send content to secondary view
+                arguments: toolCallData.arguments,
+                status: (toolCallData.status as 'running' | 'completed' | 'started') || 'running',
+                language: toolCallData.language,
+                fileName: toolCallData.fileName
+              } : undefined}
+            />
           </div>
         )}
       </div>
