@@ -4,10 +4,12 @@ from agentpress.tool import ToolResult, openapi_schema, xml_schema
 from agent.tools.utils.daytona_sandbox import SandboxToolsBase
 import os
 
-WORKSPACE_PATH = "/workspace"
-
-def clean_path(path: str) -> str:
-    return path.replace(WORKSPACE_PATH, "").lstrip("/")
+# TODO: might want to be more granular with the tool names:
+# file_read - Read file content. Use for checking file contents, analyzing logs, or reading configuration files.
+# file_write - Overwrite or append content to a file. Use for creating new files, appending content, or modifying existing files.
+# file_str_replace - Replace specified string in a file. Use for updating specific content in files or fixing errors in code.
+# file_find_in_content - Search for matching text within file content. Use for finding specific content or patterns in files.
+# file_find_by_name - Find files by name pattern in specified directory. Use for locating files with specific naming patterns.
 
 
 class SandboxFilesTool(SandboxToolsBase):
@@ -83,7 +85,7 @@ class SandboxFilesTool(SandboxToolsBase):
         """Get the current workspace state by reading all files"""
         files_state = {}
         try:
-            files = self.sandbox.fs.list_files(WORKSPACE_PATH)
+            files = self.sandbox.fs.list_files(self.workspace_path)
             for file_info in files:
                 rel_path = file_info.name
                 
@@ -92,7 +94,7 @@ class SandboxFilesTool(SandboxToolsBase):
                     continue
 
                 try:
-                    full_path = f"{WORKSPACE_PATH}/{rel_path}"
+                    full_path = f"{self.workspace_path}/{rel_path}"
                     content = self.sandbox.fs.download_file(full_path).decode()
                     files_state[rel_path] = {
                         "content": content,
@@ -149,9 +151,9 @@ class SandboxFilesTool(SandboxToolsBase):
         '''
     )
     async def create_file(self, file_path: str, file_contents: str, permissions: str = "644") -> ToolResult:
-        file_path = clean_path(file_path)
+        file_path = self.clean_path(file_path)
         try:
-            full_path = f"{WORKSPACE_PATH}/{file_path}"
+            full_path = f"{self.workspace_path}/{file_path}"
             if self._file_exists(full_path):
                 return self.fail_response(f"File '{file_path}' already exists. Use update_file to modify existing files.")
             
@@ -209,8 +211,8 @@ class SandboxFilesTool(SandboxToolsBase):
     )
     async def str_replace(self, file_path: str, old_str: str, new_str: str) -> ToolResult:
         try:
-            file_path = clean_path(file_path)
-            full_path = f"{WORKSPACE_PATH}/{file_path}"
+            file_path = self.clean_path(file_path)
+            full_path = f"{self.workspace_path}/{file_path}"
             if not self._file_exists(full_path):
                 return self.fail_response(f"File '{file_path}' does not exist")
             
@@ -281,8 +283,8 @@ class SandboxFilesTool(SandboxToolsBase):
     )
     async def full_file_rewrite(self, file_path: str, file_contents: str, permissions: str = "644") -> ToolResult:
         try:
-            file_path = clean_path(file_path)
-            full_path = f"{WORKSPACE_PATH}/{file_path}"
+            file_path = self.clean_path(file_path)
+            full_path = f"{self.workspace_path}/{file_path}"
             if not self._file_exists(full_path):
                 return self.fail_response(f"File '{file_path}' does not exist. Use create_file to create a new file.")
             
@@ -322,8 +324,8 @@ class SandboxFilesTool(SandboxToolsBase):
     )
     async def delete_file(self, file_path: str) -> ToolResult:
         try:
-            file_path = clean_path(file_path)
-            full_path = f"{WORKSPACE_PATH}/{file_path}"
+            file_path = self.clean_path(file_path)
+            full_path = f"{self.workspace_path}/{file_path}"
             if not self._file_exists(full_path):
                 return self.fail_response(f"File '{file_path}' does not exist")
             
@@ -366,8 +368,8 @@ class SandboxFilesTool(SandboxToolsBase):
     )
     async def search_files(self, path: str, pattern: str) -> ToolResult:
         try:
-            path = clean_path(path)
-            full_path = f"{WORKSPACE_PATH}/{path}" if not path.startswith(WORKSPACE_PATH) else path
+            path = self.clean_path(path)
+            full_path = f"{self.workspace_path}/{path}" if not path.startswith(self.workspace_path) else path
             results = self.sandbox.fs.find_files(
                 path=full_path,
                 pattern=pattern
@@ -436,8 +438,8 @@ class SandboxFilesTool(SandboxToolsBase):
     )
     async def replace_in_files(self, files: list[str], pattern: str, new_value: str) -> ToolResult:
         try:
-            files = [clean_path(f) for f in files]
-            full_paths = [f"{WORKSPACE_PATH}/{f}" if not f.startswith(WORKSPACE_PATH) else f for f in files]
+            files = [self.clean_path(f) for f in files]
+            full_paths = [f"{self.workspace_path}/{f}" if not f.startswith(self.workspace_path) else f for f in files]
             self.sandbox.fs.replace_in_files(
                 files=full_paths,
                 pattern=pattern,

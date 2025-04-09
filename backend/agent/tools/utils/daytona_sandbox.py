@@ -279,6 +279,7 @@ class SandboxToolsBase(Tool):
         super().__init__()
         self.sandbox = None
         self.daytona = daytona
+        self.workspace_path = "/workspace"
 
         self.sandbox_id = sandbox_id
         try:
@@ -293,3 +294,6 @@ class SandboxToolsBase(Tool):
         print(self.sandbox.get_preview_link(6080))
         print(self.sandbox.get_preview_link(8080))
         print("***\033[0m")
+
+    def clean_path(self, path: str) -> str:
+        return path.replace(self.workspace_path, "").lstrip("/")
