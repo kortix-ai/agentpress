@@ -519,12 +519,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             whileTap="tap"
             variants={sidebarLogoMotion}
           >
-            <div className="h-12 w-16 flex items-center justify-center">
+            <div className="h-12 w-14 flex items-center justify-center">
               <Spline
                 scene="https://prod.spline.design/UBkdpJsne-eB6mDZ/scene.splinecode"
                 style={{ transform: 'scale(0.5)', transformOrigin: 'left' }}
               />
             </div>
+            <div className="text-md font-medium -ml-4">S U N A</div>
           </motion.div>
         </Link>
       </SidebarHeader>
