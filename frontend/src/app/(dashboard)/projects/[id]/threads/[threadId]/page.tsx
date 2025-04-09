@@ -1442,10 +1442,10 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                                       
                                       return (
                                         <div 
-                                          className="mt-0 rounded-md overflow-hidden border border-success/20 inline-block cursor-pointer hover:border-success/40 transition-all relative"
+                                          className="mt-0 rounded-md overflow-hidden inline-block cursor-pointer hover:border-success/40 transition-all relative"
                                           onClick={() => handleToolClick(message)}
                                         >
-                                          <div className="flex items-center justify-between px-2 py-2 bg-success/10">
+                                          <div className="flex items-center justify-between py-2 bg-success/10">
                                             <div className="flex items-center gap-2">
                                               <FileText className="h-4 w-4 text-success" />
                                               <span className="font-normal text-success/90">File created successfully</span>

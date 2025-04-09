@@ -237,38 +237,32 @@ const Timeline = ({
         </button>
       </div>
       
-      {tools.length > 1 && (
-        <div 
-          ref={timelineRef}
-          className="relative h-1.5 bg-zinc-200 rounded-full cursor-pointer"
-          onClick={(e) => {
-            if (!timelineRef.current) return;
-            const rect = timelineRef.current.getBoundingClientRect();
-            const clickPosition = (e.clientX - rect.left) / rect.width;
-            const newIndex = Math.round(clickPosition * (tools.length - 1));
-            onSelectTool(tools[newIndex].id);
-          }}
-        >
-          {/* Timeline markers for each tool */}
-          {tools.map((tool, idx) => (
-            <div 
+      {/* Replace empty Slider with functional slider */}
+      <div className="relative pt-4 pb-1">
+        <div className="h-1 bg-zinc-200 rounded-full relative">
+          {tools.map((tool, index) => (
+            <button
               key={tool.id}
-              className={`absolute top-1/2 transform -translate-y-1/2 w-2.5 h-2.5 rounded-full transition-all duration-300 ${idx === currentIndex ? 'bg-blue-500' : 'bg-zinc-400'}`}
-              style={{ left: `${(idx / (tools.length - 1)) * 100}%` }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectTool(tool.id);
-              }}
+              className={`absolute w-3 h-3 rounded-full transform -translate-y-1/2 -translate-x-1/2 transition-all ${
+                tool.id === activeToolId 
+                  ? 'bg-blue-500 scale-125 border-2 border-white' 
+                  : 'bg-zinc-400 hover:bg-zinc-500'
+              }`}
+              style={{ left: `${(index / (tools.length - 1)) * 100}%`, top: '50%' }}
+              onClick={() => onSelectTool(tool.id)}
+              title={`${tool.name} (${formatTime(tool.startTime.toISOString())})`}
             />
           ))}
-          
-          {/* Active section of timeline */}
           <div 
-            className="absolute top-0 left-0 h-full bg-blue-500 rounded-full"
-            style={{ width: `${markerPosition}%` }}
+            className="absolute h-1 bg-blue-500 rounded-full"
+            style={{ 
+              width: `${markerPosition}%`, 
+              left: 0, 
+              top: 0 
+            }}
           />
         </div>
-      )}
+      </div>
     </div>
   );
 };
@@ -299,6 +293,7 @@ export default function SecondaryView({
   onSelectTool,
   streamingToolCall,
 }: SecondaryViewProps) {
+  // Use memo to find the active tool
   const activeTool = useMemo(() => {
     return toolExecutions.find((tool) => tool.id === activeToolId);
   }, [toolExecutions, activeToolId]);
@@ -474,13 +469,27 @@ export default function SecondaryView({
     );
   }, [toolExecutions, historicalTools]);
 
-  // Use the first active tool ID as default if none selected
+  // Always select the last tool by default if none is selected
   const effectiveActiveToolId = useMemo(() => {
+    // If there's an activeToolId provided, use it
     if (activeToolId) return activeToolId;
+    
+    // If there's a selectedTool, use its id
     if (selectedTool) return selectedTool.id;
+    
+    // If there's a currently streaming tool, use its id
     if (currentToolId) return currentToolId;
+    
+    // Default to the most recent tool if available
     return displayTools.length > 0 ? displayTools[displayTools.length - 1].id : '';
   }, [activeToolId, selectedTool, currentToolId, displayTools]);
+  
+  // Auto-select the first tool when component mounts if none is selected
+  useEffect(() => {
+    if (displayTools.length > 0 && !activeToolId && !selectedTool && onSelectTool) {
+      onSelectTool(displayTools[displayTools.length - 1].id);
+    }
+  }, [displayTools, activeToolId, selectedTool, onSelectTool]);
   
   // If a tool is streaming, ensure it's the selected one
   useEffect(() => {
@@ -489,8 +498,23 @@ export default function SecondaryView({
     }
   }, [isToolActive, currentToolId, onSelectTool, selectedTool]);
   
-  // Hide timeline when a specific tool is selected or when streaming
-  const showTimeline = displayTools.length > 0 && !selectedTool;
+  // Always show timeline when there are tools available
+  const showTimeline = displayTools.length > 1;
+  
+  // Get the tool to display - never be undefined
+  const displayTool = useMemo(() => {
+    const tool = selectedTool || 
+                activeTool || 
+                displayTools.find(t => t.id === effectiveActiveToolId) || 
+                (displayTools.length > 0 ? displayTools[displayTools.length - 1] : null);
+    
+    return tool || {
+      id: '',
+      name: '',
+      status: 'completed' as const,
+      startTime: new Date(),
+    };
+  }, [selectedTool, activeTool, displayTools, effectiveActiveToolId]);
   
   return (
     <div className="w-full h-full flex flex-col bg-zinc-50 border border-zinc-200 rounded-md p-4">
@@ -498,7 +522,7 @@ export default function SecondaryView({
       <div className="border-b border-zinc-200 pb-3 mb-4 flex justify-between items-center">
         <div className="flex items-center">
           <div className="bg-zinc-100 p-2 rounded-md mr-3">
-            {getToolIcon(streamingData?.toolName || selectedTool?.name || activeTool?.name || '')}
+            {getToolIcon(streamingData?.toolName || displayTool?.name || '')}
           </div>
           <div>
             <h2 className="text-md font-medium text-zinc-800">Tool Execution</h2>
@@ -509,7 +533,7 @@ export default function SecondaryView({
                   Running: {streamingData?.toolName || streamingToolCall?.name}
                 </span>
               ) : (
-                streamingData?.toolName || selectedTool?.name || activeTool?.name || 'No tool selected'
+                streamingData?.toolName || displayTool?.name || 'No tool selected'
               )}
             </p>
             {streamingData?.fileName && (
@@ -525,21 +549,16 @@ export default function SecondaryView({
         </button>
       </div>
       
-      {/* Section 2: Content View */}
+      {/* Section 2: Content View - Always show a tool */}
       <div className="flex-1 min-h-0">
         <ContentView 
-          tool={selectedTool || activeTool || displayTools.find(t => t.id === effectiveActiveToolId) || {
-            id: '',
-            name: '',
-            status: 'completed' as const,
-            startTime: new Date(),
-          }}
+          tool={displayTool}
           streamingData={streamingData || undefined}
         />
       </div>
       
-      {/* Section 3: Timeline - only show when tools are available */}
-      {showTimeline && displayTools.length > 0 && (
+      {/* Section 3: Timeline - show when multiple tools are available */}
+      {showTimeline && (
         <Timeline 
           tools={displayTools} 
           activeToolId={effectiveActiveToolId} 
