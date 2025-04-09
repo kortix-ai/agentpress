@@ -10,12 +10,30 @@ from utils.logger import logger
 
 load_dotenv()
 
+logger.info("Initializing Daytona sandbox configuration")
 config = DaytonaConfig(
     api_key=os.getenv("DAYTONA_API_KEY"),
     server_url=os.getenv("DAYTONA_SERVER_URL"),
     target=os.getenv("DAYTONA_TARGET")
 )
+
+if config.api_key:
+    logger.debug("Daytona API key configured successfully")
+else:
+    logger.warning("No Daytona API key found in environment variables")
+
+if config.server_url:
+    logger.debug(f"Daytona server URL set to: {config.server_url}")
+else:
+    logger.warning("No Daytona server URL found in environment variables")
+
+if config.target:
+    logger.debug(f"Daytona target set to: {config.target}")
+else:
+    logger.warning("No Daytona target found in environment variables")
+
 daytona = Daytona(config)
+logger.debug("Daytona client initialized")
 
 
 sandbox_browser_api = b'''
@@ -200,6 +218,15 @@ if __name__ == "__main__":
 
 
 def create_sandbox(password: str):
+    logger.info("Creating new Daytona sandbox environment")
+    logger.debug("Configuring sandbox with browser-use image and environment variables")
+    
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        logger.warning("OPENAI_API_KEY not found in environment variables")
+    else:
+        logger.debug("OPENAI_API_KEY configured for sandbox")
+    
     sandbox = daytona.create(CreateSandboxParams(
         image="adamcohenhillel/kortix-browser-use:0.0.1",
         env_vars={
@@ -209,7 +236,7 @@ def create_sandbox(password: str):
             "RESOLUTION_HEIGHT": "1080",
             "VNC_PASSWORD": password,
             "OPENAI_ENDPOINT": "https://api.openai.com/v1",
-            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
+            "OPENAI_API_KEY": openai_api_key,
             "ANTHROPIC_API_KEY": "",
             "ANTHROPIC_ENDPOINT": "https://api.anthropic.com",
             "GOOGLE_API_KEY": "",
@@ -236,39 +263,59 @@ def create_sandbox(password: str):
             8080   # HTTP website port
         ]
     ))
+    logger.info(f"Sandbox created with ID: {sandbox.id}")
+    
+    logger.debug("Uploading browser API script to sandbox")
     sandbox.fs.upload_file(sandbox.get_user_root_dir() + "/browser_api.py", sandbox_browser_api)
+    logger.debug("Uploading website server script to sandbox")
     sandbox.fs.upload_file(sandbox.get_user_root_dir() + "/website_server.py", sandbox_website_server)
+    
+    logger.debug("Creating sandbox browser API session")
     sandbox.process.create_session('sandbox_browser_api')
+    logger.debug("Creating sandbox website server session")
     sandbox.process.create_session('sandbox_website_server')
+    
+    logger.debug("Executing browser API command in sandbox")
     rsp = sandbox.process.execute_session_command('sandbox_browser_api', SessionExecuteRequest(
         command="python " + sandbox.get_user_root_dir() + "/browser_api.py",
         var_async=True
     ))
+    logger.debug(f"Browser API command execution result: {rsp}")
+    
+    logger.debug("Executing website server command in sandbox")
     rsp2 = sandbox.process.execute_session_command('sandbox_website_server', SessionExecuteRequest(
         command="python " + sandbox.get_user_root_dir() + "/website_server.py",
         var_async=True
     ))
+    logger.debug(f"Website server command execution result: {rsp2}")
+    
     times = 0
     success = False
     api_url = sandbox.get_preview_link(8000)
+    logger.info(f"Sandbox API URL: {api_url}")
+    
     while times < 10:
         times += 1
-        logger.info(f"Waiting for API to be ready...")
-        # Make the API call to our FastAPI endpoint
-        response = requests.get(f"{api_url}/health")
-        if response.status_code == 200:
-            logger.info(f"API call completed successfully")
-            success = True
-            break
-        else:
+        logger.info(f"Waiting for API to be ready... Attempt {times}/10")
+        try:
+            # Make the API call to our FastAPI endpoint
+            response = requests.get(f"{api_url}/health")
+            if response.status_code == 200:
+                logger.info(f"API call completed successfully: {response.status_code}")
+                success = True
+                break
+            else:
+                logger.warning(f"API health check failed with status code: {response.status_code}")
+                sleep(1)
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"API request error on attempt {times}: {str(e)}")
             sleep(1)
 
     if not success:
-        raise Exception("API call failed")
+        logger.error("API health check failed after maximum attempts")
+        raise Exception("API call failed after maximum attempts")
     
-    logger.info(f"Executed command {rsp}")
-    logger.info(f"Executed command {rsp2}")
-    logger.info(f"Created kortix_browser_use_api session `kortix_browser_use_api`")
+    logger.info(f"Sandbox environment successfully initialized")
     return sandbox
 
 
@@ -282,18 +329,32 @@ class SandboxToolsBase(Tool):
         self.workspace_path = "/workspace"
 
         self.sandbox_id = sandbox_id
+        logger.info(f"Initializing SandboxToolsBase with sandbox ID: {sandbox_id}")
+        
         try:
+            logger.debug(f"Retrieving sandbox with ID: {sandbox_id}")
             self.sandbox = self.daytona.get_current_sandbox(self.sandbox_id)
+            logger.info(f"Successfully retrieved sandbox: {self.sandbox.id}")
         except Exception as e:
-            logger.error(f"Error getting sandbox: {e}")
+            logger.error(f"Error retrieving sandbox: {str(e)}", exc_info=True)
             raise e
 
         self.api_url = self.sandbox.get_preview_link(8000)
+        logger.debug(f"Sandbox API URL: {self.api_url}")
+        
+        # Get and log preview links
+        vnc_url = self.sandbox.get_preview_link(6080)
+        website_url = self.sandbox.get_preview_link(8080)
+        
+        logger.info(f"Sandbox VNC URL: {vnc_url}")
+        logger.info(f"Sandbox Website URL: {website_url}")
         
         print("\033[95m***")
-        print(self.sandbox.get_preview_link(6080))
-        print(self.sandbox.get_preview_link(8080))
+        print(vnc_url)
+        print(website_url)
         print("***\033[0m")
 
     def clean_path(self, path: str) -> str:
-        return path.replace(self.workspace_path, "").lstrip("/")
+        cleaned_path = path.replace(self.workspace_path, "").lstrip("/")
+        logger.debug(f"Cleaned path: {path} -> {cleaned_path}")
+        return cleaned_path

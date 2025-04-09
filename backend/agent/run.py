@@ -47,7 +47,7 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
     #groq/deepseek-r1-distill-llama-70b
     #bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0
 
-    files_tool = SandboxFilesTool()
+    files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_password)
 
     files_state = await files_tool.get_workspace_state()
 

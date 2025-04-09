@@ -2,6 +2,7 @@ from daytona_sdk.process import SessionExecuteRequest
 
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
 from agent.tools.utils.daytona_sandbox import SandboxToolsBase
+from agent.tools.utils.exclusions import EXCLUDED_FILES, EXCLUDED_DIRS, EXCLUDED_EXT, should_exclude_file
 import os
 
 # TODO: might want to be more granular with the tool names:
@@ -15,63 +16,13 @@ import os
 class SandboxFilesTool(SandboxToolsBase):
     """Tool for executing file system operations in a Daytona sandbox."""
 
-    # Excluded files, directories, and extensions
-    EXCLUDED_FILES = {
-        ".DS_Store",
-        ".gitignore",
-        "package-lock.json",
-        "postcss.config.js",
-        "postcss.config.mjs",
-        "jsconfig.json",
-        "components.json",
-        "tsconfig.tsbuildinfo",
-        "tsconfig.json",
-    }
-
-    EXCLUDED_DIRS = {
-        "node_modules",
-        ".next",
-        "dist",
-        "build",
-        ".git"
-    }
-
-    EXCLUDED_EXT = {
-        ".ico",
-        ".svg",
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".gif",
-        ".bmp",
-        ".tiff",
-        ".webp",
-        ".db",
-        ".sql"
-    }
-
     def __init__(self, sandbox_id: str, password: str):
         super().__init__(sandbox_id, password)
         self.SNIPPET_LINES = 4  # Number of context lines to show around edits
 
     def _should_exclude_file(self, rel_path: str) -> bool:
         """Check if a file should be excluded based on path, name, or extension"""
-        # Check filename
-        filename = rel_path.split('/')[-1]
-        if filename in self.EXCLUDED_FILES:
-            return True
-
-        # Check directory
-        dir_path = '/'.join(rel_path.split('/')[:-1])
-        if any(excluded in dir_path for excluded in self.EXCLUDED_DIRS):
-            return True
-
-        # Check extension
-        _, ext = os.path.splitext(filename)
-        if ext.lower() in self.EXCLUDED_EXT:
-            return True
-
-        return False
+        return should_exclude_file(rel_path)
 
     def _file_exists(self, path: str) -> bool:
         """Check if a file exists in the sandbox"""
