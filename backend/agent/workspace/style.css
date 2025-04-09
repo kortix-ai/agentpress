@@ -1,0 +1,75 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    min-height: 100vh;
+    background-color: #0a0a0a;
+    cursor: none;
+    overflow: hidden;
+}
+
+.cursor {
+    width: 15px;
+    height: 15px;
+    background-color: #fff;
+    border-radius: 50%;
+    position: fixed;
+    pointer-events: none;
+    z-index: 999;
+    transform: translate(-50%, -50%);
+}
+
+.cursor-clone {
+    position: fixed;
+    pointer-events: none;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    mix-blend-mode: screen;
+}
+
+.clone1 {
+    width: 30px;
+    height: 30px;
+    border: 2px solid #ff3366;
+    z-index: 998;
+    transition: all 0.1s ease-out;
+}
+
+.clone2 {
+    width: 45px;
+    height: 45px;
+    border: 2px solid #33ff66;
+    z-index: 997;
+    transition: all 0.15s ease-out;
+}
+
+.clone3 {
+    width: 60px;
+    height: 60px;
+    border: 2px solid #3366ff;
+    z-index: 996;
+    transition: all 0.2s ease-out;
+}
+
+.clone4 {
+    width: 75px;
+    height: 75px;
+    border: 2px solid #ff6633;
+    z-index: 995;
+    transition: all 0.25s ease-out;
+}
+
+.clone5 {
+    width: 90px;
+    height: 90px;
+    border: 2px solid #66ff33;
+    z-index: 994;
+    transition: all 0.3s ease-out;
+}
+
+.cursor-clone:hover {
+    transform: translate(-50%, -50%) scale(1.2);
+}
