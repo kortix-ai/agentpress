@@ -82,8 +82,29 @@ class SandboxBrowseTool(SandboxToolsBase):
             
             if response.status_code == 200:
                 logger.info("API call completed successfully")
-                print(response.json())
-                return self.success_response(response.json())
+                response_data = response.json()
+
+                status = response_data['status']
+                action_history = []
+                # Extract only the key information from each history item
+                for h in response_data['history']:
+                    thinking = h['model_output']['current_state']
+                    result = h['result'][0] if h['result'] else {}
+                    screenshot = h['state']['screenshot']
+                    step = {
+                        "thinking": {
+                            "evaluation": thinking.get('evaluation_previous_goal', ''),
+                            "memory": thinking.get('memory', ''),
+                            "next_goal": thinking.get('next_goal', '')
+                        },
+                        "result": result.get('extracted_content', ''),
+                        # "screenshot": screenshot
+                    }
+                    action_history.append(step)
+                if status != "success":
+                    return self.fail_response(action_history)
+                else:
+                    return self.success_response(action_history)
             else:
                 logger.error(f"API call failed with status code {response.status_code}: {response.text}")
                 return self.fail_response(f"API call failed with status code {response.status_code}: {response.text}")
