@@ -124,12 +124,12 @@ class ResponseProcessor:
         # Track finish reason
         finish_reason = None
         
-        logger.info(f"Starting to process streaming response for thread {thread_id}")
+        # logger.debug(f"Starting to process streaming response for thread {thread_id}")
         logger.info(f"Config: XML={config.xml_tool_calling}, Native={config.native_tool_calling}, " 
                    f"Execute on stream={config.execute_on_stream}, Execution strategy={config.tool_execution_strategy}")
         
-        if config.max_xml_tool_calls > 0:
-            logger.info(f"XML tool call limit enabled: {config.max_xml_tool_calls}")
+        # if config.max_xml_tool_calls > 0:
+        #     logger.info(f"XML tool call limit enabled: {config.max_xml_tool_calls}")
         
         try:
             async for chunk in llm_response:
@@ -138,7 +138,7 @@ class ResponseProcessor:
                 # Check for finish_reason
                 if hasattr(chunk, 'choices') and chunk.choices and hasattr(chunk.choices[0], 'finish_reason') and chunk.choices[0].finish_reason:
                     finish_reason = chunk.choices[0].finish_reason
-                    logger.info(f"Detected finish_reason: {finish_reason}")
+                    logger.debug(f"Detected finish_reason: {finish_reason}")
                 
                 if hasattr(chunk, 'choices') and chunk.choices:
                     delta = chunk.choices[0].delta if hasattr(chunk.choices[0], 'delta') else None

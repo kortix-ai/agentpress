@@ -2,6 +2,7 @@ import json
 from uuid import uuid4
 from typing import Optional
 
+from agent.tools.message_tool import MessageTool
 from dotenv import load_dotenv
 
 from agentpress.thread_manager import ThreadManager
@@ -11,11 +12,26 @@ from agent.tools.sb_shell_tool import SandboxShellTool
 from agent.tools.sb_website_tool import SandboxWebsiteTool
 from agent.tools.sb_files_tool import SandboxFilesTool
 from agent.prompt import get_system_prompt
-from agent.tools.utils.daytona_sandbox import daytona, create_sandbox
-from daytona_api_client.models.workspace_state import WorkspaceState
+from agent.tools.utils.daytona_sandbox import daytona, create_sandbox, get_or_start_sandbox
+
 load_dotenv()
 
-async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None, native_max_auto_continues: int = 25, max_iterations: int = 1000):
+# Custom JSON encoder to handle non-serializable types
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        # Handle ToolResult objects
+        if hasattr(obj, 'to_dict'):
+            return obj.to_dict()
+        # Handle datetime objects
+        if hasattr(obj, 'isoformat'):
+            return obj.isoformat()
+        # Return string representation for other unserializable objects
+        try:
+            return str(obj)
+        except:
+            return f"<Unserializable object of type {type(obj).__name__}>"
+
+async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None, native_max_auto_continues: int = 25, max_iterations: int = 1):
     """Run the development agent with specified configuration."""
     
     if not thread_manager:
@@ -27,13 +43,7 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     if project.data[0]['sandbox_id']:
         sandbox_id = project.data[0]['sandbox_id']
         sandbox_pass = project.data[0]['sandbox_pass']
-        sandbox = daytona.get_current_sandbox(sandbox_id)
-        if sandbox.instance.state == WorkspaceState.ARCHIVED or sandbox.instance.state == WorkspaceState.STOPPED:
-            try:
-                daytona.start(sandbox)
-            except Exception as e:
-                print(f"Error starting sandbox: {e}")
-                raise e
+        sandbox = await get_or_start_sandbox(sandbox_id, sandbox_pass)
     else:
         sandbox_pass = str(uuid4())
         sandbox = create_sandbox(sandbox_pass)
@@ -44,7 +54,7 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
         }).eq('project_id', project_id).execute()
     ### ---
 
-    print("Adding tools to thread manager...")
+    
     thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxWebsiteTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
@@ -52,9 +62,9 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
 
     system_message = { "role": "system", "content": get_system_prompt() }
 
-    model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"         
+    model_name = "anthropic/claude-3-5-sonnet-latest"
+    # model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"         
     # model_name = "anthropic/claude-3-5-sonnet-latest" 
-    # model_name = "anthropic/claude-3-5-sonnet-latest"
     # model_name = "anthropic/claude-3-7-sonnet-latest"
     # model_name = "openai/gpt-4o"
     # model_name = "groq/deepseek-r1-distill-llama-70b"
@@ -77,7 +87,7 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
             "content": f"""
 Current development environment workspace state:
 <current_workspace_state>
-{json.dumps(files_state, indent=2)}
+{json.dumps(files_state, indent=2, cls=CustomJSONEncoder)}
 </current_workspace_state>
             """
         }
@@ -101,7 +111,7 @@ Current development environment workspace state:
                 xml_adding_strategy="user_message"
             ),
             native_max_auto_continues=native_max_auto_continues,
-            include_xml_examples=True
+            include_xml_examples=True,
         )
             
         if isinstance(response, dict) and "status" in response and response["status"] == "error":
@@ -143,8 +153,19 @@ async def test_agent():
     client = await DBConnection().client
     
     try:
-        thread_result = await client.table('projects').insert({"name": "test", "user_id": "68e1da55-0749-49db-937a-ff56bf0269a0"}).execute()
-        thread_result = await client.table('threads').insert({'project_id': thread_result.data[0]['project_id']}).execute()
+        project_result = await client.table('projects').select('*').eq('name', 'test11').eq('user_id', '68e1da55-0749-49db-937a-ff56bf0269a0').execute()
+        
+        if project_result.data and len(project_result.data) > 0:
+            # Use existing test project
+            project_id = project_result.data[0]['project_id']
+            print(f"\n🔄 Using existing test project: {project_id}")
+        else:
+            # Create new test project if none exists
+            project_result = await client.table('projects').insert({"name": "test11", "user_id": "68e1da55-0749-49db-937a-ff56bf0269a0"}).execute()
+            project_id = project_result.data[0]['project_id']
+            print(f"\n✨ Created new test project: {project_id}")
+        
+        thread_result = await client.table('threads').insert({'project_id': project_id}).execute()
         thread_data = thread_result.data[0] if thread_result.data else None
         
         if not thread_data:
@@ -152,9 +173,8 @@ async def test_agent():
             return
             
         thread_id = thread_data['thread_id']
-        project_id = thread_data['project_id']
     except Exception as e:
-        print(f"Error creating thread: {str(e)}")
+        print(f"Error setting up thread: {str(e)}")
         return
         
     print(f"\n🤖 Agent Thread Created: {thread_id}\n")

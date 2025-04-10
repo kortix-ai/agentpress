@@ -37,11 +37,11 @@ class DBConnection:
                 logger.error("Missing required environment variables for Supabase connection")
                 raise RuntimeError("SUPABASE_URL and a key (SERVICE_ROLE_KEY or ANON_KEY) environment variables must be set.")
 
-            logger.info("Initializing Supabase connection")
+            logger.debug("Initializing Supabase connection")
             self._client = await create_async_client(supabase_url, supabase_key)
             self._initialized = True
             key_type = "SERVICE_ROLE_KEY" if os.getenv('SUPABASE_SERVICE_ROLE_KEY') else "ANON_KEY"
-            logger.info(f"Database connection initialized with Supabase using {key_type}")
+            logger.debug(f"Database connection initialized with Supabase using {key_type}")
         except Exception as e:
             logger.error(f"Database initialization error: {e}")
             raise RuntimeError(f"Failed to initialize database connection: {str(e)}")

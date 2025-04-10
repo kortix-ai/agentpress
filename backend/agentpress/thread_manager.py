@@ -254,7 +254,7 @@ Here are the XML tools available with examples:
                     logger.debug(f"Retrieved {len(openapi_tool_schemas) if openapi_tool_schemas else 0} OpenAPI tool schemas")
 
                 # 5. Make LLM API call
-                logger.info("Making LLM API call")
+                logger.debug("Making LLM API call")
                 try:
                     llm_response = await make_llm_api_call(
                         prepared_messages,
@@ -273,7 +273,7 @@ Here are the XML tools available with examples:
 
                 # 6. Process LLM response using the ResponseProcessor
                 if stream:
-                    logger.info("Processing streaming response")
+                    logger.debug("Processing streaming response")
                     response_generator = self.response_processor.process_streaming_response(
                         llm_response=llm_response,
                         thread_id=thread_id,
@@ -282,7 +282,7 @@ Here are the XML tools available with examples:
                     
                     return response_generator
                 else:
-                    logger.info("Processing non-streaming response")
+                    logger.debug("Processing non-streaming response")
                     try:
                         response = await self.response_processor.process_non_streaming_response(
                             llm_response=llm_response,

@@ -29,7 +29,7 @@ class ToolRegistry:
             cls._instance = super().__new__(cls)
             cls._instance.tools = {}
             cls._instance.xml_tools = {}
-            logger.info("Initialized new ToolRegistry instance")
+            logger.debug("Initialized new ToolRegistry instance")
         return cls._instance
     
     def register_tool(self, tool_class: Type[Tool], function_names: Optional[List[str]] = None, **kwargs):
@@ -44,7 +44,7 @@ class ToolRegistry:
             - If function_names is None, all functions are registered
             - Handles both OpenAPI and XML schema registration
         """
-        logger.info(f"Registering tool class: {tool_class.__name__}")
+        logger.debug(f"Registering tool class: {tool_class.__name__}")
         tool_instance = tool_class(**kwargs)
         schemas = tool_instance.get_schemas()
         
@@ -73,7 +73,7 @@ class ToolRegistry:
                         registered_xml += 1
                         logger.debug(f"Registered XML tag {schema.xml_schema.tag_name} -> {func_name} from {tool_class.__name__}")
         
-        logger.info(f"Tool registration complete for {tool_class.__name__}: {registered_openapi} OpenAPI functions, {registered_xml} XML tags")
+        logger.debug(f"Tool registration complete for {tool_class.__name__}: {registered_openapi} OpenAPI functions, {registered_xml} XML tags")
 
     def get_available_functions(self) -> Dict[str, Callable]:
         """Get all available tool functions.

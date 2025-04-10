@@ -191,7 +191,7 @@ async def make_llm_api_call(
         LLMRetryError: If API call fails after retries
         LLMError: For other API-related errors
     """
-    logger.info(f"Making LLM API call to model: {model_name}")
+    logger.debug(f"Making LLM API call to model: {model_name}")
     params = prepare_params(
         messages=messages,
         model_name=model_name,
@@ -214,7 +214,7 @@ async def make_llm_api_call(
             # logger.debug(f"API request parameters: {json.dumps(params, indent=2)}")
             
             response = await litellm.acompletion(**params)
-            logger.info(f"Successfully received API response from {model_name}")
+            logger.debug(f"Successfully received API response from {model_name}")
             logger.debug(f"Response: {response}")
             return response
             
