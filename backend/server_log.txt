@@ -1,0 +1,85 @@
+2025-04-08 11:00:40,630 - WARNING - No API key found for provider: OPENAI
+2025-04-08 11:00:40,630 - WARNING - No API key found for provider: ANTHROPIC
+2025-04-08 11:00:40,630 - WARNING - No API key found for provider: GROQ
+2025-04-08 11:00:40,630 - WARNING - No API key found for provider: OPENROUTER
+2025-04-08 11:00:40,630 - WARNING - Missing AWS credentials for Bedrock integration - access_key: False, secret_key: False, region: None
+2025-04-08 11:00:40,691 - DEBUG - Applying XML schema with tag 'create-file' to function create_file
+2025-04-08 11:00:40,691 - DEBUG - Added XML mapping for parameter 'file_path' with type 'attribute' at path '.', required=True
+2025-04-08 11:00:40,691 - DEBUG - Added XML mapping for parameter 'file_contents' with type 'content' at path '.', required=True
+2025-04-08 11:00:40,691 - DEBUG - Added xml schema to function create_file
+2025-04-08 11:00:40,691 - DEBUG - Applying OpenAPI schema to function create_file
+2025-04-08 11:00:40,691 - DEBUG - Added openapi schema to function create_file
+2025-04-08 11:00:40,691 - DEBUG - Applying XML schema with tag 'str-replace' to function str_replace
+2025-04-08 11:00:40,691 - DEBUG - Added XML mapping for parameter 'file_path' with type 'attribute' at path 'file_path', required=True
+2025-04-08 11:00:40,691 - DEBUG - Added XML mapping for parameter 'old_str' with type 'element' at path 'old_str', required=True
+2025-04-08 11:00:40,691 - DEBUG - Added XML mapping for parameter 'new_str' with type 'element' at path 'new_str', required=True
+2025-04-08 11:00:40,691 - DEBUG - Added xml schema to function str_replace
+2025-04-08 11:00:40,691 - DEBUG - Applying OpenAPI schema to function str_replace
+2025-04-08 11:00:40,691 - DEBUG - Added openapi schema to function str_replace
+2025-04-08 11:00:40,691 - DEBUG - Applying XML schema with tag 'full-file-rewrite' to function full_file_rewrite
+2025-04-08 11:00:40,691 - DEBUG - Added XML mapping for parameter 'file_path' with type 'attribute' at path '.', required=True
+2025-04-08 11:00:40,691 - DEBUG - Added XML mapping for parameter 'file_contents' with type 'content' at path '.', required=True
+2025-04-08 11:00:40,691 - DEBUG - Added xml schema to function full_file_rewrite
+2025-04-08 11:00:40,691 - DEBUG - Applying OpenAPI schema to function full_file_rewrite
+2025-04-08 11:00:40,691 - DEBUG - Added openapi schema to function full_file_rewrite
+2025-04-08 11:00:40,691 - DEBUG - Applying XML schema with tag 'delete-file' to function delete_file
+2025-04-08 11:00:40,691 - DEBUG - Added XML mapping for parameter 'file_path' with type 'attribute' at path '.', required=True
+2025-04-08 11:00:40,692 - DEBUG - Added xml schema to function delete_file
+2025-04-08 11:00:40,692 - DEBUG - Applying OpenAPI schema to function delete_file
+2025-04-08 11:00:40,692 - DEBUG - Added openapi schema to function delete_file
+2025-04-08 11:00:40,692 - DEBUG - Applying XML schema with tag 'execute-command' to function execute_command
+2025-04-08 11:00:40,692 - DEBUG - Added XML mapping for parameter 'command' with type 'content' at path '.', required=True
+2025-04-08 11:00:40,692 - DEBUG - Added xml schema to function execute_command
+2025-04-08 11:00:40,692 - DEBUG - Applying OpenAPI schema to function execute_command
+2025-04-08 11:00:40,692 - DEBUG - Added openapi schema to function execute_command
+2025-04-08 11:00:40,703 - INFO - Starting server on 0.0.0.0:8000
+INFO:     Started server process [1383]
+INFO:     Waiting for application startup.
+2025-04-08 11:00:40,708 - INFO - Starting up FastAPI application with instance ID: 45a8b44b
+2025-04-08 11:00:40,708 - INFO - Initializing Supabase connection
+2025-04-08 11:00:40,715 - INFO - Database connection initialized with Supabase using ANON_KEY
+2025-04-08 11:00:40,715 - INFO - Initialized new ToolRegistry instance
+2025-04-08 11:00:40,715 - INFO - Initialized agent API with instance ID: 45a8b44b
+2025-04-08 11:00:40,715 - INFO - Initializing Redis connection
+2025-04-08 11:00:40,715 - INFO - Redis connection initialized successfully
+2025-04-08 11:00:40,715 - INFO - Restoring running agent runs after server restart
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+Task exception was never retrieved
+future: <Task finished name='Task-3' coro=<restore_running_agent_runs() done, defined at /Users/bryceneil/kortix/agentpress/backend/agent/api.py:136> exception=Error 42501:
+Message: permission denied for table agent_runs>
+Traceback (most recent call last):
+  File "/Users/bryceneil/kortix/agentpress/backend/agent/api.py", line 140, in restore_running_agent_runs
+    running_agent_runs = await client.table('agent_runs').select('*').eq("status", "running").execute()
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/bryceneil/Library/Caches/pypoetry/virtualenvs/agentpress-OEzIjUr2-py3.12/lib/python3.12/site-packages/postgrest/_async/request_builder.py", line 78, in execute
+    raise APIError(r.json())
+postgrest.exceptions.APIError: {'code': '42501', 'details': None, 'hint': None, 'message': 'permission denied for table agent_runs'}
+INFO:     127.0.0.1:52281 - "GET /health HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52285 - "GET / HTTP/1.1" 404 Not Found
+2025-04-08 11:01:21,301 - INFO - Health check endpoint called
+INFO:     127.0.0.1:52290 - "GET /api/health-check HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2025-04-08 11:01:53,155 - INFO - Cleaning up agent resources
+2025-04-08 11:01:53,156 - INFO - Starting cleanup of agent API resources
+2025-04-08 11:01:53,171 - WARNING - Redis keys error (attempt 1/5): You must set server_hostname when using ssl without a host. Retrying in 0.45s
+2025-04-08 11:01:53,623 - DEBUG - Trying to reconnect to Redis before retry 1...
+2025-04-08 11:01:53,623 - WARNING - Redis reconnection failed: You must set server_hostname when using ssl without a host
+2025-04-08 11:01:53,623 - WARNING - Redis keys error (attempt 2/5): You must set server_hostname when using ssl without a host. Retrying in 1.10s
+2025-04-08 11:01:54,720 - DEBUG - Trying to reconnect to Redis before retry 2...
+2025-04-08 11:01:54,721 - WARNING - Redis reconnection failed: You must set server_hostname when using ssl without a host
+2025-04-08 11:01:54,721 - WARNING - Redis keys error (attempt 3/5): You must set server_hostname when using ssl without a host. Retrying in 1.83s
+2025-04-08 11:01:56,550 - DEBUG - Trying to reconnect to Redis before retry 3...
+2025-04-08 11:01:56,550 - WARNING - Redis reconnection failed: You must set server_hostname when using ssl without a host
+2025-04-08 11:01:56,550 - WARNING - Redis keys error (attempt 4/5): You must set server_hostname when using ssl without a host. Retrying in 3.95s
+2025-04-08 11:02:00,500 - DEBUG - Trying to reconnect to Redis before retry 4...
+2025-04-08 11:02:00,501 - WARNING - Redis reconnection failed: You must set server_hostname when using ssl without a host
+2025-04-08 11:02:00,501 - ERROR - Redis operation keys failed after 5 retries: You must set server_hostname when using ssl without a host
+2025-04-08 11:02:00,501 - ERROR - Failed to clean up running agent runs: You must set server_hostname when using ssl without a host
+2025-04-08 11:02:00,501 - INFO - Closing Redis connection
+2025-04-08 11:02:00,501 - INFO - Redis connection closed
+2025-04-08 11:02:00,501 - INFO - Completed cleanup of agent API resources
+2025-04-08 11:02:00,501 - INFO - Disconnecting from database
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1383]

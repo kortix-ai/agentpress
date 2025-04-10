@@ -1,42 +1,54 @@
-import os
 import json
-import uuid
+from uuid import uuid4
+from typing import Optional
+
+from dotenv import load_dotenv
+
 from agentpress.thread_manager import ThreadManager
+from agentpress.response_processor import ProcessorConfig
 from agent.tools.sb_browse_tool import SandboxBrowseTool
 from agent.tools.sb_shell_tool import SandboxShellTool
 from agent.tools.sb_website_tool import SandboxWebsiteTool
 from agent.tools.sb_files_tool import SandboxFilesTool
-from typing import Optional
 from agent.prompt import get_system_prompt
-from agentpress.response_processor import ProcessorConfig
-from dotenv import load_dotenv
-from agent.tools.utils.daytona_sandbox import create_sandbox
-
-# Load environment variables
+from agent.tools.utils.daytona_sandbox import daytona, create_sandbox
+from daytona_api_client.models.workspace_state import WorkspaceState
 load_dotenv()
 
-async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None, native_max_auto_continues: int = 25):
+async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None, native_max_auto_continues: int = 25):
     """Run the development agent with specified configuration."""
     
     if not thread_manager:
         thread_manager = ThreadManager()
     
-    if True: # todo: change to of not sandbox running
-        sandbox = create_sandbox("vvv")
-        sandbox_id = sandbox.id
-        sandbox_password = "vvv"
+    client = await thread_manager.db.client
+    ## probably want to move to api.py
+    project = await client.table('projects').select('*').eq('project_id', project_id).execute()
+    if project.data[0]['sandbox_id']:
+        sandbox_id = project.data[0]['sandbox_id']
+        sandbox_pass = project.data[0]['sandbox_pass']
+        sandbox = daytona.get_current_sandbox(sandbox_id)
+        if sandbox.instance.state == WorkspaceState.ARCHIVED or sandbox.instance.state == WorkspaceState.STOPPED:
+            try:
+                daytona.start(sandbox)
+            except Exception as e:
+                print(f"Error starting sandbox: {e}")
+                raise e
     else:
-        sandbox_id = "sandbox-01efaaa5"
-        sandbox_password = "vvv"
+        sandbox_pass = str(uuid4())
+        sandbox = create_sandbox(sandbox_pass)
+        sandbox_id = sandbox.id
+        await client.table('projects').update({
+            'sandbox_id': sandbox_id,
+            'sandbox_pass': sandbox_pass
+        }).eq('project_id', project_id).execute()
+    ### ---
 
     print("Adding tools to thread manager...")
-    # thread_manager.add_tool(FilesTool)
-    # thread_manager.add_tool(TerminalTool)
-    # thread_manager.add_tool(CodeSearchTool)
-    thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_password)
-    thread_manager.add_tool(SandboxWebsiteTool, sandbox_id=sandbox_id, password=sandbox_password)
-    thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_password)
-    thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_password)
+    thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
+    thread_manager.add_tool(SandboxWebsiteTool, sandbox_id=sandbox_id, password=sandbox_pass)
+    thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
+    thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)
 
     system_message = { "role": "system", "content": get_system_prompt() }
 
@@ -49,7 +61,7 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
     #groq/deepseek-r1-distill-llama-70b
     #bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0
 
-    files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_password)
+    files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_pass)
 
     files_state = await files_tool.get_workspace_state()
 
@@ -74,8 +86,8 @@ Current development environment workspace state:
         tool_choice="auto",
         max_xml_tool_calls=1,
         processor_config=ProcessorConfig(
-            xml_tool_calling=True,
-            native_tool_calling=False,
+            xml_tool_calling=False,
+            native_tool_calling=True,
             execute_tools=True,
             execute_on_stream=True,
             tool_execution_strategy="parallel",
@@ -103,7 +115,8 @@ async def test_agent():
     client = await DBConnection().client
     
     try:
-        thread_result = await client.table('threads').insert({}).execute()
+        thread_result = await client.table('projects').insert({"name": "test", "user_id": "68e1da55-0749-49db-937a-ff56bf0269a0"}).execute()
+        thread_result = await client.table('threads').insert({'project_id': thread_result.data[0]['project_id']}).execute()
         thread_data = thread_result.data[0] if thread_result.data else None
         
         if not thread_data:
@@ -111,6 +124,7 @@ async def test_agent():
             return
             
         thread_id = thread_data['thread_id']
+        project_id = thread_data['project_id']
     except Exception as e:
         print(f"Error creating thread: {str(e)}")
         return
@@ -126,7 +140,7 @@ async def test_agent():
         
         if not user_message.strip():
             print("\n🔄 Running agent...\n")
-            await process_agent_response(thread_id, thread_manager)
+            await process_agent_response(thread_id, project_id, thread_manager)
             continue
             
         # Add the user message to the thread
@@ -141,17 +155,17 @@ async def test_agent():
         )
         
         print("\n🔄 Running agent...\n")
-        await process_agent_response(thread_id, thread_manager)
+        await process_agent_response(thread_id, project_id, thread_manager)
     
     print("\n👋 Test completed. Goodbye!")
 
-async def process_agent_response(thread_id: str, thread_manager: ThreadManager):
+async def process_agent_response(thread_id: str, project_id: str, thread_manager: ThreadManager):
     """Process the streaming response from the agent."""
     chunk_counter = 0
     current_response = ""
     tool_call_counter = 0  # Track number of tool calls
     
-    async for chunk in run_agent(thread_id=thread_id, stream=True, thread_manager=thread_manager, native_max_auto_continues=25):
+    async for chunk in run_agent(thread_id=thread_id, project_id=project_id, stream=True, thread_manager=thread_manager, native_max_auto_continues=25):
         chunk_counter += 1
         
         if chunk.get('type') == 'content' and 'content' in chunk:
