@@ -15,7 +15,7 @@ from agent.tools.utils.daytona_sandbox import daytona, create_sandbox
 from daytona_api_client.models.workspace_state import WorkspaceState
 load_dotenv()
 
-async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None, native_max_auto_continues: int = 25):
+async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None, native_max_auto_continues: int = 25, max_iterations: int = 1000):
     """Run the development agent with specified configuration."""
     
     if not thread_manager:
@@ -52,56 +52,84 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
 
     system_message = { "role": "system", "content": get_system_prompt() }
 
+    model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"         
     # model_name = "anthropic/claude-3-5-sonnet-latest" 
-    model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0" 
-    
-    #anthropic/claude-3-5-sonnet-latest
-    #anthropic/claude-3-7-sonnet-latest
-    model_name = "openai/gpt-4o"
-    #groq/deepseek-r1-distill-llama-70b
-    #bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0
+    # model_name = "anthropic/claude-3-5-sonnet-latest"
+    # model_name = "anthropic/claude-3-7-sonnet-latest"
+    # model_name = "openai/gpt-4o"
+    # model_name = "groq/deepseek-r1-distill-llama-70b"
+    # model_name = "bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0"
+    # model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"
 
     files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_pass)
 
-    files_state = await files_tool.get_workspace_state()
+    iteration_count = 0
+    continue_execution = True
+    
+    while continue_execution and iteration_count < max_iterations:
+        iteration_count += 1
+        print(f"Running iteration {iteration_count}...")
+        
+        files_state = await files_tool.get_workspace_state()
 
-    state_message = {
-        "role": "user",
-        "content": f"""
+        state_message = {
+            "role": "user",
+            "content": f"""
 Current development environment workspace state:
 <current_workspace_state>
 {json.dumps(files_state, indent=2)}
 </current_workspace_state>
-        """
-    }
+            """
+        }
 
-    response = await thread_manager.run_thread(
-        thread_id=thread_id,
-        system_prompt=system_message,
-        stream=stream,
-        temporary_message=state_message,
-        llm_model=model_name,
-        llm_temperature=0.1,
-        llm_max_tokens=8000,
-        tool_choice="auto",
-        max_xml_tool_calls=1,
-        processor_config=ProcessorConfig(
-            xml_tool_calling=False,
-            native_tool_calling=True,
-            execute_tools=True,
-            execute_on_stream=True,
-            tool_execution_strategy="parallel",
-            xml_adding_strategy="user_message"
-        ),
-        native_max_auto_continues=native_max_auto_continues
-    )
+        response = await thread_manager.run_thread(
+            thread_id=thread_id,
+            system_prompt=system_message,
+            stream=stream,
+            temporary_message=state_message,
+            llm_model=model_name,
+            llm_temperature=0.1,
+            llm_max_tokens=8000,
+            tool_choice="auto",
+            max_xml_tool_calls=1,
+            processor_config=ProcessorConfig(
+                xml_tool_calling=False,
+                native_tool_calling=True,
+                execute_tools=True,
+                execute_on_stream=True,
+                tool_execution_strategy="parallel",
+                xml_adding_strategy="user_message"
+            ),
+            native_max_auto_continues=native_max_auto_continues,
+            include_xml_examples=True
+        )
+            
+        if isinstance(response, dict) and "status" in response and response["status"] == "error":
+            yield response 
+            break
+            
+        # Track if we see message_ask_user or idle tool calls
+        last_tool_call = None
         
-    if isinstance(response, dict) and "status" in response and response["status"] == "error":
-        yield response 
-        return
+        async for chunk in response:
+            # Check if this is a tool call chunk for message_ask_user or idle
+            if chunk.get('type') == 'tool_call':
+                tool_call = chunk.get('tool_call', {})
+                function_name = tool_call.get('function', {}).get('name', '')
+                if function_name in ['message_ask_user', 'idle']:
+                    last_tool_call = function_name
+                    
+            yield chunk
         
-    async for chunk in response:
-        yield chunk
+        # Check if we should stop based on the last tool call
+        if last_tool_call in ['message_ask_user', 'idle']:
+            print(f"Agent decided to stop with tool: {last_tool_call}")
+            continue_execution = False
+
+
+
+
+# TESTING
 
 async def test_agent():
     """Test function to run the agent with a sample query"""

@@ -46,6 +46,7 @@ python-ripgrep = "0.0.6"
 daytona_sdk = "^0.12.0"
 boto3 = "^1.34.0"
 openai = "^1.72.0"
+streamlit = "^1.44.1"
 
 [tool.poetry.scripts]
 agentpress = "agentpress.cli:main"
