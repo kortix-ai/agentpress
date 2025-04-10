@@ -1,0 +1,55 @@
+services:
+  kortix-browser-use:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: ${DOCKERFILE:-Dockerfile}
+      args:
+        TARGETPLATFORM: ${TARGETPLATFORM:-linux/amd64}
+    image: kortix-browser-use:0.0.1
+    ports:
+      - "7788:7788"  # Gradio default port
+      - "6080:6080"  # noVNC web interface
+      - "5901:5901"  # VNC port
+      - "9222:9222"  # Chrome remote debugging port
+    environment:
+      - OPENAI_ENDPOINT=${OPENAI_ENDPOINT:-https://api.openai.com/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_ENDPOINT=${ANTHROPIC_ENDPOINT:-https://api.anthropic.com}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
+      - DEEPSEEK_ENDPOINT=${DEEPSEEK_ENDPOINT:-https://api.deepseek.com}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - OLLAMA_ENDPOINT=${OLLAMA_ENDPOINT:-http://localhost:11434}
+
+      - BROWSER_USE_LOGGING_LEVEL=${BROWSER_USE_LOGGING_LEVEL:-info}
+      - ANONYMIZED_TELEMETRY=${ANONYMIZED_TELEMETRY:-false}
+      - CHROME_PATH=/usr/bin/google-chrome
+      - CHROME_USER_DATA=/app/data/chrome_data
+      - CHROME_PERSISTENT_SESSION=${CHROME_PERSISTENT_SESSION:-false}
+      - CHROME_CDP=${CHROME_CDP:-http://localhost:9222}
+      - DISPLAY=:99
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+      - RESOLUTION=${RESOLUTION:-1920x1080x24}
+      - RESOLUTION_WIDTH=${RESOLUTION_WIDTH:-1920}
+      - RESOLUTION_HEIGHT=${RESOLUTION_HEIGHT:-1080}
+      - VNC_PASSWORD=${VNC_PASSWORD:-vncpassword}
+      - CHROME_DEBUGGING_PORT=9222
+      - CHROME_DEBUGGING_HOST=localhost
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    restart: unless-stopped
+    shm_size: '2gb'
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp=unconfined
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5901"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
