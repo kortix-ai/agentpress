@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import '@/styles/markdown.css';
 import { renderToString } from 'react-dom/server';
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Instead of importing 'diff', let's create a simple custom diff function
 // This avoids the need for an external dependency
@@ -151,53 +152,40 @@ export default function MarkdownView({
       setViewMode('diff');
     }
   }, [showDiff]);
-  
-  // Determine which content to display based on view mode
-  const displayContent = viewMode === 'original' 
-    ? originalContent 
-    : viewMode === 'modified' 
-      ? modifiedContent 
-      : originalContent;
 
   return (
-    <div className="h-full flex flex-col bg-zinc-50 text-white">
-      {/* Header section */}
-      <div className="border-b border-zinc-800 px-4 py-2 flex items-center">
+    <div className="h-full flex flex-col text-white border border-zinc-200 rounded-lg backdrop-blur-sm">
+      {/* Header section with tabs */}
+      <div className="border-b border-zinc-200 px-4 py-2 flex items-center justify-between">
         <div className="text-zinc-400 text-sm font-medium">
           {title || 'Markdown View'}
         </div>
+        
+        {/* Tabs in header */}
+        <Tabs 
+          defaultValue={viewMode} 
+          value={viewMode} 
+          onValueChange={(value) => setViewMode(value as 'original' | 'modified' | 'diff')}
+          className="w-auto"
+        >
+          <TabsList className="">
+            <TabsTrigger value="original" className="text-xs py-1">Original</TabsTrigger>
+            <TabsTrigger value="modified" className="text-xs py-1">Modified</TabsTrigger>
+            <TabsTrigger value="diff" className="text-xs py-1">Diff</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
-      
-      {/* Tab navigation with blurred background */}
-      <div className="px-4 py-2 backdrop-blur-sm bg-zinc-50 border-b border-zinc-800/50 sticky top-0 z-10">
-        <div className="flex justify-end space-x-2">
-          <button 
-            onClick={() => setViewMode('original')}
-            className={`px-3 py-1 text-xs rounded-full ${viewMode === 'original' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:bg-zinc-800'}`}
-          >
-            Original
-          </button>
-          <button 
-            onClick={() => setViewMode('modified')}
-            className={`px-3 py-1 text-xs rounded-full ${viewMode === 'modified' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:bg-zinc-800'}`}
-          >
-            Modified
-          </button>
-          <button 
-            onClick={() => setViewMode('diff')}
-            className={`px-3 py-1 text-xs rounded-full ${viewMode === 'diff' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:bg-zinc-800'}`}
-          >
-            Diff
-          </button>
-        </div>
-      </div>
-      
+
       {/* Content area */}
-      <div className="flex-1 p-4 overflow-auto">
-        {viewMode === 'diff' ? (
+      <div className="flex-1 overflow-auto p-4">
+        {viewMode === 'original' && (
+          <MarkdownViewer content={originalContent} />
+        )}
+        {viewMode === 'modified' && (
+          <MarkdownViewer content={modifiedContent} />
+        )}
+        {viewMode === 'diff' && (
           <DiffView original={originalContent} modified={modifiedContent} />
-        ) : (
-          <MarkdownViewer content={displayContent} />
         )}
       </div>
     </div>
