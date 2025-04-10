@@ -3,7 +3,7 @@ import { Minimize2, Terminal, FileText, Search, MessageSquare, File, ChevronLeft
 import { ReactNode } from 'react';
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
-import { MarkdownView } from "@/components/views";
+import { CodeView } from "@/components/views";
 
 // Define view type
 type ViewType = 'code' | 'terminal' | 'markdown' | 'text' | 'search' | 'browser' | 'issues';
@@ -91,6 +91,69 @@ export default function SecondaryView({
   // Determine if a tool is actively running
   const isToolActive = streamingToolCall?.status === 'started' || streamingToolCall?.status === 'running';
   
+  // Example original code
+  const originalCode = `// User authentication function
+function authenticateUser(username, password) {
+  if (!username || !password) {
+    console.error("Missing credentials");
+    return false;
+  }
+  
+  // TODO: Implement actual authentication logic
+  const isValid = password.length > 5;
+  
+  if (isValid) {
+    console.log("User authenticated successfully");
+    return true;
+  } else {
+    console.error("Authentication failed");
+    return false;
+  }
+}
+
+// Export the function for use in other modules
+module.exports = {
+  authenticateUser
+};`;
+
+  // Example modified code with changes
+  const modifiedCode = `// User authentication function with improved security
+function authenticateUser(username, password) {
+  // Validate inputs
+  if (!username || !password) {
+    console.error("Missing credentials");
+    return { success: false, error: "MISSING_CREDENTIALS" };
+  }
+  
+  // Added security check for username format
+  if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+    return { success: false, error: "INVALID_USERNAME_FORMAT" };
+  }
+  
+  // Enhanced password validation
+  const isValid = password.length >= 8 && /[A-Z]/.test(password) && /[0-9]/.test(password);
+  
+  // Return structured response with status
+  if (isValid) {
+    console.log("User authenticated successfully");
+    return { success: true, userId: generateUserId(username) };
+  } else {
+    console.error("Authentication failed: Password requirements not met");
+    return { success: false, error: "INVALID_PASSWORD" };
+  }
+}
+
+// Helper function to generate a user ID
+function generateUserId(username) {
+  return username + "_" + Date.now();
+}
+
+// Export the function for use in other modules
+module.exports = {
+  authenticateUser,
+  generateUserId
+};`;
+  
   return (
     <div className="w-full h-full flex flex-col bg-zinc-50 border border-zinc-200 rounded-md p-4">
       {/* Header section with title and close button */}
@@ -111,7 +174,7 @@ export default function SecondaryView({
             {getToolIcon(displayName)}
           </div>
           <div>
-            <h2 className="text-md font-medium text-zinc-800">Documentation</h2>
+            <h2 className="text-md font-medium text-zinc-800">Code Review</h2>
             <p className="text-sm text-zinc-500">
               {isToolActive ? (
                 <span className="flex items-center">
@@ -131,42 +194,13 @@ export default function SecondaryView({
       <div className="flex-1 min-h-0 flex flex-col">
         {/* Content section */}
         <div className="flex-1 bg-zinc-100 rounded-md mb-4 overflow-hidden">
-          {/* Always show MarkdownView for testing */}
-          <MarkdownView 
-            title="Documentation" 
-            showDiff={false}
-            originalContent={`# Novel Markdown Viewer
-
-## Introduction
-
-This is a demonstration of the Novel markdown viewer using TipTap. It provides a clean, modern interface for viewing markdown content.
-
-## Features
-
-- **Rich Text Formatting**: Support for headings, lists, code blocks, and more
-- **Syntax Highlighting**: Code blocks with proper syntax highlighting
-- **Responsive Design**: Adapts to different screen sizes
-- **Dark Mode Support**: Optimized for dark mode viewing
-
-## Code Example
-
-\`\`\`javascript
-// Example JavaScript code
-function helloWorld() {
-  console.log("Hello from Novel markdown viewer!");
-  return true;
-}
-\`\`\`
-
-## Next Steps
-
-1. Integrate with your application
-2. Customize styles as needed
-3. Add additional extensions if required
-
-> This component uses TipTap and StarterKit for powerful markdown rendering capabilities.
-
-`}
+          {/* Now showing CodeView with original and modified content */}
+          <CodeView 
+            fileName="auth.js"
+            language="javascript"
+            originalContent={originalCode}
+            modifiedContent={modifiedCode}
+            showDiff={true}
           />
         </div>
         
