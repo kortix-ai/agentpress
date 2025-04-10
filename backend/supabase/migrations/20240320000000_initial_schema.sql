@@ -272,7 +272,7 @@ GRANT ALL PRIVILEGES ON TABLE threads TO authenticated, service_role;
 GRANT ALL PRIVILEGES ON TABLE messages TO authenticated, service_role;
 GRANT ALL PRIVILEGES ON TABLE agent_runs TO authenticated, service_role;
 
--- Create a function that matches the Python get_messages behavior
+-- Create a function that matches the Python get_llm_messages behavior
 CREATE OR REPLACE FUNCTION get_llm_formatted_messages(p_thread_id UUID)
 RETURNS JSONB
 SECURITY INVOKER

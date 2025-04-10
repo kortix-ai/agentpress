@@ -81,9 +81,9 @@ async def test_xml_streaming_execution():
     thread_manager.add_message = AsyncMock(side_effect=mock_add_message)
     thread_manager.response_processor.add_message = AsyncMock(side_effect=mock_add_message)
     
-    # Set up the get_messages mock
-    original_get_messages = thread_manager.get_messages
-    thread_manager.get_messages = AsyncMock()
+    # Set up the get_llm_messages mock
+    original_get_llm_messages = thread_manager.get_llm_messages
+    thread_manager.get_llm_messages = AsyncMock()
     
     # Test cases for streaming and non-streaming
     test_cases = [
@@ -103,8 +103,8 @@ async def test_xml_streaming_execution():
         print(f"🔍 Testing XML Tool Execution - {test['name']} Mode")
         print("-"*60 + "\n")
         
-        # Setup mock for get_messages to return test content
-        thread_manager.get_messages.return_value = [
+        # Setup mock for get_llm_messages to return test content
+        thread_manager.get_llm_messages.return_value = [
             {
                 "role": "system",
                 "content": "You are a testing assistant that will execute wait commands."
@@ -152,7 +152,7 @@ async def test_xml_streaming_execution():
         )
         
         # Get the last message to process (using mock)
-        messages = await thread_manager.get_messages(thread_id)
+        messages = await thread_manager.get_llm_messages(thread_id)
         last_message = messages[-1]
         
         # Process response based on mode
@@ -225,8 +225,8 @@ async def test_xml_streaming_execution():
         assert wait_tool_count == expected_wait_count, f"❌ Expected {expected_wait_count} wait tool executions, got {wait_tool_count} in {test['name']} mode"
         print(f"✅ PASS: {test['name']} executed {wait_tool_count} wait tools as expected")
     
-    # Restore original get_messages method
-    thread_manager.get_messages = original_get_messages
+    # Restore original get_llm_messages method
+    thread_manager.get_llm_messages = original_get_llm_messages
     
     # Additional assertions for both test cases
     assert 'Non-Streaming' in test_results, "❌ Non-streaming test not completed"
