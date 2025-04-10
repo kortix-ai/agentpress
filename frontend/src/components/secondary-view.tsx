@@ -34,7 +34,6 @@ export type ToolExecution = {
   language?: string;
   viewType?: ViewType;
   searchResults?: SearchResult[];
-  arguments?: string;
 };
 
 // Helper function to get the appropriate icon for a tool
@@ -259,36 +258,6 @@ export default function SecondaryView({
         );
       }
       
-      // Check for markdown-specific tool calls
-      const isCreatingMarkdown = streamingToolCall.name?.toLowerCase().includes('create_file') && 
-                               (streamingToolCall.fileName?.toLowerCase().endsWith('.md') || 
-                                streamingToolCall.fileName?.toLowerCase().endsWith('.markdown'));
-      
-      if (isCreatingMarkdown) {
-        // Extract the content from the streaming content
-        let markdownContent = streamingToolCall.content;
-        if (markdownContent.includes('file_contents')) {
-          try {
-            // Try to parse as JSON to extract file contents - without using 's' flag
-            const contentMatch = markdownContent.match(/\"file_contents\":\s*\"([\s\S]*?)\"/);
-            if (contentMatch && contentMatch[1]) {
-              // Un-escape the content
-              markdownContent = contentMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-            }
-          } catch (e) {
-            console.error('Error parsing markdown content:', e);
-          }
-        }
-        
-        return (
-          <MarkdownView 
-            title={streamingToolCall.fileName || 'Markdown File'}
-            originalContent={markdownContent}
-            showDiff={false}
-          />
-        );
-      }
-      
       // Check if we're dealing with a file
       if (streamingToolCall.fileName) {
         const fileExtension = streamingToolCall.fileName.split('.').pop()?.toLowerCase() || '';
@@ -336,46 +305,6 @@ export default function SecondaryView({
       
       // Determine file extension if available
       const fileExtension = fileName ? fileName.split('.').pop()?.toLowerCase() : '';
-
-      // Handle markdown files created with create_file
-      const isMarkdownCreate = toolNameLower.includes('create_file') && 
-                              (fileName?.toLowerCase().endsWith('.md') || 
-                               fileName?.toLowerCase().endsWith('.markdown'));
-      
-      if (isMarkdownCreate) {
-        // Extract the actual markdown content
-        let markdownContent = selectedTool.result;
-        
-        // If it's just a success message, look in the tool arguments
-        if (markdownContent.includes('successfully') && !markdownContent.includes('# ')) {
-          try {
-            // For successful file creation, the content might be in the previous tool call
-            const toolArgs = selectedTool.arguments;
-            if (toolArgs && typeof toolArgs === 'string') {
-              const argsObj = JSON.parse(toolArgs);
-              if (argsObj.file_contents) {
-                markdownContent = argsObj.file_contents;
-              }
-            }
-          } catch (e) {
-            console.error('Error extracting markdown content from args:', e);
-          }
-        } else {
-          // Extract content after the success message
-          const firstLineBreak = markdownContent.indexOf('\n');
-          if (firstLineBreak !== -1) {
-            markdownContent = markdownContent.substring(firstLineBreak + 1);
-          }
-        }
-        
-        return (
-          <MarkdownView 
-            title={fileName || 'Markdown File'}
-            originalContent={markdownContent}
-            showDiff={false}
-          />
-        );
-      }
       
       // Special case for terminal commands - use TerminalView
       if (toolNameLower.includes('command') || toolNameLower.includes('terminal')) {

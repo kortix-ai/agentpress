@@ -131,10 +131,10 @@
 
 @keyframes shimmer {
   0% {
-    background-position: 200% center;
+    background-position: -1000px 0;
   }
   100% {
-    background-position: -200% center;
+    background-position: 1000px 0;
   }
 }
 
@@ -161,21 +161,26 @@
 /* SUNA Text Styling */
 .suna-text {
   font-family: var(--font-orbitron);
-  font-weight: 600;
   letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 
 .suna-text-active {
-  font-family: var(--font-orbitron);
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  background-size: 200% auto;
-  animation: shimmer 3s infinite linear;
   background-clip: text;
   -webkit-background-clip: text;
-  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+  font-family: var(--font-orbitron);
+  letter-spacing: 0.05em;
   background-image: linear-gradient(to right, #94A3B8, #E2E8F0, #94A3B8);
-  text-shadow: 0 0 5px rgba(148, 163, 184, 0.3);
+}
+
+/* Add Spline Logo text styles */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
 }
