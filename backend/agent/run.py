@@ -16,21 +16,6 @@ from agent.tools.utils.daytona_sandbox import daytona, create_sandbox, get_or_st
 
 load_dotenv()
 
-# Custom JSON encoder to handle non-serializable types
-class CustomJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        # Handle ToolResult objects
-        if hasattr(obj, 'to_dict'):
-            return obj.to_dict()
-        # Handle datetime objects
-        if hasattr(obj, 'isoformat'):
-            return obj.isoformat()
-        # Return string representation for other unserializable objects
-        try:
-            return str(obj)
-        except:
-            return f"<Unserializable object of type {type(obj).__name__}>"
-
 async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None, native_max_auto_continues: int = 25, max_iterations: int = 1):
     """Run the development agent with specified configuration."""
     
@@ -81,13 +66,16 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
         print(f"Running iteration {iteration_count}...")
         
         files_state = await files_tool.get_workspace_state()
+        
+        # Simple string representation
+        state_str = str(files_state)
 
         state_message = {
             "role": "user",
             "content": f"""
 Current development environment workspace state:
 <current_workspace_state>
-{json.dumps(files_state, indent=2, cls=CustomJSONEncoder)}
+{state_str}
 </current_workspace_state>
             """
         }
