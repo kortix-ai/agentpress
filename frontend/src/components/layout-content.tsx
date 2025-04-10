@@ -15,8 +15,8 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
   const isDashboardRoute = pathname.startsWith('/dashboard') || 
                            pathname.startsWith('/projects');
   
-  // Only show MainNav on marketing pages, not in dashboard routes
-  const showMainNav = !isDashboardRoute;
+  // Only show MainNav on marketing pages that are not the home page, and not in dashboard routes
+  const showMainNav = !isDashboardRoute && pathname !== '/';
 
   // Show loading state while checking auth
   if (isAuthLoading) {

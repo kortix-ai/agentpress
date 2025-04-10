@@ -128,3 +128,59 @@
     height: 100%;
   }
 }
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 3s infinite linear;
+  background-size: 200% auto;
+}
+
+/* Brain gradient animation */
+@keyframes brainShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Add class to apply stroke animation */
+.animate-brain-gradient svg linearGradient {
+  animation: brainShimmer 3s infinite linear;
+}
+
+/* SUNA Text Styling */
+.suna-text {
+  font-family: var(--font-orbitron);
+  letter-spacing: 0.05em;
+}
+
+.suna-text-active {
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+  font-family: var(--font-orbitron);
+  letter-spacing: 0.05em;
+  background-image: linear-gradient(to right, #94A3B8, #E2E8F0, #94A3B8);
+}
+
+/* Add Spline Logo text styles */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
