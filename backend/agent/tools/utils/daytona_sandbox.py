@@ -2,7 +2,7 @@ import os
 import requests
 from time import sleep
 
-from daytona_sdk import Daytona, DaytonaConfig, CreateSandboxParams, SessionExecuteRequest
+from daytona_sdk import Daytona, DaytonaConfig, CreateSandboxParams, SessionExecuteRequest, Sandbox
 from dotenv import load_dotenv
 
 from agentpress.tool import Tool
@@ -217,7 +217,7 @@ if __name__ == "__main__":
 '''
 
 
-def create_sandbox(password: str):
+def create_sandbox(password: str) -> Sandbox:
     logger.info("Creating new Daytona sandbox environment")
     logger.debug("Configuring sandbox with browser-use image and environment variables")
     
@@ -322,33 +322,20 @@ def create_sandbox(password: str):
 class SandboxToolsBase(Tool):
     """Tool for executing tasks in a Daytona sandbox with browser-use capabilities."""
     
-    def __init__(self, sandbox_id: str, password: str):
+    def __init__(self, sandbox: Sandbox):
         super().__init__()
         self.sandbox = None
         self.daytona = daytona
         self.workspace_path = "/workspace"
+        self.sandbox = sandbox
 
-        self.sandbox_id = sandbox_id
-        logger.info(f"Initializing SandboxToolsBase with sandbox ID: {sandbox_id}")
-        
-        try:
-            logger.debug(f"Retrieving sandbox with ID: {sandbox_id}")
-            self.sandbox = self.daytona.get_current_sandbox(self.sandbox_id)
-            logger.info(f"Successfully retrieved sandbox: {self.sandbox.id}")
-        except Exception as e:
-            logger.error(f"Error retrieving sandbox: {str(e)}", exc_info=True)
-            raise e
+        logger.info(f"Initializing SandboxToolsBase with sandbox ID: {sandbox.id}")
 
         self.api_url = self.sandbox.get_preview_link(8000)
-        logger.debug(f"Sandbox API URL: {self.api_url}")
-        
-        # Get and log preview links
         vnc_url = self.sandbox.get_preview_link(6080)
         website_url = self.sandbox.get_preview_link(8080)
         
-        logger.info(f"Sandbox VNC URL: {vnc_url}")
-        logger.info(f"Sandbox Website URL: {website_url}")
-        
+        logger.debug(f"Sandbox API URL: {self.api_url}")
         print("\033[95m***")
         print(vnc_url)
         print(website_url)

@@ -1,5 +1,5 @@
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
-from agent.tools.utils.daytona_sandbox import SandboxToolsBase
+from agent.tools.utils.daytona_sandbox import SandboxToolsBase, Sandbox
 
 # TODO: might want to be more granular with the tool names:
 # shell_exec - Execute commands in a specified shell session. Use for running code, installing packages, or managing files.
@@ -13,8 +13,8 @@ from agent.tools.utils.daytona_sandbox import SandboxToolsBase
 class SandboxShellTool(SandboxToolsBase):
     """Tool for executing tasks in a Daytona sandbox with browser-use capabilities."""
 
-    def __init__(self, sandbox_id: str, password: str):
-        super().__init__(sandbox_id, password)
+    def __init__(self, sandbox: Sandbox):
+        super().__init__(sandbox)
         
 
     @openapi_schema({
@@ -62,14 +62,3 @@ class SandboxShellTool(SandboxToolsBase):
                 
         except Exception as e:
             return self.fail_response(f"Error executing command: {str(e)}")
-
-
-
-async def test_shell_tool():
-    shell_tool = SandboxShellTool(
-        sandbox_id="sandbox-15a2c059",
-        password="vvv"
-    )
-    print("1)", "*"*10)  
-    res = await shell_tool.execute_command("ls -l")
-    print(res)

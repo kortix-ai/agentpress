@@ -1,12 +1,12 @@
-from fastapi import FastAPI, Request, BackgroundTasks, HTTPException, Depends, Body
-from fastapi.responses import StreamingResponse
+from datetime import datetime, timezone
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+
 from contextlib import asynccontextmanager
 from agentpress.thread_manager import ThreadManager
 from services.supabase import DBConnection
-from datetime import datetime, timezone
+
 from dotenv import load_dotenv
 import asyncio
 from utils.logger import logger
