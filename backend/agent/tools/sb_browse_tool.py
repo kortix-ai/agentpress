@@ -5,7 +5,6 @@ from agentpress.tool import ToolResult, openapi_schema, xml_schema
 from sandbox.sandbox import SandboxToolsBase
 from utils.logger import logger
 
-
 # TODO: might want to be more granular with the tool names:
 
 
@@ -28,8 +27,8 @@ from utils.logger import logger
 class SandboxBrowseTool(SandboxToolsBase):
     """Tool for executing tasks in a Daytona sandbox with browser-use capabilities."""
     
-    def __init__(self, sandbox_id: str, password: str):
-        super().__init__(sandbox_id, password)
+    def __init__(self, sandbox: Sandbox):
+        super().__init__(sandbox)
 
     @openapi_schema({
         "type": "function",

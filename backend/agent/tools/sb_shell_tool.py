@@ -18,27 +18,7 @@ class SandboxShellTool(SandboxToolsBase):
 
     def __init__(self, sandbox_id: str, password: str):
         super().__init__(sandbox_id, password)
-        self._sessions: Dict[str, str] = {}  # Maps session names to session IDs
-
-    async def _ensure_session(self, session_name: str = "default") -> str:
-        """Ensure a session exists and return its ID."""
-        if session_name not in self._sessions:
-            session_id = str(uuid4())
-            try:
-                self.sandbox.process.create_session(session_id)
-                self._sessions[session_name] = session_id
-            except Exception as e:
-                raise RuntimeError(f"Failed to create session: {str(e)}")
-        return self._sessions[session_name]
-
-    async def _cleanup_session(self, session_name: str):
-        """Clean up a session if it exists."""
-        if session_name in self._sessions:
-            try:
-                self.sandbox.process.delete_session(self._sessions[session_name])
-                del self._sessions[session_name]
-            except Exception as e:
-                print(f"Warning: Failed to cleanup session {session_name}: {str(e)}")
+        
 
     @openapi_schema({
         "type": "function",
@@ -158,11 +138,6 @@ class SandboxShellTool(SandboxToolsBase):
                 
         except Exception as e:
             return self.fail_response(f"Error executing command: {str(e)}")
-
-    async def cleanup(self):
-        """Clean up all sessions."""
-        for session_name in list(self._sessions.keys()):
-            await self._cleanup_session(session_name)
 
 
 

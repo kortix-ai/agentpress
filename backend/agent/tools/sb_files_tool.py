@@ -17,8 +17,8 @@ import os
 class SandboxFilesTool(SandboxToolsBase):
     """Tool for executing file system operations in a Daytona sandbox. All operations are performed relative to the /workspace directory."""
 
-    def __init__(self, sandbox_id: str, password: str):
-        super().__init__(sandbox_id, password)
+    def __init__(self, sandbox: Sandbox):
+        super().__init__(sandbox)
         self.SNIPPET_LINES = 4  # Number of context lines to show around edits
         self.workspace_path = "/workspace"  # Ensure we're always operating in /workspace
 

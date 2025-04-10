@@ -6,8 +6,8 @@ from sandbox.sandbox import SandboxToolsBase
 class SandboxWebsiteTool(SandboxToolsBase):
     """Tool for executing tasks in a Daytona sandbox with browser-use capabilities."""
 
-    def __init__(self, sandbox_id: str, password: str):
-        super().__init__(sandbox_id, password)
+    def __init__(self, sandbox: Sandbox):
+        super().__init__(sandbox)
 
     @openapi_schema({
         "type": "function",

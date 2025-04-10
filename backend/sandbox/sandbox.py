@@ -389,6 +389,7 @@ class SandboxToolsBase(Tool):
         self.sandbox = None
         self.daytona = daytona
         self.workspace_path = "/workspace"
+        self.sandbox = sandbox
 
         self.sandbox_id = sandbox_id
         # logger.info(f"Initializing SandboxToolsBase with sandbox ID: {sandbox_id}")
@@ -402,9 +403,6 @@ class SandboxToolsBase(Tool):
             raise e
 
         self.api_url = self.sandbox.get_preview_link(8000)
-        logger.debug(f"Sandbox API URL: {self.api_url}")
-        
-        # Get and log preview links
         vnc_url = self.sandbox.get_preview_link(6080)
         website_url = self.sandbox.get_preview_link(8080)
         
