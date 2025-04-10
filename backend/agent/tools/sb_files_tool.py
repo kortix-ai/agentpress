@@ -59,8 +59,10 @@ class SandboxFilesTool(SandboxToolsBase):
                     print(f"Skipping binary file: {rel_path}")
 
             return files_state
+        
         except Exception as e:
-            return self.fail_response(f"Error getting workspace state: {str(e)}")
+            print(f"Error getting workspace state: {str(e)}")
+            return {}
 
     @openapi_schema({
         "type": "function",
