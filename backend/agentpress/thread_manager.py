@@ -145,6 +145,7 @@ class ThreadManager:
         processor_config: Optional[ProcessorConfig] = None,
         tool_choice: ToolChoice = "auto",
         native_max_auto_continues: int = 25,
+        max_xml_tool_calls: int = 0,
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Run a conversation thread with LLM integration and tool execution.
         
@@ -160,6 +161,7 @@ class ThreadManager:
             tool_choice: Tool choice preference ("auto", "required", "none")
             native_max_auto_continues: Maximum number of automatic continuations when 
                                       finish_reason="tool_calls" (0 disables auto-continue)
+            max_xml_tool_calls: Maximum number of XML tool calls to allow (0 = no limit)
             
         Returns:
             An async generator yielding response chunks or error dict
@@ -167,7 +169,7 @@ class ThreadManager:
         
         logger.info(f"Starting thread execution for thread {thread_id}")
         logger.debug(f"Parameters: model={llm_model}, temperature={llm_temperature}, max_tokens={llm_max_tokens}")
-        logger.debug(f"Auto-continue: max={native_max_auto_continues}")
+        logger.debug(f"Auto-continue: max={native_max_auto_continues}, XML tool limit={max_xml_tool_calls}")
         
         # Control whether we need to auto-continue due to tool_calls finish reason
         auto_continue = True
@@ -182,6 +184,10 @@ class ThreadManager:
                 # Use a default config if none was provided
                 if processor_config is None:
                     processor_config = ProcessorConfig()
+                
+                # Apply max_xml_tool_calls if specified and not already set
+                if max_xml_tool_calls > 0:
+                    processor_config.max_xml_tool_calls = max_xml_tool_calls
                 
                 # 1. Get messages from thread for LLM call
                 messages = await self.get_messages(thread_id)
@@ -211,7 +217,8 @@ class ThreadManager:
                 # 3. Create or use processor config - this is now redundant since we handle it above
                 # but kept for consistency and clarity
                 logger.debug(f"Processor config: XML={processor_config.xml_tool_calling}, Native={processor_config.native_tool_calling}, " 
-                       f"Execute tools={processor_config.execute_tools}, Strategy={processor_config.tool_execution_strategy}")
+                       f"Execute tools={processor_config.execute_tools}, Strategy={processor_config.tool_execution_strategy}, "
+                       f"XML limit={processor_config.max_xml_tool_calls}")
 
                 # 4. Prepare tools for LLM call
                 openapi_tool_schemas = None
@@ -285,15 +292,21 @@ class ThreadManager:
                 
                 # Process each chunk
                 async for chunk in response_gen:
-                    # Check if this is a finish reason chunk with tool_calls
-                    if chunk.get('type') == 'finish' and chunk.get('finish_reason') == 'tool_calls':
-                        # Only auto-continue if enabled (max > 0)
-                        if native_max_auto_continues > 0:
-                            logger.info(f"Detected finish_reason='tool_calls', auto-continuing ({auto_continue_count + 1}/{native_max_auto_continues})")
-                            auto_continue = True
-                            auto_continue_count += 1
-                            # Don't yield the finish chunk to avoid confusing the client
-                            continue
+                    # Check if this is a finish reason chunk with tool_calls or xml_tool_limit_reached
+                    if chunk.get('type') == 'finish':
+                        if chunk.get('finish_reason') == 'tool_calls':
+                            # Only auto-continue if enabled (max > 0)
+                            if native_max_auto_continues > 0:
+                                logger.info(f"Detected finish_reason='tool_calls', auto-continuing ({auto_continue_count + 1}/{native_max_auto_continues})")
+                                auto_continue = True
+                                auto_continue_count += 1
+                                # Don't yield the finish chunk to avoid confusing the client
+                                continue
+                        elif chunk.get('finish_reason') == 'xml_tool_limit_reached':
+                            # Don't auto-continue if XML tool limit was reached
+                            logger.info(f"Detected finish_reason='xml_tool_limit_reached', stopping auto-continue")
+                            auto_continue = False
+                            # Still yield the chunk to inform the client
                     
                     # Otherwise just yield the chunk normally
                     yield chunk
