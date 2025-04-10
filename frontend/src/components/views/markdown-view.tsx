@@ -142,9 +142,9 @@ export default function MarkdownView({
   title, 
   originalContent = MOCK_ORIGINAL,
   modifiedContent = MOCK_MODIFIED,
-  showDiff = false 
+  showDiff = true 
 }: MarkdownViewProps) {
-  const [viewMode, setViewMode] = useState<'original' | 'modified' | 'diff'>('original');
+  const [viewMode, setViewMode] = useState<'original' | 'modified' | 'diff'>('diff');
   
   // Set initial view mode to diff if showDiff is true
   useEffect(() => {
