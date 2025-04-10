@@ -259,7 +259,7 @@ async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id
     
     # Run the agent in the background
     task = asyncio.create_task(
-        run_agent_background(agent_run_id, thread_id, instance_id)
+        run_agent_background(agent_run_id, thread_id, instance_id, project_id)
     )
     
     # Set a callback to clean up when task is done
@@ -389,7 +389,7 @@ async def stream_agent_run(
         }
     )
 
-async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: str):
+async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: str, project_id: str):
     """Run the agent in the background and handle status updates."""
     logger.info(f"Starting background agent run: {agent_run_id} for thread: {thread_id} (instance: {instance_id})")
     client = await db.client
@@ -510,7 +510,7 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
         # Run the agent
         logger.debug(f"Initializing agent generator for thread: {thread_id} (instance: {instance_id})")
         agent_gen = run_agent(thread_id, stream=True, 
-                      thread_manager=thread_manager)
+                      thread_manager=thread_manager, project_id=project_id)
         
         # Collect all responses to save to database
         all_responses = []
