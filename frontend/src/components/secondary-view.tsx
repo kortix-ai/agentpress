@@ -474,7 +474,7 @@ export default function SecondaryView({
   };
   
   return (
-    <div className="w-full h-full flex flex-col bg-zinc-50 border border-zinc-200 rounded-md p-4">
+    <div className="w-full h-full flex flex-col bg-zinc-50 border border-zinc-200 rounded-2xl p-4">
       {/* Header section with title and close button */}
       <div className="flex justify-between items-center">
         <div className="flex items-center">
@@ -489,7 +489,7 @@ export default function SecondaryView({
       </div>
       
       <div className="flex items-center mb-4">
-          <div className="bg-zinc-100 p-2 rounded-md mr-3">
+          <div className="bg-zinc-100 p-2 rounded-2xl mr-3">
           {isToolActive ? (
             <div className="relative">
             {getToolIcon(displayName)}
@@ -547,7 +547,7 @@ export default function SecondaryView({
       {/* Main content area */}
       <div className="flex-1 min-h-0 flex flex-col">
         {/* Content section */}
-        <div className="flex-1 rounded-md mb-4 overflow-hidden">
+        <div className="flex-1 rounded-2xl mb-4 overflow-hidden">
           {getContent()}
         </div>
         
