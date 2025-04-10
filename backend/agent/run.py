@@ -2,13 +2,15 @@ import os
 import json
 import uuid
 from agentpress.thread_manager import ThreadManager
-from agent.tools.files_tool import FilesTool
-from agent.tools.terminal_tool import TerminalTool
-# from agent.tools.search_tool import CodeSearchTool
+from agent.tools.sb_browse_tool import SandboxBrowseTool
+from agent.tools.sb_shell_tool import SandboxShellTool
+from agent.tools.sb_website_tool import SandboxWebsiteTool
+from agent.tools.sb_files_tool import SandboxFilesTool
 from typing import Optional
 from agent.prompt import get_system_prompt
 from agentpress.response_processor import ProcessorConfig
 from dotenv import load_dotenv
+from agent.tools.utils.daytona_sandbox import create_sandbox
 
 # Load environment variables
 load_dotenv()
@@ -19,25 +21,35 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
     if not thread_manager:
         thread_manager = ThreadManager()
     
-    print("Adding tools to thread manager...")
-    thread_manager.add_tool(FilesTool)
-    thread_manager.add_tool(TerminalTool)
-    # thread_manager.add_tool(CodeSearchTool)
-    
-    system_message = {
-        "role": "system",
-        "content": get_system_prompt()
-    }
+    if True: # todo: change to of not sandbox running
+        sandbox = create_sandbox("vvv")
+        sandbox_id = sandbox.id
+        sandbox_password = "vvv"
+    else:
+        sandbox_id = "sandbox-01efaaa5"
+        sandbox_password = "vvv"
 
+    print("Adding tools to thread manager...")
+    # thread_manager.add_tool(FilesTool)
+    # thread_manager.add_tool(TerminalTool)
+    # thread_manager.add_tool(CodeSearchTool)
+    thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_password)
+    thread_manager.add_tool(SandboxWebsiteTool, sandbox_id=sandbox_id, password=sandbox_password)
+    thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_password)
+    thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_password)
+
+    system_message = { "role": "system", "content": get_system_prompt() }
+
+    # model_name = "anthropic/claude-3-5-sonnet-latest" 
     model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0" 
     
     #anthropic/claude-3-5-sonnet-latest
     #anthropic/claude-3-7-sonnet-latest
-    #openai/gpt-4o
+    model_name = "openai/gpt-4o"
     #groq/deepseek-r1-distill-llama-70b
     #bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0
 
-    files_tool = FilesTool()
+    files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_password)
 
     files_state = await files_tool.get_workspace_state()
 
