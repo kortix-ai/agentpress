@@ -3,7 +3,6 @@ import { Minimize2, Terminal, FileText, Search, MessageSquare, File, ChevronLeft
 import { ReactNode } from 'react';
 import { Slider } from "@/components/ui/slider";
 import { CodeView } from "@/components/views";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Define view type
 type ViewType = 'code' | 'terminal' | 'markdown' | 'text' | 'search' | 'browser' | 'issues';
@@ -238,54 +237,6 @@ export default function SecondaryView({
     }
   }, [currentToolIndex, sortedTools, sliderValue, selectedTool, onSelectTool]);
   
-  // Create a memoized marker renderer
-  const renderToolMarkers = useCallback(() => {
-    if (sortedTools.length <= 1) return null;
-
-    return sortedTools.map((tool, index) => {
-      const position = (index / (sortedTools.length - 1)) * 100;
-      const isSelected = currentToolIndex === index;
-      
-      // Memoize the click handler
-      const handleMarkerClick = () => {
-        // Only update if we're not already showing this tool
-        if (currentToolIndex !== index) {
-          setCurrentToolIndex(index);
-          // Only update slider position if it's significantly different
-          if (Math.abs((sliderValue[0] || 0) - position) > 1) {
-            setSliderValue([position]);
-          }
-          // Prevent redundant selection
-          if (selectedTool?.id !== tool.id) {
-            onSelectTool(tool.id);
-          }
-        }
-      };
-      
-      return (
-        <TooltipProvider key={tool.id}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div 
-                className={`absolute h-3 w-3 rounded-full -mt-1.5 transform -translate-x-1/2 cursor-pointer ${
-                  isSelected
-                    ? 'bg-primary border-2 border-primary-foreground' 
-                    : 'bg-zinc-300'
-                }`}
-                style={{ left: `${position}%`, top: '50%' }}
-                onClick={handleMarkerClick}
-              />
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="text-xs">{tool.name}</p>
-              <p className="text-xs text-zinc-400">{formatTime(tool.startTime)}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    });
-  }, [sortedTools, currentToolIndex, sliderValue, selectedTool, onSelectTool]);
-  
   // Get content to display in the main view
   const getContent = () => {
     // Show streaming content if we have an active tool call
@@ -515,9 +466,6 @@ export default function SecondaryView({
               onValueChange={handleSliderChange}
               disabled={sortedTools.length <= 1}
             />
-            
-            {/* Render tool markers on the slider */}
-            {renderToolMarkers()}
             
             {/* Tooltip for the current hover position */}
             {hoveredPosition !== null && (
