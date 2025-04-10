@@ -130,7 +130,19 @@ async def run_task(request: TaskRequest):
         history = []
         for h in result.history:
             logger.debug(f"Task history entry: {h}")
-            history.append(str(h))
+            # Parse the history entry as an object rather than string
+            history.append({
+                "model_output": h.model_output,
+                "result": h.result,
+                "state": {
+                    "url": h.state.url,
+                    "title": h.state.title,
+                    "tabs": h.state.tabs,
+                    "interacted_element": h.state.interacted_element,
+                    "screenshot": h.state.screenshot
+                },
+                "metadata": h.metadata
+            })
             
         logger.info("Task completed successfully")
         return {

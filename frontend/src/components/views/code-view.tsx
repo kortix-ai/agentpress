@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Editor, { DiffEditor, BeforeMount } from '@monaco-editor/react';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -63,12 +63,38 @@ export default function CodeView({
   const [viewMode, setViewMode] = useState<'original' | 'modified' | 'diff'>(showDiff ? 'diff' : 'original');
   const diffEditorRef = useRef<MonacoDiffEditor | null>(null);
   
+  // Ensure we have content to display
+  useEffect(() => {
+    // Initialize with the appropriate view based on available content
+    if (showDiff && originalContent && modifiedContent) {
+      setViewMode('diff');
+    } else if (modifiedContent) {
+      setViewMode('modified');
+    } else {
+      setViewMode('original');
+    }
+    
+    // Log what we're receiving for debugging
+    console.log('CodeView received content:', {
+      content: content?.substring(0, 100),
+      originalContent: originalContent?.substring(0, 100), 
+      modifiedContent: modifiedContent?.substring(0, 100),
+      showDiff
+    });
+  }, [content, originalContent, modifiedContent, showDiff]);
+  
   // Determine which content to display based on view mode
-  const displayContent = viewMode === 'original' 
-    ? originalContent || content
-    : viewMode === 'modified' 
-      ? modifiedContent || content
-      : originalContent || content;
+  // Made more robust to handle different content passing patterns
+  const displayContent = (() => {
+    // In non-diff view modes, choose the appropriate content source
+    if (viewMode === 'original') {
+      return originalContent || content || '';
+    } else if (viewMode === 'modified') {
+      return modifiedContent || content || '';
+    }
+    // In diff mode, fallback is handled by the condition in render
+    return '';
+  })();
 
   // Prepare editor before mount
   const handleBeforeMount: BeforeMount = (monaco) => {
@@ -121,22 +147,24 @@ export default function CodeView({
       <div className="px-4 py-2 text-zinc-800 text-sm border-b border-zinc-300 flex justify-between items-center">
         <span>{fileName || 'Code View'}</span>
         
-        {/* Tabs for view modes */}
-        <Tabs 
-          value={viewMode}
-          onValueChange={(value) => setViewMode(value as 'original' | 'modified' | 'diff')}
-          className="w-auto"
-        >
-          <TabsList className="">
-            <TabsTrigger value="original" className="text-xs py-1">Original</TabsTrigger>
-            <TabsTrigger value="modified" className="text-xs py-1">Modified</TabsTrigger>
-            <TabsTrigger value="diff" className="text-xs py-1">Diff</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/* Only show view mode tabs when we have content to compare */}
+        {(originalContent && modifiedContent) ? (
+          <Tabs 
+            value={viewMode}
+            onValueChange={(value) => setViewMode(value as 'original' | 'modified' | 'diff')}
+            className="w-auto"
+          >
+            <TabsList className="">
+              <TabsTrigger value="original" className="text-xs py-1">Original</TabsTrigger>
+              <TabsTrigger value="modified" className="text-xs py-1">Modified</TabsTrigger>
+              <TabsTrigger value="diff" className="text-xs py-1">Diff</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        ) : null}
       </div>
       
       <div className="flex-1 min-h-0">
-        {viewMode === 'diff' && originalContent && modifiedContent ? (
+        {(viewMode === 'diff' && originalContent && modifiedContent) ? (
           // Monaco Diff Editor
           <DiffEditor
             height="100%"

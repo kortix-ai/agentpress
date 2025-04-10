@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { useAgentStatus } from '@/context/agent-status-context';
@@ -166,428 +166,6 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       setGlobalAgentStatus('idle');
     }
   }, [isStreaming, agentStatus, setGlobalIsStreaming, setGlobalAgentStatus]);
-
-  const handleStreamAgent = useCallback(async (runId: string) => {
-    // Clean up any existing stream
-    if (streamCleanupRef.current) {
-      console.log(`[PAGE] Cleaning up existing stream before starting new one`);
-      streamCleanupRef.current();
-      streamCleanupRef.current = null;
-    }
-    
-    setIsStreaming(true);
-    setStreamContent('');
-    
-    console.log(`[PAGE] Setting up stream for agent run ${runId}`);
-    
-    // Start streaming the agent's responses with improved implementation
-    const cleanup = streamAgent(runId, {
-      onMessage: async (rawData: string) => {
-        try {
-          // Log the raw data first for debugging
-          console.log(`[PAGE] Raw message data:`, rawData);
-          
-          let processedData = rawData;
-          let jsonData: {
-            type?: string;
-            status?: string;
-            content?: string;
-            message?: string;
-            name?: string;
-            arguments?: string;
-            tool_call?: {
-              id: string;
-              function: {
-                name: string;
-                arguments: string;
-              };
-              type: string;
-              index: number;
-            };
-          } | null = null;
-          
-          // Handle data: prefix format (SSE standard format)
-          if (rawData.startsWith('data: ')) {
-            processedData = rawData.substring(6).trim(); // Remove "data: " prefix
-            
-            try {
-              jsonData = JSON.parse(processedData);
-              console.log('[PAGE] Successfully parsed data: prefixed JSON:', jsonData);
-              
-              // Specifically check for completion status
-              if (jsonData?.type === 'status' && jsonData?.status === 'completed') {
-                console.log('[PAGE] Detected completion status event:', processedData);
-                
-                try {
-                  // Direct access verification - forcing immediate state update
-                  // This will execute regardless of the normal flow
-                  console.log(`[PAGE] 🚨 FORCE VERIFYING completion status for run: ${runId || 'unknown'}`);
-                  
-                  // Reset tool call data on completion
-                  setToolCallData(null);
-                  
-                  // Immediately mark as not streaming to update UI
-                  setIsStreaming(false);
-                  setAgentStatus('idle');
-                  
-                  // Explicitly clean up stream to ensure it's closed
-                  if (streamCleanupRef.current) {
-                    console.log('[PAGE] 🚨 Force closing stream on completion status');
-                    streamCleanupRef.current();
-                    streamCleanupRef.current = null;
-                  }
-                  
-                  // Explicitly set agent run ID to null to reset state
-                  setAgentRunId(null);
-                  
-                  // Attempt to load fresh messages
-                  if (threadId) {
-                    console.log('[PAGE] 🚨 Loading fresh messages after run completion');
-                    getMessages(threadId)
-                      .then(updatedMsgs => {
-                        console.log('[PAGE] 🚨 Updated messages after run completion');
-                        setMessages(updatedMsgs);
-                        setStreamContent('');
-                      })
-                      .catch(err => console.error('[PAGE] Failed run completion message update:', err));
-                  }
-                } catch (forceErr) {
-                  console.error('[PAGE] Error in run completion handling:', forceErr);
-                }
-                
-                return;
-              }
-              
-              // Handle tool status messages
-              if (jsonData?.type === 'tool_status') {
-                console.log('[PAGE] Received tool status message:', jsonData);
-                
-                if (jsonData?.status === 'completed' || jsonData?.status === 'failed' || jsonData?.status === 'error') {
-                  console.log('[PAGE] Tool completed/failed/error, resetting toolCallData');
-                  // Reset tool call data when a tool execution completes
-                  setToolCallData(null);
-                }
-                
-                return;
-              }
-              
-              // Handle tool result messages
-              if (jsonData?.type === 'tool_result') {
-                console.log('[PAGE] Received tool output message, resetting toolCallData');
-                setToolCallData(null);
-                
-                // For tool output, also append to stream content
-                if (jsonData?.content) {
-                  setStreamContent(prev => prev + jsonData?.content);
-                  console.log('[PAGE] Added tool output content:', jsonData?.content.substring(0, 30) + '...');
-                }
-                return;
-              }
-            } catch (e) {
-              console.warn('[PAGE] Failed to parse data: prefix event:', e);
-              // Continue with standard parsing if data: prefix parsing fails
-            }
-          }
-          
-          // Standard JSON parsing for non-prefixed messages
-          try {
-            jsonData = JSON.parse(processedData);
-            
-            // Handle status messages specially
-            if (jsonData?.type === 'status') {
-              console.log(`[PAGE] Received status update: ${jsonData?.status}`);
-              
-              if (jsonData?.status === 'completed') {
-                // Same handling as the data: prefix section
-                console.log('[PAGE] Received standard completed status message');
-                
-                // IMPORTANT: Add the same completion handling here
-                try {
-                  // Direct access verification - forcing immediate state update
-                  console.log(`[PAGE] 🚨 FORCE VERIFYING completion status for standard message: ${runId || 'unknown'}`);
-                  
-                  // Reset tool call data
-                  setToolCallData(null);
-                  
-                  // Immediately mark as not streaming to update UI
-                  setIsStreaming(false);
-                  setAgentStatus('idle');
-                  
-                  // Explicitly clean up stream to ensure it's closed
-                  if (streamCleanupRef.current) {
-                    console.log('[PAGE] 🚨 Force closing stream on standard completion status');
-                    streamCleanupRef.current();
-                    streamCleanupRef.current = null;
-                  }
-                  
-                  // Explicitly set agent run ID to null to reset state
-                  setAgentRunId(null);
-                  
-                  // Load fresh messages
-                  if (threadId) {
-                    getMessages(threadId)
-                      .then(updatedMsgs => {
-                        console.log('[PAGE] 🚨 Updated messages after standard completion');
-                        setMessages(updatedMsgs);
-                        setStreamContent('');
-                      })
-                      .catch(err => console.error('[PAGE] Failed standard message update:', err));
-                  }
-                } catch (forceErr) {
-                  console.error('[PAGE] Error in standard completion handling:', forceErr);
-                }
-                
-                return;
-              }
-              
-              // Don't process other status messages further
-              return;
-            }
-            
-            // Handle tool output messages - reset toolCallData when we receive a tool output
-            if (jsonData && 'role' in jsonData && jsonData.role === 'tool') {
-              console.log('[PAGE] Received standard tool output message, resetting toolCallData');
-              
-              // Parse file extension to determine language when receiving tool output
-              let language = 'plaintext';
-              let fileName = '';
-              
-              // Try to extract file info from content
-              if (jsonData?.content) {
-                // Try to detect a file path
-                const filePathMatch = jsonData.content.match(/Contents of file: (.+?)($|\n)/);
-                const fileCreatedMatch = jsonData.content.match(/(Created|Updated|Edited) file: (.+?)($|\n)/);
-                
-                if (filePathMatch && filePathMatch[1]) {
-                  fileName = filePathMatch[1].split('/').pop() || '';
-                } else if (fileCreatedMatch && fileCreatedMatch[2]) {
-                  fileName = fileCreatedMatch[2].split('/').pop() || '';
-                }
-                
-                // Determine language based on extension
-                if (fileName) {
-                  const ext = fileName.split('.').pop()?.toLowerCase();
-                  if (ext === 'js' || ext === 'jsx') language = 'javascript';
-                  else if (ext === 'ts' || ext === 'tsx') language = 'typescript';
-                  else if (ext === 'html' || ext === 'xml') language = 'html';
-                  else if (ext === 'css') language = 'css';
-                  else if (ext === 'md') language = 'markdown';
-                  else if (ext === 'json') language = 'json';
-                  else if (ext === 'py') language = 'python';
-                }
-              }
-              
-              // Set tool call data with the determined language before clearing it
-              // This ensures the language is properly tracked for the last tool output
-              setToolCallData(prev => prev ? { ...prev, language, fileName } : null);
-              
-              // Then clear the tool call data after a short delay
-              setTimeout(() => {
-                setToolCallData(null);
-              }, 500);
-              
-              // For tool output, also append to stream content
-              if (jsonData?.content) {
-                setStreamContent(prev => prev + jsonData?.content);
-                console.log('[PAGE] Added standard tool output content:', jsonData?.content.substring(0, 30) + '...');
-              }
-              return;
-            }
-            
-            // Skip empty messages
-            if (!jsonData?.content && !jsonData?.arguments && !jsonData?.tool_call) return;
-            
-            // Handle different message types
-            if (jsonData?.type === 'content' && jsonData?.tool_call) {
-              console.log('[PAGE] Processing tool call chunk:', jsonData.tool_call);
-              
-              const { id, function: toolFunction } = jsonData.tool_call;
-              
-              // Detect file paths and language from tool call
-              let fileName = '';
-              let language = 'plaintext';
-              
-              try {
-                // Try to parse arguments as they come in
-                // Sometimes they may be incomplete, so we handle errors gracefully
-                const partialArgs = toolFunction.arguments;
-                
-                // Look for common file path patterns
-                const filePathMatch = partialArgs.match(/"(file_path|target_file|path)":\s*"([^"]+)"/);
-                if (filePathMatch && filePathMatch[2]) {
-                  fileName = filePathMatch[2].split('/').pop() || '';
-                  
-                  // Determine language based on file extension
-                  const ext = fileName.split('.').pop()?.toLowerCase();
-                  if (ext === 'js' || ext === 'jsx') language = 'javascript';
-                  else if (ext === 'ts' || ext === 'tsx') language = 'typescript';
-                  else if (ext === 'html' || ext === 'xml') language = 'html';
-                  else if (ext === 'css') language = 'css';
-                  else if (ext === 'md') language = 'markdown';
-                  else if (ext === 'json') language = 'json';
-                  else if (ext === 'py') language = 'python';
-                  else language = 'plaintext'; // Default fallback
-                }
-              } catch {
-                // Ignore parsing errors for partial data
-                console.debug('[PAGE] Error parsing partial tool arguments');
-              }
-              
-              // Update tool call data - accumulate arguments
-              setToolCallData(prev => ({
-                id,
-                name: toolFunction?.name,
-                arguments: prev && prev.id === id ? 
-                  (prev.arguments || '') + (toolFunction?.arguments || '') : 
-                  toolFunction?.arguments,
-                fileName,
-                language
-              }));
-              
-              // Don't update streamContent directly for tool calls - they go to the secondary view
-              return;
-            } else if (jsonData?.type === 'tool_status') {
-              // Handle tool status messages
-              console.log('[PAGE] Received tool status message:', jsonData);
-              
-              if (jsonData?.status === 'completed' || jsonData?.status === 'failed' || jsonData?.status === 'error') {
-                console.log('[PAGE] Tool completed/failed/error, resetting toolCallData');
-                // Reset tool call data when a tool execution completes
-                setToolCallData(prev => prev ? {...prev, status: jsonData?.status} : null);
-                
-                // After a short delay, clear the tool call data
-                setTimeout(() => {
-                  setToolCallData(null);
-                }, 1000);
-              }
-              
-              return;
-            } else if (jsonData?.type === 'tool_call') {
-              // Create proper tool call object for secondary view
-              if (jsonData?.name && jsonData?.arguments) {
-                setToolCallData(prev => {
-                  // If it's an update to the current tool, update arguments
-                  if (prev && !prev.id) {
-                    return {
-                      ...prev,
-                      id: String(Date.now()), // Generate an ID if none exists
-                      name: jsonData?.name || prev.name,
-                      arguments: jsonData?.arguments || ''
-                    };
-                  }
-                  // Otherwise create a new tool call
-                  return {
-                    id: String(Date.now()),
-                    name: jsonData?.name || '',
-                    arguments: jsonData?.arguments || '',
-                    status: 'running'
-                  };
-                });
-              }
-              
-              // For the main view, format the tool call as a message
-              const toolContent = jsonData?.name 
-                ? `Tool: ${jsonData?.name}\n${jsonData?.arguments || ''}`
-                : jsonData?.arguments || '';
-              
-              // Update UI with tool call content
-              setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
-              console.log('[PAGE] Added tool call content from prefixed data:', toolContent.substring(0, 30) + '...');
-            } else if (jsonData?.type === 'content' && jsonData?.content) {
-              // Only reset tool call data if we're receiving regular content and no tool is currently active
-              // This prevents explanation text from interrupting a streaming tool display
-              if (!toolCallData || toolCallData.status === 'completed') {
-                console.log('[PAGE] Resetting tool call data for regular content');
-                setToolCallData(null);
-              } else {
-                console.log('[PAGE] Keeping tool call data active while receiving content', toolCallData);
-              }
-              
-              // For regular content, just append to the existing content in main view
-              setStreamContent(prev => prev + jsonData?.content);
-              console.log('[PAGE] Added content:', jsonData?.content.substring(0, 30) + '...');
-            }
-          } catch (error) {
-            console.warn('[PAGE] Failed to process message as JSON:', error);
-          }
-        } catch (error) {
-          console.warn('[PAGE] Failed to process message:', error, 'Raw data:', rawData);
-        }
-      },
-      onError: (error: Error | unknown) => {
-        console.error('[PAGE] Streaming error:', error);
-        
-        if (error instanceof Error) {
-          // Only show critical errors
-          if (!error.message.includes('connect')) {
-            toast.error(`Error: ${error.message}`);
-          }
-        }
-        
-        // Clean up on error
-        streamCleanupRef.current = null;
-        setIsStreaming(false);
-        setAgentStatus('idle');
-      },
-      onClose: async () => {
-        console.log('[PAGE] Stream connection closed');
-        
-        // Immediately set UI state to idle
-        setAgentStatus('idle');
-        setIsStreaming(false);
-        
-        // Reset tool call data
-        setToolCallData(null);
-        
-        try {
-          console.log(`[PAGE] Checking final status for agent run ${runId}`);
-          const status = await getAgentStatus(runId);
-          console.log(`[PAGE] Agent status: ${status.status}`);
-          
-          // Clear cleanup reference to prevent reconnection
-          streamCleanupRef.current = null;
-          
-          // Set agent run ID to null to prevent lingering state
-          setAgentRunId(null);
-          
-          // Fetch final messages first, then clear streaming content
-          console.log('[PAGE] Fetching final messages');
-          const updatedMessages = await getMessages(threadId);
-          
-          // Update messages first
-          setMessages(updatedMessages);
-          
-          // Then clear streaming content after a tiny delay for smooth transition
-          setTimeout(() => {
-            console.log('[PAGE] Clearing streaming content');
-            setStreamContent('');
-          }, 50);
-        } catch (err) {
-          console.error('[PAGE] Error checking agent status:', err);
-          
-          // Clear the agent run ID
-          setAgentRunId(null);
-          
-          // Handle any remaining streaming content
-          if (streamContent) {
-            console.log('[PAGE] Adding partial streaming content as message');
-            const assistantMessage = {
-              role: 'assistant',
-              content: streamContent + "\n\n[Connection to agent lost]"
-            };
-            setMessages(prev => [...prev, assistantMessage]);
-            setStreamContent('');
-          }
-          
-          // Clear cleanup reference
-          streamCleanupRef.current = null;
-        }
-      }
-    });
-    
-    // Store cleanup function
-    streamCleanupRef.current = cleanup;
-  }, [threadId]);
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -856,32 +434,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     if ((isNewUserMessage || agentStatus === 'running') && !userHasScrolled) {
       scrollToBottom();
     }
-  }, [messages, agentStatus, userHasScrolled]);
-
-  // Make sure clicking the scroll button scrolls to bottom
-  const handleScrollButtonClick = () => {
-    scrollToBottom();
-    setUserHasScrolled(false);
-  };
-
-  // Remove unnecessary scroll effects
-  useEffect(() => {
-    if (!latestMessageRef.current || messages.length === 0) return;
-    
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setShowScrollButton(!entry?.isIntersecting);
-        setButtonOpacity(entry?.isIntersecting ? 0 : 1);
-      },
-      {
-        root: messagesContainerRef.current,
-        threshold: 0.1,
-      }
-    );
-    
-    observer.observe(latestMessageRef.current);
-    return () => observer.disconnect();
-  }, [messages, streamContent]);
+  }, [messages, agentStatus, userHasScrolled, scrollToBottom]);
 
   // Update UI states when agent status changes
   useEffect(() => {
@@ -952,7 +505,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   };
 
   // Only show a full-screen loader on the very first load
-  if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {
+  if (isAuthLoading || isLoading) {
     return (
       <div className="flex h-[calc(100vh-4rem)] flex-col">
         <div className="relative flex-1 flex flex-col">
@@ -1547,21 +1100,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                   )}
                   
                   {agentStatus === 'running' && !streamContent && (
-                    <div className="flex justify-start">
-                      <div className="flex items-center gap-2 rounded-lg px-4 py-2.5">
-                        <div className="relative animate-brain-gradient">
-                          <Brain className="h-4 w-4 mr-1 text-transparent" strokeWidth={1.5} style={{stroke: 'url(#brainGradient)'}} />
-                          <svg width="0" height="0">
-                            <linearGradient id="brainGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                              <stop offset="0%" stopColor="#d1d5db" />
-                              <stop offset="50%" stopColor="#f9fafb" />
-                              <stop offset="100%" stopColor="#d1d5db" />
-                            </linearGradient>
-                          </svg>
-                        </div>
-                        <span className="text-sm suna-text-active bg-gradient-to-r from-gray-300 via-zinc-100 to-gray-300 animate-shimmer">Thinking</span>
-                      </div>
-                    </div>
+                    <ThinkingIndicator />
                   )}
                   
                   <div ref={messagesEndRef} />
@@ -1593,10 +1132,10 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               {/* Connector component above chat input */}
               <div className="flex items-center justify-center rounded-t-md border-t border-x border-zinc-200 mx-2 pt-3 pb-1 relative">
                 {/* Zinc rectangle button that extends above the connector */}
-                {!isSecondaryViewOpen && (
+                {!isViewOpen && (
                   <div 
                     className="absolute left-5 -top-17 h-20 w-36 bg-zinc-200 rounded-md border border-zinc-300 flex items-center justify-center cursor-pointer hover:bg-zinc-300 transition-colors"
-                    onClick={() => setIsSecondaryViewOpen(prev => !prev)}
+                    onClick={() => setIsViewOpen(true)}
                   >
                     <PlusCircle className="h-6 w-6 text-zinc-600 mr-2" />
                     <span className="text-sm text-zinc-600">Show Panel</span>
@@ -1611,14 +1150,14 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               </div>
               
               <ChatInput
-                value={newMessage}
-                onChange={setNewMessage}
-                onSubmit={handleSubmitMessage}
+                value={inputMessage}
+                onChange={setInputMessage}
+                onSubmit={handleSendMessage}
                 placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
                 loading={isSending}
                 disabled={isSending}
                 isAgentRunning={agentStatus === 'running'}
-                onStopAgent={handleStopAgent}
+                onStopAgent={stopCurrentAgent}
                 autoFocus={!isLoading}
               />
             </div>
@@ -1654,4 +1193,4 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       </div>
     </div>
   );
-} 
+}
