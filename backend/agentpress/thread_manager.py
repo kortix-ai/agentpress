@@ -124,7 +124,7 @@ class ThreadManager:
                             # Ensure function.arguments is a string
                             if 'arguments' in tool_call['function'] and not isinstance(tool_call['function']['arguments'], str):
                                 # Log and fix the issue
-                                logger.warning(f"Found non-string arguments in tool_call, converting to string")
+                                # logger.warning(f"Found non-string arguments in tool_call, converting to string")
                                 tool_call['function']['arguments'] = json.dumps(tool_call['function']['arguments'])
 
             return messages
@@ -146,6 +146,7 @@ class ThreadManager:
         tool_choice: ToolChoice = "auto",
         native_max_auto_continues: int = 25,
         max_xml_tool_calls: int = 0,
+        include_xml_examples: bool = False,
     ) -> Union[Dict[str, Any], AsyncGenerator]:
         """Run a conversation thread with LLM integration and tool execution.
         
@@ -162,6 +163,7 @@ class ThreadManager:
             native_max_auto_continues: Maximum number of automatic continuations when 
                                       finish_reason="tool_calls" (0 disables auto-continue)
             max_xml_tool_calls: Maximum number of XML tool calls to allow (0 = no limit)
+            include_xml_examples: Whether to include XML tool examples in the system prompt
             
         Returns:
             An async generator yielding response chunks or error dict
@@ -188,6 +190,31 @@ class ThreadManager:
                 # Apply max_xml_tool_calls if specified and not already set
                 if max_xml_tool_calls > 0:
                     processor_config.max_xml_tool_calls = max_xml_tool_calls
+                
+                # Add XML examples to system prompt if requested
+                if include_xml_examples and processor_config.xml_tool_calling:
+                    xml_examples = self.tool_registry.get_xml_examples()
+                    if xml_examples:
+                        # logger.debug(f"Adding {len(xml_examples)} XML examples to system prompt")
+                        
+                        # Create or append to content
+                        if isinstance(system_prompt['content'], str):
+                            examples_content = """
+
+In this environment you have access to a set of tools you can use to answer the user's question. The tools are specified in XML format.
+{{ FORMATTING INSTRUCTIONS }}
+String and scalar parameters should be specified as attributes, while content goes between tags.
+Note that spaces for string values are not stripped. The output is parsed with regular expressions.
+
+Here are the XML tools available with examples:
+"""
+                            for tag_name, example in xml_examples.items():
+                                examples_content += f"<{tag_name}> Example: {example}\n"
+                            
+                            system_prompt['content'] += examples_content
+                        else:
+                            # If content is not a string (might be a list or dict), log a warning
+                            logger.warning("System prompt content is not a string, cannot add XML examples")
                 
                 # 1. Get messages from thread for LLM call
                 messages = await self.get_messages(thread_id)
