@@ -41,7 +41,9 @@ async def run_agent(thread_id: str, stream: bool = True, thread_manager: Optiona
     system_message = { "role": "system", "content": get_system_prompt() }
 
     # model_name = "anthropic/claude-3-5-sonnet-latest" 
+    model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0" 
     
+    #anthropic/claude-3-5-sonnet-latest
     #anthropic/claude-3-7-sonnet-latest
     model_name = "openai/gpt-4o"
     #groq/deepseek-r1-distill-llama-70b
@@ -70,9 +72,10 @@ Current development environment workspace state:
         llm_temperature=0.1,
         llm_max_tokens=8000,
         tool_choice="auto",
+        max_xml_tool_calls=1,
         processor_config=ProcessorConfig(
-            xml_tool_calling=False,
-            native_tool_calling=True,
+            xml_tool_calling=True,
+            native_tool_calling=False,
             execute_tools=True,
             execute_on_stream=True,
             tool_execution_strategy="parallel",
@@ -120,6 +123,11 @@ async def test_agent():
         user_message = input("\n💬 Enter your message (or 'exit' to quit): ")
         if user_message.lower() == 'exit':
             break
+        
+        if not user_message.strip():
+            print("\n🔄 Running agent...\n")
+            await process_agent_response(thread_id, thread_manager)
+            continue
             
         # Add the user message to the thread
         await thread_manager.add_message(
@@ -133,83 +141,86 @@ async def test_agent():
         )
         
         print("\n🔄 Running agent...\n")
-        
-        chunk_counter = 0
-        current_response = ""
-        tool_call_counter = 0  # Track number of tool calls
-        
-        async for chunk in run_agent(thread_id=thread_id, stream=True, thread_manager=thread_manager, native_max_auto_continues=25):
-            chunk_counter += 1
-            
-            if chunk.get('type') == 'content' and 'content' in chunk:
-                current_response += chunk.get('content', '')
-                # Print the response as it comes in
-                print(chunk.get('content', ''), end='', flush=True)
-            elif chunk.get('type') == 'tool_result':
-                # Add timestamp and format tool result nicely
-                tool_name = chunk.get('function_name', 'Tool')
-                result = chunk.get('result', '')
-                print(f"\n\n🛠️  TOOL RESULT [{tool_name}] → {result}")
-            elif chunk.get('type') == 'tool_call':
-                # Display native tool call chunks as they arrive
-                tool_call = chunk.get('tool_call', {})
-                
-                # Check if it's a meaningful part of the tool call to display
-                args = tool_call.get('function', {}).get('arguments', '')
-                
-                # Only show when we have substantial arguments or a function name
-                should_display = (
-                    len(args) > 3 or  # More than just '{}'
-                    tool_call.get('function', {}).get('name')  # Or we have a name
-                )
-                
-                if should_display:
-                    tool_call_counter += 1
-                    tool_name = tool_call.get('function', {}).get('name', 'Building...')
-                    
-                    # Print tool call header with counter and tool name
-                    print(f"\n🔧 TOOL CALL #{tool_call_counter} [{tool_name}]")
-                    
-                    # Try to parse and pretty print the arguments if they're JSON
-                    try:
-                        # Check if it's complete JSON or just a fragment
-                        if args.strip().startswith('{') and args.strip().endswith('}'):
-                            args_obj = json.loads(args)
-                            # Only print non-empty args to reduce clutter
-                            if args_obj and args_obj != {}:
-                                # Format JSON with nice indentation and color indicators for readability
-                                print(f"  ARGS: {json.dumps(args_obj, indent=2)}")
-                        else:
-                            # Only print if there's actual content to show
-                            if args.strip():
-                                print(f"  ARGS: {args}")
-                    except json.JSONDecodeError:
-                        if args.strip():
-                            print(f"  ARGS: {args}")
-                    
-                    # Add a separator for visual clarity
-                    print("  " + "-" * 40)
-                    
-                    # Return to the current content display
-                    if current_response:
-                        print("\nContinuing response:", flush=True)
-                        print(current_response, end='', flush=True)
-            elif chunk.get('type') == 'tool_status':
-                # Log tool status changes
-                status = chunk.get('status', '')
-                function_name = chunk.get('function_name', '')
-                if status and function_name:
-                    status_emoji = "✅" if status == "completed" else "⏳" if status == "started" else "❌"
-                    print(f"\n{status_emoji} TOOL {status.upper()}: {function_name}")
-            elif chunk.get('type') == 'finish':
-                # Just log finish reason to console but don't show to user
-                finish_reason = chunk.get('finish_reason', '')
-                if finish_reason:
-                    print(f"\n📌 Finished: {finish_reason}")
-        
-        print(f"\n\n✅ Agent run completed with {tool_call_counter} tool calls")
+        await process_agent_response(thread_id, thread_manager)
     
     print("\n👋 Test completed. Goodbye!")
+
+async def process_agent_response(thread_id: str, thread_manager: ThreadManager):
+    """Process the streaming response from the agent."""
+    chunk_counter = 0
+    current_response = ""
+    tool_call_counter = 0  # Track number of tool calls
+    
+    async for chunk in run_agent(thread_id=thread_id, stream=True, thread_manager=thread_manager, native_max_auto_continues=25):
+        chunk_counter += 1
+        
+        if chunk.get('type') == 'content' and 'content' in chunk:
+            current_response += chunk.get('content', '')
+            # Print the response as it comes in
+            print(chunk.get('content', ''), end='', flush=True)
+        elif chunk.get('type') == 'tool_result':
+            # Add timestamp and format tool result nicely
+            tool_name = chunk.get('function_name', 'Tool')
+            result = chunk.get('result', '')
+            print(f"\n\n🛠️  TOOL RESULT [{tool_name}] → {result}")
+        elif chunk.get('type') == 'tool_call':
+            # Display native tool call chunks as they arrive
+            tool_call = chunk.get('tool_call', {})
+            
+            # Check if it's a meaningful part of the tool call to display
+            args = tool_call.get('function', {}).get('arguments', '')
+            
+            # Only show when we have substantial arguments or a function name
+            should_display = (
+                len(args) > 3 or  # More than just '{}'
+                tool_call.get('function', {}).get('name')  # Or we have a name
+            )
+            
+            if should_display:
+                tool_call_counter += 1
+                tool_name = tool_call.get('function', {}).get('name', 'Building...')
+                
+                # Print tool call header with counter and tool name
+                print(f"\n🔧 TOOL CALL #{tool_call_counter} [{tool_name}]")
+                
+                # Try to parse and pretty print the arguments if they're JSON
+                try:
+                    # Check if it's complete JSON or just a fragment
+                    if args.strip().startswith('{') and args.strip().endswith('}'):
+                        args_obj = json.loads(args)
+                        # Only print non-empty args to reduce clutter
+                        if args_obj and args_obj != {}:
+                            # Format JSON with nice indentation and color indicators for readability
+                            print(f"  ARGS: {json.dumps(args_obj, indent=2)}")
+                    else:
+                        # Only print if there's actual content to show
+                        if args.strip():
+                            print(f"  ARGS: {args}")
+                except json.JSONDecodeError:
+                    if args.strip():
+                        print(f"  ARGS: {args}")
+                
+                # Add a separator for visual clarity
+                print("  " + "-" * 40)
+                
+                # Return to the current content display
+                if current_response:
+                    print("\nContinuing response:", flush=True)
+                    print(current_response, end='', flush=True)
+        elif chunk.get('type') == 'tool_status':
+            # Log tool status changes
+            status = chunk.get('status', '')
+            function_name = chunk.get('function_name', '')
+            if status and function_name:
+                status_emoji = "✅" if status == "completed" else "⏳" if status == "started" else "❌"
+                print(f"\n{status_emoji} TOOL {status.upper()}: {function_name}")
+        elif chunk.get('type') == 'finish':
+            # Just log finish reason to console but don't show to user
+            finish_reason = chunk.get('finish_reason', '')
+            if finish_reason:
+                print(f"\n📌 Finished: {finish_reason}")
+    
+    print(f"\n\n✅ Agent run completed with {tool_call_counter} tool calls")
 
 if __name__ == "__main__":
     import asyncio

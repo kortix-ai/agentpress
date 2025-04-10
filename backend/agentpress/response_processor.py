@@ -50,6 +50,7 @@ class ProcessorConfig:
         execute_on_stream: For streaming, execute tools as they appear vs. at the end
         tool_execution_strategy: How to execute multiple tools ("sequential" or "parallel")
         xml_adding_strategy: How to add XML tool results to the conversation
+        max_xml_tool_calls: Maximum number of XML tool calls to process (0 = no limit)
     """
 
     xml_tool_calling: bool = True  
@@ -59,6 +60,7 @@ class ProcessorConfig:
     execute_on_stream: bool = False
     tool_execution_strategy: ToolExecutionStrategy = "sequential"
     xml_adding_strategy: XmlAddingStrategy = "assistant_message"
+    max_xml_tool_calls: int = 0  # 0 means no limit
     
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -67,6 +69,9 @@ class ProcessorConfig:
             
         if self.xml_adding_strategy not in ["user_message", "assistant_message", "inline_edit"]:
             raise ValueError("xml_adding_strategy must be 'user_message', 'assistant_message', or 'inline_edit'")
+        
+        if self.max_xml_tool_calls < 0:
+            raise ValueError("max_xml_tool_calls must be a non-negative integer (0 = no limit)")
 
 class ResponseProcessor:
     """Processes LLM responses, extracting and executing tool calls."""
@@ -113,12 +118,18 @@ class ResponseProcessor:
         # Tool index counter for tracking all tool executions
         tool_index = 0
         
+        # Count of processed XML tool calls
+        xml_tool_call_count = 0
+        
         # Track finish reason
         finish_reason = None
         
         logger.info(f"Starting to process streaming response for thread {thread_id}")
         logger.info(f"Config: XML={config.xml_tool_calling}, Native={config.native_tool_calling}, " 
                    f"Execute on stream={config.execute_on_stream}, Execution strategy={config.tool_execution_strategy}")
+        
+        if config.max_xml_tool_calls > 0:
+            logger.info(f"XML tool call limit enabled: {config.max_xml_tool_calls}")
         
         try:
             async for chunk in llm_response:
@@ -143,6 +154,11 @@ class ResponseProcessor:
                         
                         # Parse XML tool calls if enabled
                         if config.xml_tool_calling:
+                            # Check if we've reached the XML tool call limit
+                            if config.max_xml_tool_calls > 0 and xml_tool_call_count >= config.max_xml_tool_calls:
+                                # Skip XML tool call parsing if we've reached the limit
+                                continue
+                            
                             # Extract complete XML chunks
                             xml_chunks = self._extract_xml_chunks(current_xml_content)
                             for xml_chunk in xml_chunks:
@@ -153,6 +169,9 @@ class ResponseProcessor:
                                 # Parse and extract the tool call
                                 tool_call = self._parse_xml_tool_call(xml_chunk)
                                 if tool_call:
+                                    # Increment the XML tool call counter
+                                    xml_tool_call_count += 1
+                                    
                                     # Create a context for this tool execution
                                     context = self._create_tool_context(
                                         tool_call=tool_call,
@@ -177,8 +196,13 @@ class ResponseProcessor:
                                         
                                         # Increment the tool index
                                         tool_index += 1
-                                        
-                                        # Immediately continue processing more chunks
+                                    
+                                    # If we've reached the XML tool call limit, break out of the loop and stop processing
+                                    if config.max_xml_tool_calls > 0 and xml_tool_call_count >= config.max_xml_tool_calls:
+                                        logger.info(f"Reached XML tool call limit ({config.max_xml_tool_calls}), stopping further XML parsing")
+                                        # Add a custom finish reason
+                                        finish_reason = "xml_tool_limit_reached"
+                                        break
                     
                 # Process native tool calls
                 if config.native_tool_calling and delta and hasattr(delta, 'tool_calls') and delta.tool_calls:
@@ -280,8 +304,11 @@ class ResponseProcessor:
                             
                             # Increment the tool index
                             tool_index += 1
-                            
-                            # Immediately continue processing more chunks
+                
+                # If we've reached the XML tool call limit, stop streaming
+                if finish_reason == "xml_tool_limit_reached":
+                    logger.info("Stopping stream due to XML tool call limit")
+                    break
             
                 # Check for completed tool executions
                 completed_executions = []
@@ -336,7 +363,7 @@ class ResponseProcessor:
                 for i in sorted(completed_executions, reverse=True):
                     pending_tool_executions.pop(i)
             
-            # After streaming completes, wait for any remaining tool executions
+            # After streaming completes or is stopped due to limit, wait for any remaining tool executions
             if pending_tool_executions:
                 logger.info(f"Waiting for {len(pending_tool_executions)} pending tool executions to complete")
                 
@@ -390,8 +417,17 @@ class ResponseProcessor:
                                 "tool_index": tool_index
                             }
             
+            # If stream was stopped due to XML limit, report custom finish reason
+            if finish_reason == "xml_tool_limit_reached":
+                yield {
+                    "type": "finish",
+                    "finish_reason": "xml_tool_limit_reached"
+                }
+                logger.info(f"Stream finished with reason: xml_tool_limit_reached after {xml_tool_call_count} XML tool calls")
+            
             # After streaming completes, process any remaining content and tool calls
-            if accumulated_content:
+            # Only do this if we didn't stop due to XML tool limit (already handled pending executions above)
+            if accumulated_content and finish_reason != "xml_tool_limit_reached":
                 # Extract final complete tool calls for native format
                 complete_native_tool_calls = []
                 if config.native_tool_calling:
@@ -446,7 +482,8 @@ class ResponseProcessor:
                     tool_index += 1
                 
                 # Execute any remaining tool calls if not done during streaming
-                if config.execute_tools and not config.execute_on_stream:
+                # Only process if we haven't reached the XML limit
+                if config.execute_tools and not config.execute_on_stream and (config.max_xml_tool_calls == 0 or xml_tool_call_count < config.max_xml_tool_calls):
                     tool_calls_to_execute = []
                     
                     # Process native tool calls
@@ -458,16 +495,21 @@ class ResponseProcessor:
                                 "id": tool_call["id"]
                             })
                     
-                    # Process XML tool calls
-                    if config.xml_tool_calling:
+                    # Process XML tool calls - only if we haven't hit the limit
+                    if config.xml_tool_calling and (config.max_xml_tool_calls == 0 or xml_tool_call_count < config.max_xml_tool_calls):
                         # Extract any remaining complete XML chunks
                         xml_chunks = self._extract_xml_chunks(current_xml_content)
                         xml_chunks_buffer.extend(xml_chunks)
                         
-                        for xml_chunk in xml_chunks_buffer:
+                        # Only process up to the limit
+                        remaining_xml_calls = config.max_xml_tool_calls - xml_tool_call_count if config.max_xml_tool_calls > 0 else len(xml_chunks_buffer)
+                        xml_chunks_to_process = xml_chunks_buffer[:remaining_xml_calls] if remaining_xml_calls > 0 else []
+                        
+                        for xml_chunk in xml_chunks_to_process:
                             tool_call = self._parse_xml_tool_call(xml_chunk)
                             if tool_call:
                                 tool_calls_to_execute.append(tool_call)
+                                xml_tool_call_count += 1
                     
                     # Execute all collected tool calls
                     if tool_calls_to_execute:
@@ -496,7 +538,7 @@ class ResponseProcessor:
                             tool_index += 1
                 
                 # Finally, if we detected a finish reason, yield it
-                if finish_reason:
+                if finish_reason and finish_reason != "xml_tool_limit_reached":  # Already yielded if limit reached
                     yield {
                         "type": "finish",
                         "finish_reason": finish_reason
@@ -528,6 +570,8 @@ class ResponseProcessor:
             tool_calls = []
             # Tool execution counter
             tool_index = 0
+            # XML tool call counter
+            xml_tool_call_count = 0
             
             # Extract finish_reason if available
             finish_reason = None
@@ -545,7 +589,16 @@ class ResponseProcessor:
                         # Parse XML tool calls if enabled
                         if config.xml_tool_calling:
                             xml_tool_calls = self._parse_xml_tool_calls(content)
+                            
+                            # Apply XML tool call limit if configured
+                            if config.max_xml_tool_calls > 0 and len(xml_tool_calls) > config.max_xml_tool_calls:
+                                logger.info(f"Limiting XML tool calls from {len(xml_tool_calls)} to {config.max_xml_tool_calls}")
+                                xml_tool_calls = xml_tool_calls[:config.max_xml_tool_calls]
+                                # Set a custom finish reason
+                                finish_reason = "xml_tool_limit_reached"
+                            
                             tool_calls.extend(xml_tool_calls)
+                            xml_tool_call_count = len(xml_tool_calls)
                     
                     # Extract native tool calls
                     if config.native_tool_calling and hasattr(response_message, 'tool_calls') and response_message.tool_calls:
@@ -613,10 +666,20 @@ class ResponseProcessor:
                     
                     # Increment tool index for next tool
                     tool_index += 1
-                    
-            # Finally, if we detected a finish reason, yield it
-            if finish_reason:
-                yield {"type": "finish", "finish_reason": finish_reason}
+            
+            # If we hit the XML tool call limit, report it
+            if finish_reason == "xml_tool_limit_reached":
+                yield {
+                    "type": "finish",
+                    "finish_reason": "xml_tool_limit_reached"
+                }
+                logger.info(f"Non-streaming response finished with reason: xml_tool_limit_reached after {xml_tool_call_count} XML tool calls")
+            # Otherwise yield the regular finish reason if available
+            elif finish_reason:
+                yield {
+                    "type": "finish", 
+                    "finish_reason": finish_reason
+                }
                     
         except Exception as e:
             logger.error(f"Error processing response: {str(e)}", exc_info=True)
