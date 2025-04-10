@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Minimize2, Terminal, FileText, Search, MessageSquare, File, ChevronLeft, ChevronRight, Loader2, FolderOpen } from 'lucide-react';
+import { Minimize2, Terminal, FileText, Search, MessageSquare, File, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ReactNode } from 'react';
 import { Slider } from "@/components/ui/slider";
-import { CodeView } from "@/components/views";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { 
+  CodeView, 
+  TerminalView, 
+  MarkdownView, 
+  TextView 
+} from "@/components/views";
 
 // Define view type
 type ViewType = 'code' | 'terminal' | 'markdown' | 'text' | 'search' | 'browser' | 'issues';
@@ -238,54 +242,6 @@ export default function SecondaryView({
     }
   }, [currentToolIndex, sortedTools, sliderValue, selectedTool, onSelectTool]);
   
-  // Create a memoized marker renderer
-  const renderToolMarkers = useCallback(() => {
-    if (sortedTools.length <= 1) return null;
-
-    return sortedTools.map((tool, index) => {
-      const position = (index / (sortedTools.length - 1)) * 100;
-      const isSelected = currentToolIndex === index;
-      
-      // Memoize the click handler
-      const handleMarkerClick = () => {
-        // Only update if we're not already showing this tool
-        if (currentToolIndex !== index) {
-          setCurrentToolIndex(index);
-          // Only update slider position if it's significantly different
-          if (Math.abs((sliderValue[0] || 0) - position) > 1) {
-            setSliderValue([position]);
-          }
-          // Prevent redundant selection
-          if (selectedTool?.id !== tool.id) {
-            onSelectTool(tool.id);
-          }
-        }
-      };
-      
-      return (
-        <TooltipProvider key={tool.id}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div 
-                className={`absolute h-3 w-3 rounded-full -mt-1.5 transform -translate-x-1/2 cursor-pointer ${
-                  isSelected
-                    ? 'bg-primary border-2 border-primary-foreground' 
-                    : 'bg-zinc-300'
-                }`}
-                style={{ left: `${position}%`, top: '50%' }}
-                onClick={handleMarkerClick}
-              />
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="text-xs">{tool.name}</p>
-              <p className="text-xs text-zinc-400">{formatTime(tool.startTime)}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    });
-  }, [sortedTools, currentToolIndex, sliderValue, selectedTool, onSelectTool]);
-  
   // Get content to display in the main view
   const getContent = () => {
     // Show streaming content if we have an active tool call
@@ -293,16 +249,47 @@ export default function SecondaryView({
       const isCommandOrTerminal = streamingToolCall.name?.toLowerCase().includes('command') || 
                                 streamingToolCall.name?.toLowerCase().includes('terminal');
       
+      if (isCommandOrTerminal) {
+        return (
+          <TerminalView 
+            content={streamingToolCall.content}
+            title={streamingToolCall.status === 'running' ? `Running ${streamingToolCall.name}...` : streamingToolCall.name}
+          />
+        );
+      }
+      
+      // Check if we're dealing with a file
+      if (streamingToolCall.fileName) {
+        const fileExtension = streamingToolCall.fileName.split('.').pop()?.toLowerCase() || '';
+        
+        // For markdown files
+        if (fileExtension === 'md' || fileExtension === 'markdown') {
+          return (
+            <MarkdownView 
+              title={streamingToolCall.fileName}
+              originalContent={streamingToolCall.content}
+              showDiff={false}
+            />
+          );
+        }
+        
+        // For code files (use CodeView)
+        return (
+          <CodeView 
+            fileName={streamingToolCall.fileName}
+            language={streamingToolCall.language || getLanguageFromExtension(fileExtension)}
+            originalContent={streamingToolCall.content}
+            showDiff={false}
+          />
+        );
+      }
+      
+      // Default text view for other content
       return (
-        <div className={`h-full ${isCommandOrTerminal ? 'bg-zinc-900 text-zinc-200' : 'bg-white'} font-mono text-sm p-4 overflow-auto whitespace-pre-wrap`}>
-          {streamingToolCall.status === 'running' && (
-            <div className="flex items-center gap-2 mb-2 text-green-400">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Running {streamingToolCall.name}...</span>
-            </div>
-          )}
-          {streamingToolCall.content}
-        </div>
+        <TextView
+          content={streamingToolCall.content}
+          title={streamingToolCall.name}
+        />
       );
     }
     
@@ -316,38 +303,36 @@ export default function SecondaryView({
         (selectedTool.result.match(/(?:Contents of file|Created file|Updated file|Edited file): (.*?)(?:$|\n)/))?.[1]?.split('/').pop() || 'file' : 
         undefined;
       
-      // Special case for terminal commands
+      // Determine file extension if available
+      const fileExtension = fileName ? fileName.split('.').pop()?.toLowerCase() : '';
+      
+      // Special case for terminal commands - use TerminalView
       if (toolNameLower.includes('command') || toolNameLower.includes('terminal')) {
         return (
-          <div className="h-full bg-zinc-900 text-green-400 font-mono text-sm p-4 overflow-auto whitespace-pre-wrap">
-            {selectedTool.result}
-          </div>
+          <TerminalView 
+            content={selectedTool.result}
+            title="Terminal Output"
+          />
         );
       }
       
-      // Special case for search operations
+      // Special case for search operations - use TextView for now
       if (toolNameLower.includes('search') || toolNameLower.includes('grep')) {
         return (
-          <div className="h-full bg-white font-mono text-sm p-4 overflow-auto">
-            <div className="text-zinc-600 mb-2 pb-2 border-b border-zinc-200">
-              <Search className="h-4 w-4 inline-block mr-2" />
-              Search results
-            </div>
-            <pre className="whitespace-pre-wrap text-xs">{selectedTool.result}</pre>
-          </div>
+          <TextView
+            content={selectedTool.result}
+            title="Search Results"
+          />
         );
       }
       
-      // Special case for list directory
+      // Special case for list directory - use TextView
       if (toolNameLower.includes('list_dir')) {
         return (
-          <div className="h-full bg-white font-mono text-sm p-4 overflow-auto">
-            <div className="text-zinc-600 mb-2 pb-2 border-b border-zinc-200">
-              <FolderOpen className="h-4 w-4 inline-block mr-2" />
-              Directory contents
-            </div>
-            <pre className="whitespace-pre-wrap text-xs">{selectedTool.result}</pre>
-          </div>
+          <TextView
+            content={selectedTool.result}
+            title="Directory Contents"
+          />
         );
       }
         
@@ -356,10 +341,23 @@ export default function SecondaryView({
         // Try to extract before/after content for edit operations
         const beforeAfterMatch = selectedTool.result.match(/Before:([\s\S]*?)After:([\s\S]*)/i);
         if (beforeAfterMatch) {
+          // If it's a markdown file, use MarkdownView
+          if (fileExtension === 'md' || fileExtension === 'markdown') {
+            return (
+              <MarkdownView 
+                title={fileName}
+                originalContent={beforeAfterMatch[1].trim()}
+                modifiedContent={beforeAfterMatch[2].trim()}
+                showDiff={true}
+              />
+            );
+          }
+          
+          // Otherwise use CodeView for diff
           return (
             <CodeView 
               fileName={fileName}
-              language={language}
+              language={language || getLanguageFromExtension(fileExtension || '')}
               originalContent={beforeAfterMatch[1].trim()}
               modifiedContent={beforeAfterMatch[2].trim()}
               showDiff={true}
@@ -371,15 +369,33 @@ export default function SecondaryView({
       // For file operations, extract file content after the first line
       if (fileName && (toolNameLower.includes('read') || toolNameLower.includes('create') || toolNameLower.includes('write'))) {
         let fileContent = selectedTool.result;
+        
+        // More robust content extraction - look for file content after the header line
         if (fileContent.includes('Contents of file:') || fileContent.includes('Created file:') || fileContent.includes('Updated file:')) {
-          fileContent = fileContent.split('\n').slice(1).join('\n');
+          // Split by the first newline after the header
+          const firstLineBreakIndex = fileContent.indexOf('\n');
+          if (firstLineBreakIndex !== -1) {
+            fileContent = fileContent.substring(firstLineBreakIndex + 1);
+          }
         }
         
+        // For markdown files, use MarkdownView
+        if (fileExtension === 'md' || fileExtension === 'markdown') {
+          return (
+            <MarkdownView 
+              title={fileName}
+              originalContent={fileContent}
+              showDiff={false}
+            />
+          );
+        }
+        
+        // For code files, use CodeView
         return (
           <div className="h-full overflow-auto">
             <CodeView 
               fileName={fileName}
-              language={language}
+              language={language || getLanguageFromExtension(fileExtension || '')}
               originalContent={fileContent}
               showDiff={false}
             />
@@ -387,13 +403,12 @@ export default function SecondaryView({
         );
       }
       
-      // For any other tool output, just show as pre-formatted text
+      // For any other tool output, use TextView
       return (
-        <div className="h-full overflow-auto">
-          <div className="bg-white font-mono text-sm p-4 overflow-auto whitespace-pre-wrap">
-            <pre className="text-xs text-zinc-800">{selectedTool.result}</pre>
-          </div>
-        </div>
+        <TextView
+          content={selectedTool.result}
+          title={selectedTool.name}
+        />
       );
     }
     
@@ -403,6 +418,59 @@ export default function SecondaryView({
         <span className="text-sm">No content to display</span>
       </div>
     );
+  };
+  
+  // Helper function to determine language from file extension
+  const getLanguageFromExtension = (extension: string): string => {
+    switch (extension) {
+      case 'js': 
+      case 'jsx': 
+        return 'javascript';
+      case 'ts':
+      case 'tsx':
+        return 'typescript';
+      case 'py': 
+        return 'python';
+      case 'html': 
+      case 'htm': 
+        return 'html';
+      case 'css': 
+        return 'css';
+      case 'json': 
+        return 'json';
+      case 'md':
+      case 'markdown':
+        return 'markdown';
+      case 'yaml':
+      case 'yml':
+        return 'yaml';
+      case 'sh':
+      case 'bash':
+        return 'bash';
+      case 'sql':
+        return 'sql';
+      case 'rb':
+        return 'ruby';
+      case 'php':
+        return 'php';
+      case 'go':
+        return 'go';
+      case 'rs':
+        return 'rust';
+      case 'java':
+        return 'java';
+      case 'c':
+        return 'c';
+      case 'cpp':
+      case 'cc':
+      case 'h':
+      case 'hpp':
+        return 'cpp';
+      case 'cs':
+        return 'csharp';
+      default:
+        return 'plaintext';
+    }
   };
   
   return (
@@ -421,28 +489,28 @@ export default function SecondaryView({
       </div>
       
       <div className="flex items-center mb-4">
-        <div className="bg-zinc-100 p-2 rounded-md mr-3">
+          <div className="bg-zinc-100 p-2 rounded-md mr-3">
           {isToolActive ? (
             <div className="relative">
-              {getToolIcon(displayName)}
+            {getToolIcon(displayName)}
               <div className="absolute -top-1 -right-1 h-2 w-2 bg-green-500 rounded-full animate-pulse" />
             </div>
           ) : (
             getToolIcon(displayName)
           )}
-        </div>
-        <div>
+          </div>
+          <div>
           <h2 className="text-md font-medium text-zinc-800">
             {currentToolIndex !== null && sortedTools[currentToolIndex]?.status === 'error' 
               ? 'Error' 
               : displayName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
           </h2>
           <p className="text-sm text-zinc-500 flex items-center">
-            {isToolActive ? (
+              {isToolActive ? (
               <span className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                Running: {displayName}
-              </span>
+                  Running: {displayName}
+                </span>
             ) : currentToolIndex !== null && sortedTools[currentToolIndex] ? (
               <span className="flex items-center gap-1">
                 {formatTime(sortedTools[currentToolIndex].startTime)}
@@ -452,17 +520,17 @@ export default function SecondaryView({
                   </span>
                 )}
               </span>
-            ) : (
-              displayName
+              ) : (
+                displayName
+              )}
+            </p>
+            {streamingToolCall?.fileName && (
+              <p className="text-xs text-zinc-400 mt-1">{streamingToolCall.fileName}</p>
             )}
-          </p>
-          {streamingToolCall?.fileName && (
-            <p className="text-xs text-zinc-400 mt-1">{streamingToolCall.fileName}</p>
-          )}
           {currentToolIndex !== null && sortedTools[currentToolIndex]?.status === 'error' && (
             <p className="text-xs text-red-500 mt-1">Execution failed</p>
           )}
-        </div>
+          </div>
       </div>
       
       {/* Tool execution count */}
@@ -515,9 +583,6 @@ export default function SecondaryView({
               onValueChange={handleSliderChange}
               disabled={sortedTools.length <= 1}
             />
-            
-            {/* Render tool markers on the slider */}
-            {renderToolMarkers()}
             
             {/* Tooltip for the current hover position */}
             {hoveredPosition !== null && (
