@@ -1099,21 +1099,33 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
 
   const handleToolClick = (message: ApiMessage) => {
     let language = '';
+    let fileContents = message.content || '';
+    let fileName = '';
     
-    // Determine language for file operations
+    // Determine language and extract file contents for file operations
     if (message.arguments) {
       try {
         const args = JSON.parse(message.arguments);
         const path = args.file_path || args.target_file || args.path || '';
-        const fileName = path.split('/').pop() || '';
+        fileName = path.split('/').pop() || '';
         
-        if (fileName.endsWith('.js') || fileName.endsWith('.jsx')) language = 'javascript';
-        else if (fileName.endsWith('.ts') || fileName.endsWith('.tsx')) language = 'typescript';
-        else if (fileName.endsWith('.html') || fileName.endsWith('.xml')) language = 'html';
-        else if (fileName.endsWith('.css')) language = 'css';
-        else if (fileName.endsWith('.md')) language = 'markdown';
-        else if (fileName.endsWith('.json')) language = 'json';
-        else if (fileName.endsWith('.py')) language = 'python';
+        // Check if this is a create_file operation for markdown
+        if (message.name?.toLowerCase() === 'create_file' && fileName.endsWith('.md')) {
+          // For markdown files, use the file_contents from the arguments directly
+          language = 'markdown';
+          if (args.file_contents) {
+            fileContents = args.file_contents;
+          }
+        } else {
+          // For other files, determine language by extension
+          if (fileName.endsWith('.js') || fileName.endsWith('.jsx')) language = 'javascript';
+          else if (fileName.endsWith('.ts') || fileName.endsWith('.tsx')) language = 'typescript';
+          else if (fileName.endsWith('.html') || fileName.endsWith('.xml')) language = 'html';
+          else if (fileName.endsWith('.css')) language = 'css';
+          else if (fileName.endsWith('.md')) language = 'markdown';
+          else if (fileName.endsWith('.json')) language = 'json';
+          else if (fileName.endsWith('.py')) language = 'python';
+        }
       } catch (e) {
         console.error('Error parsing arguments', e);
       }
@@ -1126,8 +1138,10 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       status: 'completed' as const,
       startTime: message.created_at ? new Date(message.created_at) : new Date(),
       endTime: message.created_at ? new Date(message.created_at) : new Date(),
-      result: message.content || '',
-      language
+      result: fileContents,
+      language,
+      arguments: message.arguments, // Pass arguments to allow the SecondaryView to extract file_contents if needed
+      viewType: fileName.endsWith('.md') ? 'markdown' : undefined // Set explicit view type for markdown files
     };
     
     // Add this to our historical tool executions if it's not already there
