@@ -17,6 +17,7 @@ interface ChatMessageProps {
   handleSubmitEdit: () => void;
   setEditedContent: (content: string) => void;
   handleToolClick: (message: ApiMessage) => void;
+  messages: ApiMessage[];
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -30,7 +31,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   handleCancelEdit,
   handleSubmitEdit,
   setEditedContent,
-  handleToolClick
+  handleToolClick,
+  messages
 }) => {
   // Function to copy text to clipboard
   const copyToClipboard = (text: string) => {
@@ -189,7 +191,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             onClick={() => message.role === 'user' ? handleEditMessage(index) : null}
           >
             {/* Add Kortix logo for assistant messages that are not tool calls */}
-            {message.role === 'assistant' && message.type !== 'tool_call' && !message.tool_call && (
+            {message.role === 'assistant' && message.type !== 'tool_call' && !message.tool_calls && (
               <div className="flex items-center mb-4">
                 <img 
                   src="/Kortix-Logo-Only.svg" 
@@ -237,17 +239,54 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                     }
 
                     // File creation/write result
-                    if ((toolNameLower.includes('create_file') || toolNameLower.includes('write')) && message.content) {
+                    if ((toolNameLower.includes('create_file') || toolNameLower.includes('write') || toolNameLower.includes('full_file_rewrite')) && message.content) {
                       const filePath = message.content.match(/Created file: (.*)/)?.[1] || 
                                       message.content.match(/Updated file: (.*)/)?.[1] ||
-                                      message.content.match(/path: "(.*?)"/)?.[1];
+                                      message.content.match(/path: "(.*?)"/)?.[1] ||
+                                      message.content.match(/File '(.*)' created/)?.[1];
                       const fileName = filePath?.split('/').pop();
                       
-                      // Look for file content in the tool result
+                      // Always prioritize getting file content from the original tool call
                       let fileContent = '';
-                      if (jsonOutput?.output) {
-                        fileContent = jsonOutput.output.includes('File created') ? 
-                          message.content.split('\n').slice(1).join('\n') : jsonOutput.output;
+                      
+                      // First try to get content from the original tool call
+                      if (message.tool_call_id) {
+                        const originalToolCall = messages.find(m => 
+                          m.role === 'assistant' && 
+                          m.tool_calls && m.tool_calls.some(tc => tc.id === message.tool_call_id)
+                        );
+                        
+                        if (originalToolCall?.tool_calls) {
+                          const toolCall = originalToolCall.tool_calls.find(tc => tc.id === message.tool_call_id);
+                          if (toolCall) {
+                            try {
+                              const args = JSON.parse(toolCall.function.arguments);
+                              fileContent = args.file_contents || args.content || '';
+                            } catch (e) {
+                              // Parsing failed, continue to next method
+                            }
+                          }
+                        }
+                      }
+                      
+                      // If we couldn't get from tool call, try to parse from response
+                      if (!fileContent) {
+                        if (jsonOutput?.output) {
+                          fileContent = jsonOutput.output.includes('File created') ? 
+                            message.content.split('\n').slice(1).join('\n') : jsonOutput.output;
+                        } else if (message.content.includes('\n')) {
+                          // If result contains a newline, extract content after first line
+                          fileContent = message.content.split('\n').slice(1).join('\n');
+                        }
+                      }
+                      
+                      // Fallback - check for line breaks to separate the content
+                      if (!fileContent && message.content.includes('\n')) {
+                        const lines = message.content.split('\n');
+                        if (lines.length > 1) {
+                          // Skip the first line (success message) and use the rest as content
+                          fileContent = lines.slice(1).join('\n');
+                        }
                       }
                       
                       return (
@@ -322,10 +361,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                     }
                     
                     // Edit file result
-                    else if (toolNameLower.includes('edit_file') && message.content) {
+                    else if (toolNameLower.includes('edit_file') || toolNameLower.includes('str_replace') && message.content) {
                       const filePath = message.content.match(/Edited file: (.*)/)?.[1] || 
-                                    message.content.match(/path: "(.*?)"/)?.[1];
+                                      message.content.match(/Replacement successful.*?: (.*)/)?.[1] ||
+                                      message.content.match(/path: "(.*?)"/)?.[1];
                       const fileName = filePath?.split('/').pop() || filePath;
+                      
+                      // Extract snippet of changes for preview
+                      let snippet = '';
+                      if (message.content.includes('Snippet of changes:')) {
+                        snippet = message.content.split('Snippet of changes:')[1].trim();
+                      }
                       
                       return (
                         <div 
@@ -339,13 +385,28 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                             </div>
                             <span className="text-xs text-purple-500 ml-3">{fileName}</span>
                           </div>
+                          {snippet && (
+                            <div className="px-3 py-2 bg-white max-h-60 overflow-y-auto">
+                              <pre className="text-xs text-slate-700">{snippet}</pre>
+                            </div>
+                          )}
                         </div>
                       );
                     }
                     
                     // Terminal/command result
                     else if ((toolNameLower.includes('command') || toolNameLower.includes('terminal')) && message.content) {
-                      const commandOutput = message.content;
+                      let commandOutput = message.content;
+                      
+                      // Try to parse JSON output
+                      try {
+                        const jsonResult = JSON.parse(message.content);
+                        if (jsonResult.output) {
+                          commandOutput = jsonResult.output;
+                        }
+                      } catch (e) {
+                        // Not JSON, keep as is
+                      }
                       
                       return (
                         <div 

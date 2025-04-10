@@ -8,14 +8,14 @@ import { Button } from '@/components/ui/button';
 import { ArrowDown, PlusCircle} from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChatInput } from '@/components/chat-input';
-import SecondaryView from '@/components/secondary-view';
 import ChatMessage from '@/components/threads/ChatMessage';
 import StreamingMessage from '@/components/threads/StreamingMessage';
 import ThinkingIndicator from '@/components/threads/ThinkingIndicator';
 import { useChatThread } from '@/hooks/useChatThread';
 import { useScrollManager } from '@/hooks/useScrollManager';
 import { useMessageEditor } from '@/hooks/useMessageEditor';
-import { useToolExecutions } from '@/hooks/useToolExecutions';
+import { useToolData } from '@/hooks/useToolData';
+import { ComputerPanel } from '@/components/computer';
 
 // Define a type for the params to make React.use() work properly
 type ThreadParams = { id: string; threadId: string };
@@ -73,20 +73,19 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     updateOverlayOnScroll
   } = useMessageEditor({ messagesContainerRef });
   
-  // Use the tool executions hook
+  // Replace useToolExecutions with our new useToolData hook
   const {
-    isSecondaryViewOpen,
-    setIsSecondaryViewOpen,
-    selectedToolExecution,
-    setSelectedToolExecution,
-    historicalToolExecutions,
-    handleToolClick,
-    streamingToolCall
-  } = useToolExecutions({
-    messages,
-    toolCallData,
-    streamContent
-  });
+    tools,
+    selectedTool,
+    isViewOpen,
+    setIsViewOpen,
+    selectTool
+  } = useToolData(messages, toolCallData ? {
+    id: toolCallData.id || String(Date.now()),
+    name: toolCallData.name || 'Unknown Tool',
+    content: streamContent,
+    status: toolCallData.status
+  } : undefined);
   
   // Create a custom handleEditMessage that sets content too
   const handleEditMessage = useCallback((index: number) => {
@@ -223,20 +222,20 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
-      <div className="flex flex-1 w-full h-full">
-        {/* Left side: Chat UI */}
-        <div className={`${isSecondaryViewOpen ? 'w-3/5' : 'w-full'} border-r border-zinc-100 relative transition-all duration-300`}>
+      <div className={`relative flex-1 flex flex-col ${isViewOpen ? 'lg:flex-row' : ''}`}>
+        {/* Main chat area */}
+        <div className={`relative flex-1 flex flex-col ${isViewOpen ? 'lg:w-3/5' : ''}`}>
           <div 
             ref={messagesContainerRef}
-            className="absolute inset-0 overflow-y-auto px-4 py-4 pb-[5.5rem]" 
+            className="absolute inset-0 overflow-y-auto px-4 py-4 pb-[5.5rem]"
             onScroll={handleScroll}
           >
             <div className="mx-auto max-w-2xl">
-              {messages.length === 0 && !streamContent ? (
-                <div className="flex h-full items-center justify-center">
-                  <div className="flex flex-col items-center gap-1 text-center">
-                    <p className="text-sm text-muted-foreground">Send a message to start the conversation.</p>
-                    <p className="text-xs text-muted-foreground/60">The AI agent will respond automatically.</p>
+              {error ? (
+                <div className="p-4 m-4 bg-red-50 text-red-700 rounded-lg">
+                  <p>Error: {error}</p>
+                  <div className="mt-2">
+                    <Button onClick={() => window.location.reload()}>Reload</Button>
                   </div>
                 </div>
               ) : (
@@ -268,7 +267,15 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                       handleCancelEdit={handleCancelEdit}
                       handleSubmitEdit={handleSubmitEdit}
                       setEditedContent={setEditedContent}
-                      handleToolClick={handleToolClick}
+                      handleToolClick={(message) => {
+                        if (message.tool_call_id) {
+                          const toolId = message.tool_call_id;
+                          selectTool(toolId);
+                        } else if (message.id) {
+                          selectTool(message.id);
+                        }
+                      }}
+                      messages={messages}
                     />
                   ))}
                   
@@ -315,10 +322,10 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               {/* Connector component above chat input */}
               <div className="flex items-center justify-center rounded-t-md border-t border-x border-zinc-200 mx-2 pt-3 pb-1 relative">
                 {/* Zinc rectangle button that extends above the connector */}
-                {!isSecondaryViewOpen && (
+                {!isViewOpen && (
                   <div 
                     className="absolute left-5 -top-17 h-20 w-36 bg-zinc-200 rounded-md border border-zinc-300 flex items-center justify-center cursor-pointer hover:bg-zinc-300 transition-colors"
-                    onClick={() => setIsSecondaryViewOpen(prev => !prev)}
+                    onClick={() => setIsViewOpen(true)}
                   >
                     <PlusCircle className="h-6 w-6 text-zinc-600 mr-2" />
                     <span className="text-sm text-zinc-600">Show Panel</span>
@@ -347,21 +354,14 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
           </div>
         </div>
 
-        {/* Right side: Secondary View */}
-        {isSecondaryViewOpen && (
-          <div className="w-2/5 p-4 flex flex-col">
-            <SecondaryView 
-              onClose={() => setIsSecondaryViewOpen(false)} 
-              selectedTool={selectedToolExecution || undefined}
-              toolExecutions={historicalToolExecutions}
-              onSelectTool={(id) => {
-                // Find and select a specific tool execution
-                const tool = historicalToolExecutions.find(t => t.id === id);
-                if (tool) {
-                  setSelectedToolExecution(tool);
-                }
-              }}
-              streamingToolCall={streamingToolCall}
+        {/* Right side: Tool Panel */}
+        {isViewOpen && (
+          <div className="w-full lg:w-2/5 p-4 flex flex-col">
+            <ComputerPanel 
+              tools={tools}
+              selectedTool={selectedTool}
+              selectTool={selectTool}
+              onClose={() => setIsViewOpen(false)}
             />
           </div>
         )}
