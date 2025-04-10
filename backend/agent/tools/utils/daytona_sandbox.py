@@ -270,7 +270,7 @@ def wait_for_api_ready(sandbox):
     
     return api_url
 
-async def get_or_start_sandbox(sandbox_id: str, sandbox_pass: str):
+async def get_or_start_sandbox(sandbox_id: str):
     """Retrieve a sandbox by ID, check its state, and start it if needed.
     Also ensure the sandbox_browser_api and HTTP server services are running."""
     

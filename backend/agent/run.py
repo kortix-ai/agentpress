@@ -9,7 +9,7 @@ from agentpress.thread_manager import ThreadManager
 from agentpress.response_processor import ProcessorConfig
 from agent.tools.sb_browse_tool import SandboxBrowseTool
 from agent.tools.sb_shell_tool import SandboxShellTool
-from agent.tools.sb_website_tool import SandboxWebsiteTool
+# from agent.tools.sb_website_tool import SandboxWebsiteTool
 from agent.tools.sb_files_tool import SandboxFilesTool
 from agent.prompt import get_system_prompt
 from agent.tools.utils.daytona_sandbox import daytona, create_sandbox, get_or_start_sandbox
@@ -28,7 +28,7 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     if project.data[0]['sandbox_id']:
         sandbox_id = project.data[0]['sandbox_id']
         sandbox_pass = project.data[0]['sandbox_pass']
-        sandbox = await get_or_start_sandbox(sandbox_id, sandbox_pass)
+        sandbox = await get_or_start_sandbox(sandbox_id)
     else:
         sandbox_pass = str(uuid4())
         sandbox = create_sandbox(sandbox_pass)
@@ -37,13 +37,13 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
             'sandbox_id': sandbox_id,
             'sandbox_pass': sandbox_pass
         }).eq('project_id', project_id).execute()
-    ### ---
 
     
     thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
-    thread_manager.add_tool(SandboxWebsiteTool, sandbox_id=sandbox_id, password=sandbox_pass)
+    # thread_manager.add_tool(SandboxWebsiteTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)
+    files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_pass)
 
     system_message = { "role": "system", "content": get_system_prompt() }
 
@@ -55,8 +55,6 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     # model_name = "groq/deepseek-r1-distill-llama-70b"
     # model_name = "bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0"
     # model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"
-
-    files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_pass)
 
     iteration_count = 0
     continue_execution = True
@@ -73,12 +71,14 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
         state_message = {
             "role": "user",
             "content": f"""
-Current development environment workspace state:
+Current workspace state:
 <current_workspace_state>
 {state_str}
 </current_workspace_state>
             """
         }
+
+        # print(f"State message: {state_message}")
 
         response = await thread_manager.run_thread(
             thread_id=thread_id,
@@ -91,8 +91,8 @@ Current development environment workspace state:
             tool_choice="auto",
             max_xml_tool_calls=1,
             processor_config=ProcessorConfig(
-                xml_tool_calling=False,
-                native_tool_calling=True,
+                xml_tool_calling=True,
+                native_tool_calling=False,
                 execute_tools=True,
                 execute_on_stream=True,
                 tool_execution_strategy="parallel",
@@ -116,6 +116,13 @@ Current development environment workspace state:
                 function_name = tool_call.get('function', {}).get('name', '')
                 if function_name in ['message_ask_user', 'idle']:
                     last_tool_call = function_name
+            # Check for XML versions like <message_ask_user> or <Idle> in content chunks
+            elif chunk.get('type') == 'content' and 'content' in chunk:
+                content = chunk.get('content', '')
+                if '<message_ask_user>' in content or '<Idle>' in content:
+                    xml_tool = 'message_ask_user' if '<message_ask_user>' in content else 'idle'
+                    last_tool_call = xml_tool
+                    print(f"Agent used XML tool: {xml_tool}")
                     
             yield chunk
         
@@ -123,7 +130,6 @@ Current development environment workspace state:
         if last_tool_call in ['message_ask_user', 'idle']:
             print(f"Agent decided to stop with tool: {last_tool_call}")
             continue_execution = False
-
 
 
 
