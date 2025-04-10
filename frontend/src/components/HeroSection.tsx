@@ -223,7 +223,7 @@ export default function HeroSection({ onSubmit }: HeroSectionProps) {
                       
                       {/* Post title - now outside the card */}
                       <div className="mt-4">
-                        <h2 className="text-4xl md:text-5xl font-medium mb-2 tracking-tight">Introducing - Mirko</h2>
+                        <h2 className="text-4xl md:text-5xl font-medium mb-2 tracking-tight">Introducing - Suna</h2>
                         <div className="flex items-center text-sm font-normal">
                           <span className="mr-2">General Purpose AI Agent</span>
                           <span className="text-gray-500">Created by the team at Kortix</span>
