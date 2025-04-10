@@ -16,7 +16,7 @@ from agent.tools.utils.daytona_sandbox import daytona, create_sandbox, get_or_st
 
 load_dotenv()
 
-async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None, native_max_auto_continues: int = 25, max_iterations: int = 1):
+async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread_manager: Optional[ThreadManager] = None, native_max_auto_continues: int = 25, max_iterations: int = 150):
     """Run the development agent with specified configuration."""
     
     if not thread_manager:
@@ -37,17 +37,15 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
             'sandbox_id': sandbox_id,
             'sandbox_pass': sandbox_pass
         }).eq('project_id', project_id).execute()
-
     
-    thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
-    # thread_manager.add_tool(SandboxWebsiteTool, sandbox_id=sandbox_id, password=sandbox_pass)
+    # thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)
     files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_pass)
 
     system_message = { "role": "system", "content": get_system_prompt() }
 
-    model_name = "anthropic/claude-3-5-sonnet-latest"
+    model_name = "anthropic/claude-3-7-sonnet-latest"
     # model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"         
     # model_name = "anthropic/claude-3-5-sonnet-latest" 
     # model_name = "anthropic/claude-3-7-sonnet-latest"
@@ -63,6 +61,14 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
         iteration_count += 1
         print(f"Running iteration {iteration_count}...")
         
+        # Check if last message is from assistant using direct Supabase query
+        latest_message = await client.table('messages').select('*').eq('thread_id', thread_id).order('created_at', desc=True).limit(1).execute()  
+        if latest_message.data and len(latest_message.data) > 0:
+            message_type = latest_message.data[0].get('type')
+            if message_type == 'assistant':
+                print(f"Last message was from assistant, stopping execution")
+                continue_execution = False
+                break
         files_state = await files_tool.get_workspace_state()
         
         # Simple string representation
@@ -87,7 +93,7 @@ Current workspace state:
             temporary_message=state_message,
             llm_model=model_name,
             llm_temperature=0.1,
-            llm_max_tokens=8000,
+            llm_max_tokens=64000,
             tool_choice="auto",
             max_xml_tool_calls=1,
             processor_config=ProcessorConfig(
@@ -116,10 +122,10 @@ Current workspace state:
                 function_name = tool_call.get('function', {}).get('name', '')
                 if function_name in ['message_ask_user', 'idle']:
                     last_tool_call = function_name
-            # Check for XML versions like <message_ask_user> or <Idle> in content chunks
+            # Check for XML versions like <message_ask_user> or <idle> in content chunks
             elif chunk.get('type') == 'content' and 'content' in chunk:
                 content = chunk.get('content', '')
-                if '<message_ask_user>' in content or '<Idle>' in content:
+                if '<message_ask_user>' in content or '<idle>' in content:
                     xml_tool = 'message_ask_user' if '<message_ask_user>' in content else 'idle'
                     last_tool_call = xml_tool
                     print(f"Agent used XML tool: {xml_tool}")

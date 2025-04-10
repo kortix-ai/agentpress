@@ -85,7 +85,7 @@ class ThreadManager:
             logger.error(f"Failed to add message to thread {thread_id}: {str(e)}", exc_info=True)
             raise
 
-    async def get_messages(self, thread_id: str) -> List[Dict[str, Any]]:
+    async def get_llm_messages(self, thread_id: str) -> List[Dict[str, Any]]:
         """Get all messages for a thread.
         
         Args:
@@ -217,7 +217,7 @@ Here are the XML tools available with examples:
                             logger.warning("System prompt content is not a string, cannot add XML examples")
                 
                 # 1. Get messages from thread for LLM call
-                messages = await self.get_messages(thread_id)
+                messages = await self.get_llm_messages(thread_id)
                 
                 # 2. Prepare messages for LLM call + add temporary message if it exists
                 prepared_messages = [system_prompt]

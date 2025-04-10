@@ -38,9 +38,9 @@ class SandboxWebsiteTool(SandboxToolsBase):
     @xml_schema(
         tag_name="update-website-file",
         mappings=[
-            {"param_name": "file_path", "node_type": "attribute", "path": "@path"},
+            {"param_name": "file_path", "node_type": "attribute", "path": "."},
             {"param_name": "content", "node_type": "content", "path": "."},
-            {"param_name": "create_dirs", "node_type": "attribute", "path": "@create_dirs"}
+            {"param_name": "create_dirs", "node_type": "attribute", "path": "."}
         ],
         example='''
         <update-website-file path="index.html" create_dirs="true">

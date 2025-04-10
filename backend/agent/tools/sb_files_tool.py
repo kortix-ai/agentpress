@@ -126,7 +126,7 @@ class SandboxFilesTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "str_replace",
-            "description": "Replace text in file",
+            "description": "Replace specific text in a file. Use this when you need to replace a unique string that appears exactly once in the file. Best for targeted changes where you know the exact text to replace.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -150,14 +150,14 @@ class SandboxFilesTool(SandboxToolsBase):
     @xml_schema(
         tag_name="str-replace",
         mappings=[
-            {"param_name": "file_path", "node_type": "attribute", "path": "file_path"},
+            {"param_name": "file_path", "node_type": "attribute", "path": "."},
             {"param_name": "old_str", "node_type": "element", "path": "old_str"},
             {"param_name": "new_str", "node_type": "element", "path": "new_str"}
         ],
         example='''
         <str-replace file_path="path/to/file">
-            <old_str>text to replace</old_str>
-            <new_str>replacement text</new_str>
+            <old_str>text to replace (must appear exactly once in the file)</old_str>
+            <new_str>replacement text that will be inserted instead</new_str>
         </str-replace>
         '''
     )
@@ -198,7 +198,7 @@ class SandboxFilesTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "full_file_rewrite",
-            "description": "Completely rewrite an existing file with new content",
+            "description": "Completely rewrite an existing file with new content. Use this when you need to replace the entire file content or make extensive changes throughout the file. Safer than multiple str_replace operations for major rewrites.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -228,7 +228,10 @@ class SandboxFilesTool(SandboxToolsBase):
         ],
         example='''
         <full-file-rewrite file_path="path/to/file">
-        New file contents go here, replacing all existing content
+        This completely replaces the entire file content.
+        Use when making major changes to a file or when the changes
+        are too extensive for str-replace.
+        All previous content will be lost and replaced with this text.
         </full-file-rewrite>
         '''
     )
@@ -377,8 +380,8 @@ class SandboxFilesTool(SandboxToolsBase):
         tag_name="replace-in-file",
         mappings=[
             {"param_name": "file", "node_type": "attribute", "path": "."},
-            {"param_name": "pattern", "node_type": "element", "path": "."},
-            {"param_name": "new_value", "node_type": "element", "path": "."}
+            {"param_name": "pattern", "node_type": "element", "path": "pattern"},
+            {"param_name": "new_value", "node_type": "element", "path": "new_value"}
         ],
         example='''
         <replace-in-file file="path/to/file.txt">
