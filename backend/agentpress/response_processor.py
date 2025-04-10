@@ -81,7 +81,10 @@ class ResponseProcessor:
         
         Args:
             tool_registry: Registry of available tools
-            add_message_callback: Callback function to add messages to the thread
+            add_message_callback: Callback function to add messages to the thread.
+                This function is used to record assistant messages, tool calls,
+                and tool results in the conversation history, making them
+                available for the LLM in subsequent interactions.
         """
         self.tool_registry = tool_registry
         self.add_message = add_message_callback
@@ -426,8 +429,8 @@ class ResponseProcessor:
                 logger.info(f"Stream finished with reason: xml_tool_limit_reached after {xml_tool_call_count} XML tool calls")
             
             # After streaming completes, process any remaining content and tool calls
-            # Only do this if we didn't stop due to XML tool limit (already handled pending executions above)
-            if accumulated_content and finish_reason != "xml_tool_limit_reached":
+            # IMPORTANT: Always process accumulated content even when XML tool limit is reached
+            if accumulated_content:
                 # Extract final complete tool calls for native format
                 complete_native_tool_calls = []
                 if config.native_tool_calling:
@@ -621,7 +624,7 @@ class ResponseProcessor:
                                     }
                                 })
             
-            # Add assistant message FIRST
+            # Add assistant message FIRST - always do this regardless of finish_reason
             message_data = {
                 "role": "assistant",
                 "content": content,
@@ -1088,7 +1091,20 @@ class ResponseProcessor:
         result: ToolResult,
         strategy: Union[XmlAddingStrategy, str] = "assistant_message"
     ):
-        """Add a tool result to the thread based on the specified format."""
+        """Add a tool result to the conversation thread based on the specified format.
+        
+        This method formats tool results and adds them to the conversation history,
+        making them visible to the LLM in subsequent interactions. Results can be 
+        added either as native tool messages (OpenAI format) or as XML-wrapped content
+        with a specified role (user or assistant).
+        
+        Args:
+            thread_id: ID of the conversation thread
+            tool_call: The original tool call that produced this result
+            result: The result from the tool execution
+            strategy: How to add XML tool results to the conversation
+                     ("user_message", "assistant_message", or "inline_edit")
+        """
         try:
             # Check if this is a native function call (has id field)
             if "id" in tool_call:
@@ -1122,7 +1138,8 @@ class ResponseProcessor:
                 
                 logger.info(f"Adding native tool result for tool_call_id={tool_call['id']} with role=tool")
                 
-                # Add as a tool message
+                # Add as a tool message to the conversation history
+                # This makes the result visible to the LLM in the next turn
                 await self.add_message(
                     thread_id=thread_id,
                     type="tool",  # Special type for tool responses
@@ -1142,7 +1159,8 @@ class ResponseProcessor:
             # Format the content using the formatting helper
             content = self._format_xml_tool_result(tool_call, result)
             
-            # Add the message with the appropriate role
+            # Add the message with the appropriate role to the conversation history
+            # This allows the LLM to see the tool result in subsequent interactions
             result_message = {
                 "role": result_role,
                 "content": content

@@ -94,11 +94,10 @@ class SandboxFilesTool(SandboxToolsBase):
         tag_name="create-file",
         mappings=[
             {"param_name": "file_path", "node_type": "attribute", "path": "."},
-            {"param_name": "file_contents", "node_type": "content", "path": "."},
-            {"param_name": "permissions", "node_type": "attribute", "path": "@permissions"}
+            {"param_name": "file_contents", "node_type": "content", "path": "."}
         ],
         example='''
-        <create-file file_path="path/to/file" permissions="644">
+        <create-file file_path="path/to/file">
         File contents go here
         </create-file>
         '''
@@ -225,11 +224,10 @@ class SandboxFilesTool(SandboxToolsBase):
         tag_name="full-file-rewrite",
         mappings=[
             {"param_name": "file_path", "node_type": "attribute", "path": "."},
-            {"param_name": "file_contents", "node_type": "content", "path": "."},
-            {"param_name": "permissions", "node_type": "attribute", "path": "@permissions"}
+            {"param_name": "file_contents", "node_type": "content", "path": "."}
         ],
         example='''
-        <full-file-rewrite file_path="path/to/file" permissions="644">
+        <full-file-rewrite file_path="path/to/file">
         New file contents go here, replacing all existing content
         </full-file-rewrite>
         '''
@@ -316,9 +314,9 @@ class SandboxFilesTool(SandboxToolsBase):
     @xml_schema(
         tag_name="search-files",
         mappings=[
-            {"param_name": "path", "node_type": "attribute", "path": "@path"},
-            {"param_name": "pattern", "node_type": "attribute", "path": "@pattern"},
-            {"param_name": "recursive", "node_type": "attribute", "path": "@recursive"}
+            {"param_name": "path", "node_type": "attribute", "path": "."},
+            {"param_name": "pattern", "node_type": "attribute", "path": "."},
+            {"param_name": "recursive", "node_type": "attribute", "path": "."}
         ],
         example='''
         <search-files path="path/to/search" pattern="text-of-interest" recursive="true">
@@ -378,9 +376,9 @@ class SandboxFilesTool(SandboxToolsBase):
     @xml_schema(
         tag_name="replace-in-file",
         mappings=[
-            {"param_name": "file", "node_type": "attribute", "path": "@file"},
-            {"param_name": "pattern", "node_type": "element", "path": "pattern"},
-            {"param_name": "new_value", "node_type": "element", "path": "new_value"}
+            {"param_name": "file", "node_type": "attribute", "path": "."},
+            {"param_name": "pattern", "node_type": "element", "path": "."},
+            {"param_name": "new_value", "node_type": "element", "path": "."}
         ],
         example='''
         <replace-in-file file="path/to/file.txt">
