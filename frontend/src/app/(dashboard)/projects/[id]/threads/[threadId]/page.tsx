@@ -1921,13 +1921,15 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               {/* Connector component above chat input */}
               <div className="flex items-center justify-center rounded-t-md border-t border-x border-zinc-200 mx-2 pt-3 pb-1 relative">
                 {/* Zinc rectangle button that extends above the connector */}
-                <div 
-                  className="absolute left-5 -top-17 h-20 w-36 bg-zinc-200 rounded-md border border-zinc-300 flex items-center justify-center cursor-pointer hover:bg-zinc-300 transition-colors"
-                  onClick={() => setIsSecondaryViewOpen(prev => !prev)}
-                >
-                  <PlusCircle className="h-6 w-6 text-zinc-600 mr-2" />
-                  <span className="text-sm text-zinc-600">{isSecondaryViewOpen ? 'Hide Panel' : 'Show Panel'}</span>
-                </div>
+                {!isSecondaryViewOpen && (
+                  <div 
+                    className="absolute left-5 -top-17 h-20 w-36 bg-zinc-200 rounded-md border border-zinc-300 flex items-center justify-center cursor-pointer hover:bg-zinc-300 transition-colors"
+                    onClick={() => setIsSecondaryViewOpen(prev => !prev)}
+                  >
+                    <PlusCircle className="h-6 w-6 text-zinc-600 mr-2" />
+                    <span className="text-sm text-zinc-600">Show Panel</span>
+                  </div>
+                )}
                 
                 <div className="flex space-x-2">
                   <div className="h-1 w-8 rounded-full bg-zinc-200"></div>

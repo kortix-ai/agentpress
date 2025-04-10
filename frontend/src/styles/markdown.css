@@ -1,0 +1,189 @@
+/* Markdown styles for Novel-style rendering */
+.novel-prose {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: rgb(229, 231, 235);
+  line-height: 1.6;
+}
+
+/* Adjust text color based on background */
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose {
+  color: rgb(31, 41, 55);
+}
+
+.novel-prose h1, 
+.novel-prose h2, 
+.novel-prose h3, 
+.novel-prose h4, 
+.novel-prose h5, 
+.novel-prose h6 {
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  line-height: 1.2;
+}
+
+.novel-prose h1 {
+  font-size: 2.25rem;
+  color: rgb(229, 231, 235);
+}
+
+.novel-prose h2 {
+  font-size: 1.875rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.5rem;
+  color: rgb(229, 231, 235);
+}
+
+.novel-prose h3 {
+  font-size: 1.5rem;
+  color: rgb(229, 231, 235);
+}
+
+.novel-prose h4 {
+  font-size: 1.25rem;
+  color: rgb(229, 231, 235);
+}
+
+/* Adjust heading colors based on background */
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose h1,
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose h2,
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose h3,
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose h4,
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose h5,
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose h6 {
+  color: rgb(31, 41, 55);
+}
+
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose h2 {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.novel-prose p {
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+}
+
+.novel-prose ul, 
+.novel-prose ol {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  padding-left: 1.5em;
+}
+
+.novel-prose li {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.novel-prose blockquote {
+  border-left: 4px solid rgb(75, 85, 99);
+  padding-left: 1rem;
+  margin-left: 0;
+  margin-right: 0;
+  font-style: italic;
+  color: rgb(156, 163, 175);
+}
+
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose blockquote {
+  border-left: 4px solid rgb(156, 163, 175);
+  color: rgb(75, 85, 99);
+}
+
+.novel-prose pre {
+  background-color: rgb(31, 41, 55);
+  border-radius: 0.375rem;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 1.5em 0;
+}
+
+.novel-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.875em;
+  background-color: rgba(45, 55, 72, 0.5);
+  padding: 0.2em 0.4em;
+  border-radius: 0.25rem;
+}
+
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose code {
+  background-color: rgba(209, 213, 219, 0.5);
+  color: rgb(31, 41, 55);
+}
+
+.novel-prose pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: rgb(209, 213, 219);
+}
+
+.novel-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.375rem;
+}
+
+.novel-prose a {
+  color: rgb(96, 165, 250);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose a {
+  color: rgb(37, 99, 235);
+}
+
+.novel-prose a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.novel-prose hr {
+  border: 0;
+  border-top: 1px solid rgb(75, 85, 99);
+  margin: 2em 0;
+}
+
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose hr {
+  border-top: 1px solid rgb(209, 213, 219);
+}
+
+.novel-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+}
+
+.novel-prose th,
+.novel-prose td {
+  border: 1px solid rgb(75, 85, 99);
+  padding: 0.5rem;
+}
+
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose th,
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose td {
+  border: 1px solid rgb(209, 213, 219);
+}
+
+.novel-prose th {
+  background-color: rgb(55, 65, 81);
+  text-align: left;
+  font-weight: 600;
+}
+
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose th {
+  background-color: rgb(243, 244, 246);
+}
+
+.novel-prose tr:nth-child(even) {
+  background-color: rgba(55, 65, 81, 0.3);
+}
+
+:is(.bg-zinc-50, .bg-white, .bg-gray-50, .bg-slate-50) .novel-prose tr:nth-child(even) {
+  background-color: rgba(243, 244, 246, 0.7);
+}
+
+.novel-prose .ProseMirror {
+  min-height: 100px;
+  outline: none;
+} 
