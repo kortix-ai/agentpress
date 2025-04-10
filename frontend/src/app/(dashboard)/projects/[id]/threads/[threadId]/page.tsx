@@ -1125,10 +1125,18 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       name: message.name || 'unknown',
       status: 'completed' as const,
       startTime: message.created_at ? new Date(message.created_at) : new Date(),
+      endTime: message.created_at ? new Date(message.created_at) : new Date(),
       result: message.content || '',
-      language,
-      arguments: message.arguments ? JSON.parse(message.arguments as string) : undefined
+      language
     };
+    
+    // Add this to our historical tool executions if it's not already there
+    setHistoricalToolExecutions(prev => {
+      if (prev.some(t => t.id === toolExecution.id)) {
+        return prev;
+      }
+      return [...prev, toolExecution];
+    });
     
     // Open secondary view if not already open
     if (!isSecondaryViewOpen) {
@@ -1155,8 +1163,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       status: (toolData.status as 'running' | 'completed' | 'error') || 'running',
       startTime: new Date(),
       result: toolData.content || '',
-      language: toolData.language,
-      arguments: toolData.arguments ? JSON.parse(toolData.arguments) : undefined
+      language: toolData.language
     };
     
     setHistoricalToolExecutions(prev => {
@@ -1169,7 +1176,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
           ...prev[existingIndex],
           status: toolExecution.status,
           result: toolExecution.result || prev[existingIndex].result,
-          endTime: toolExecution.status === 'completed' ? new Date() : prev[existingIndex].endTime
+          endTime: toolExecution.status === 'completed' || toolExecution.status === 'error' ? new Date() : undefined
         };
         return newTools;
       } else {
@@ -1193,6 +1200,59 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       });
     }
   }, [toolCallData, addToolExecution, streamContent]);
+
+  // Add this effect to populate historicalToolExecutions from loaded messages
+  useEffect(() => {
+    // Only process messages if we have them and our historical tool executions are empty
+    if (messages.length > 0 && historicalToolExecutions.length === 0) {
+      console.log('[PAGE] Building tool execution history from messages');
+      
+      // Extract tool messages
+      const toolMessages = messages.filter(msg => 
+        msg.role === 'tool' || msg.type === 'tool_call'
+      );
+      
+      if (toolMessages.length > 0) {
+        // Create tool executions from messages
+        const executions: ToolExecution[] = toolMessages.map(msg => {
+          let language = 'plaintext';
+          
+          // Try to determine language
+          if (msg.role === 'tool' && msg.content) {
+            const fileName = msg.content.match(/(?:Contents of file|Created file|Updated file|Edited file): (.*?)(?:$|\n)/)?.[1]?.split('/').pop() || '';
+            if (fileName) {
+              const ext = fileName.split('.').pop()?.toLowerCase();
+              if (ext === 'js' || ext === 'jsx') language = 'javascript';
+              else if (ext === 'ts' || ext === 'tsx') language = 'typescript';
+              else if (ext === 'html' || ext === 'xml') language = 'html';
+              else if (ext === 'css') language = 'css';
+              else if (ext === 'md') language = 'markdown';
+              else if (ext === 'json') language = 'json';
+              else if (ext === 'py') language = 'python';
+            }
+          }
+          
+          return {
+            id: msg.id || String(Date.now()) + Math.random().toString(36).substr(2, 9),
+            name: msg.name || (msg.role === 'tool' ? 'tool_output' : 'tool_call'),
+            status: 'completed' as const,
+            startTime: msg.created_at ? new Date(msg.created_at) : new Date(),
+            endTime: msg.created_at ? new Date(msg.created_at) : new Date(),
+            result: msg.content || '',
+            language
+          };
+        });
+        
+        // Set historical tool executions
+        setHistoricalToolExecutions(executions);
+        
+        // If we have executions, select the latest one
+        if (executions.length > 0) {
+          setSelectedToolExecution(executions[executions.length - 1]);
+        }
+      }
+    }
+  }, [messages, historicalToolExecutions.length]);
 
   // Only show a full-screen loader on the very first load
   if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {
@@ -1960,7 +2020,6 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               onClose={() => setIsSecondaryViewOpen(false)} 
               selectedTool={selectedToolExecution || undefined}
               toolExecutions={historicalToolExecutions}
-              activeToolId={toolCallData?.id || ''}
               onSelectTool={(id) => {
                 // Find and select a specific tool execution
                 const tool = historicalToolExecutions.find(t => t.id === id);
@@ -1972,7 +2031,6 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                 id: toolCallData.id || String(Date.now()),
                 name: toolCallData.name || '',
                 content: streamContent, // Send content to secondary view
-                arguments: toolCallData.arguments,
                 status: (toolCallData.status as 'running' | 'completed' | 'started') || 'running',
                 language: toolCallData.language,
                 fileName: toolCallData.fileName
