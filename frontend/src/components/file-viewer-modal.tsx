@@ -9,25 +9,28 @@ import {
   Folder, 
   FolderOpen, 
   Upload,
-  X,
   Download,
-  Copy
+  ChevronRight,
+  Home,
+  ArrowLeft
 } from "lucide-react";
-import { listSandboxFiles, getSandboxFileContent, createSandboxFile, type FileInfo } from "@/lib/api";
+import { listSandboxFiles, getSandboxFileContent, type FileInfo } from "@/lib/api";
 import { toast } from "sonner";
+import { createClient } from "@/utils/supabase/client";
+
+// Define API_URL
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 
 interface FileViewerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sandboxId: string;
-  onSelectFile?: (path: string, content: string) => void;
 }
 
 export function FileViewerModal({ 
   open,
   onOpenChange,
-  sandboxId, 
-  onSelectFile
+  sandboxId
 }: FileViewerModalProps) {
   const [workspaceFiles, setWorkspaceFiles] = useState<FileInfo[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
@@ -37,28 +40,70 @@ export function FileViewerModal({
   const [fileType, setFileType] = useState<'text' | 'image' | 'pdf' | 'binary'>('text');
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Navigation state
+  const [currentPath, setCurrentPath] = useState<string>("/workspace");
+  const [pathHistory, setPathHistory] = useState<string[]>(["/workspace"]);
+  const [historyIndex, setHistoryIndex] = useState<number>(0);
 
   // Load files when the modal opens or sandbox ID changes
   useEffect(() => {
     if (open && sandboxId) {
-      loadWorkspaceFiles();
+      loadFilesAtPath(currentPath);
     }
-  }, [open, sandboxId]);
+  }, [open, sandboxId, currentPath]);
 
-  // Function to load files from /workspace
-  const loadWorkspaceFiles = async () => {
+  // Function to load files from a specific path
+  const loadFilesAtPath = async (path: string) => {
     if (!sandboxId) return;
     
     setIsLoadingFiles(true);
     try {
-      const files = await listSandboxFiles(sandboxId, "/workspace");
+      const files = await listSandboxFiles(sandboxId, path);
       setWorkspaceFiles(files);
     } catch (error) {
-      console.error("Failed to load workspace files:", error);
-      toast.error("Failed to load workspace files");
+      console.error(`Failed to load files at ${path}:`, error);
+      toast.error("Failed to load files");
     } finally {
       setIsLoadingFiles(false);
     }
+  };
+
+  // Navigate to a folder
+  const navigateToFolder = (folderPath: string) => {
+    // Update current path
+    setCurrentPath(folderPath);
+    
+    // Add to navigation history, discarding any forward history if we're not at the end
+    if (historyIndex < pathHistory.length - 1) {
+      setPathHistory(prevHistory => [...prevHistory.slice(0, historyIndex + 1), folderPath]);
+      setHistoryIndex(historyIndex + 1);
+    } else {
+      setPathHistory(prevHistory => [...prevHistory, folderPath]);
+      setHistoryIndex(pathHistory.length);
+    }
+    
+    // Reset file selection and content
+    setSelectedFile(null);
+    setFileContent(null);
+    setBinaryFileUrl(null);
+  };
+
+  // Go back in history
+  const goBack = () => {
+    if (historyIndex > 0) {
+      setHistoryIndex(historyIndex - 1);
+      setCurrentPath(pathHistory[historyIndex - 1]);
+    }
+  };
+
+  // Go to home directory
+  const goHome = () => {
+    setCurrentPath("/workspace");
+    // Reset file selection and content
+    setSelectedFile(null);
+    setFileContent(null);
+    setBinaryFileUrl(null);
   };
 
   // Determine file type based on extension
@@ -86,10 +131,15 @@ export function FileViewerModal({
     return 'binary';
   };
 
-  // Handle file click to view content
+  // Handle file or folder click
   const handleFileClick = async (file: FileInfo) => {
-    if (file.is_dir) return;
+    if (file.is_dir) {
+      // If it's a directory, navigate to it
+      navigateToFolder(file.path);
+      return;
+    }
     
+    // Otherwise handle as regular file
     setSelectedFile(file.path);
     setIsLoadingContent(true);
     setFileContent(null);
@@ -173,71 +223,106 @@ export function FileViewerModal({
     }
   };
 
-  // Process the file upload
+  // Process the file upload - upload to current directory
   const processFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!sandboxId || !event.target.files || event.target.files.length === 0) return;
     
-    const file = event.target.files[0];
-    const fileType = getFileType(file.name);
-    const reader = new FileReader();
-    
-    reader.onload = async (e) => {
-      if (!e.target?.result) return;
+    try {
+      setIsLoadingFiles(true);
       
-      try {
-        // For text files
-        let content: string;
-        if (typeof e.target.result === 'string') {
-          content = e.target.result;
-        } else {
-          // For binary files, convert to base64
-          const buffer = e.target.result as ArrayBuffer;
-          content = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-        }
-        
-        const filePath = `/workspace/${file.name}`;
-        await createSandboxFile(sandboxId, filePath, content);
-        toast.success(`File uploaded: ${file.name}`);
-        
-        // Refresh file list
-        loadWorkspaceFiles();
-      } catch (error) {
-        console.error("File upload failed:", error);
-        toast.error("Failed to upload file");
+      const file = event.target.files[0];
+      
+      if (file.size > 50 * 1024 * 1024) { // 50MB limit
+        toast.error("File size exceeds 50MB limit");
+        return;
       }
-    };
-    
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      toast.error("File size exceeds 10MB limit");
-      return;
+      
+      // Create a FormData object
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('path', `${currentPath}/${file.name}`);
+      
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('No access token available');
+      }
+      
+      // Upload using FormData - no need for any encoding/decoding
+      const response = await fetch(`${API_URL}/sandboxes/${sandboxId}/files`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          // Important: Do NOT set Content-Type header here, let the browser set it with the boundary
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+      
+      toast.success(`File uploaded: ${file.name}`);
+      
+      // Refresh file list for current path
+      loadFilesAtPath(currentPath);
+    } catch (error) {
+      console.error("File upload failed:", error);
+      toast.error(typeof error === 'string' ? error : (error instanceof Error ? error.message : "Failed to upload file"));
+    } finally {
+      setIsLoadingFiles(false);
+      // Reset the input
+      event.target.value = '';
     }
-    
-    // Use different reader method based on file type
-    if (fileType === 'text') {
-      reader.readAsText(file);
-    } else {
-      reader.readAsArrayBuffer(file);
-    }
-    
-    // Reset the input
-    event.target.value = '';
   };
 
-  // Handle insert into message
-  const handleSelectFile = () => {
-    if (selectedFile && fileContent && onSelectFile && typeof fileContent === 'string') {
-      onSelectFile(selectedFile, fileContent);
-      onOpenChange(false);
+  // Render breadcrumb navigation
+  const renderBreadcrumbs = () => {
+    if (currentPath === "/workspace") {
+      return (
+        <div className="text-sm font-medium">/workspace</div>
+      );
     }
-  };
-
-  // Copy file content to clipboard
-  const handleCopyContent = () => {
-    if (!fileContent) return;
     
-    navigator.clipboard.writeText(fileContent)
-      .then(() => toast.success("File content copied to clipboard"))
-      .catch(() => toast.error("Failed to copy content"));
+    const parts = currentPath.split('/').filter(Boolean);
+    const isInWorkspace = parts[0] === 'workspace';
+    const pathParts = isInWorkspace ? parts.slice(1) : parts;
+    
+    return (
+      <div className="flex items-center overflow-x-auto whitespace-nowrap py-1 text-sm">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-6 px-2 text-xs"
+          onClick={goHome}
+        >
+          <Home className="h-3 w-3 mr-1" />
+          workspace
+        </Button>
+        
+        {pathParts.map((part, index) => {
+          // Build the path up to this part
+          const pathUpToHere = isInWorkspace 
+            ? `/workspace/${pathParts.slice(0, index + 1).join('/')}` 
+            : `/${pathParts.slice(0, index + 1).join('/')}`;
+            
+          return (
+            <div key={index} className="flex items-center">
+              <ChevronRight className="h-3 w-3 mx-1 text-muted-foreground" />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => navigateToFolder(pathUpToHere)}
+              >
+                {part}
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   // Render file content based on type
@@ -263,9 +348,11 @@ export function FileViewerModal({
     
     if (fileType === 'text' && fileContent) {
       return (
-        <pre className="text-xs font-mono whitespace-pre-wrap break-words overflow-auto max-h-full">
-          {fileContent}
-        </pre>
+        <div className="flex flex-col h-full">
+          <pre className="text-xs font-mono whitespace-pre-wrap break-words overflow-auto flex-1 max-h-full">
+            {fileContent}
+          </pre>
+        </div>
       );
     }
     
@@ -327,26 +414,36 @@ export function FileViewerModal({
           {/* File browser sidebar */}
           <div className="w-full sm:w-64 border-r flex flex-col h-full">
             <div className="p-2 flex items-center justify-between border-b">
-              <h3 className="text-sm font-medium">/workspace</h3>
-              <div className="flex gap-1">
+              <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
-                  onClick={loadWorkspaceFiles}
-                  disabled={isLoadingFiles}
-                  title="Refresh files"
+                  className="h-7 w-7"
+                  onClick={goBack}
+                  disabled={historyIndex === 0}
+                  title="Go back"
                 >
-                  <FolderOpen className="h-4 w-4" />
+                  <ArrowLeft className="h-3.5 w-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-7 w-7"
+                  onClick={goHome}
+                  title="Home directory"
+                >
+                  <Home className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
                   onClick={handleFileUpload}
                   title="Upload file"
                 >
-                  <Upload className="h-4 w-4" />
+                  <Upload className="h-3.5 w-3.5" />
                 </Button>
                 <input
                   type="file"
@@ -355,6 +452,10 @@ export function FileViewerModal({
                   onChange={processFileUpload}
                 />
               </div>
+            </div>
+            
+            <div className="px-2 py-1 border-b">
+              {renderBreadcrumbs()}
             </div>
             
             <div className="flex-1 overflow-y-auto">
@@ -366,8 +467,8 @@ export function FileViewerModal({
                 </div>
               ) : workspaceFiles.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
-                  <File className="h-8 w-8 mb-2 opacity-50" />
-                  <p className="text-xs text-center">No files in workspace folder</p>
+                  <Folder className="h-8 w-8 mb-2 opacity-50" />
+                  <p className="text-xs text-center">This folder is empty</p>
                 </div>
               ) : (
                 <div className="p-1">
@@ -398,39 +499,16 @@ export function FileViewerModal({
               <h3 className="text-sm font-medium truncate">
                 {selectedFile ? selectedFile.split('/').pop() : 'Select a file to view'}
               </h3>
-              {selectedFile && (fileContent || binaryFileUrl) && (
+              {selectedFile && binaryFileUrl && (
                 <div className="flex gap-1">
-                  {fileType === 'text' && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={handleCopyContent}
-                      title="Copy content"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {binaryFileUrl && (
-                    <a
-                      href={binaryFileUrl}
-                      download={selectedFile.split('/').pop()}
-                      className="inline-flex items-center justify-center h-8 w-8 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-                      title="Download file"
-                    >
-                      <Download className="h-4 w-4" />
-                    </a>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => onSelectFile && handleSelectFile()}
-                    title="Insert into message"
-                    disabled={!onSelectFile}
+                  <a
+                    href={binaryFileUrl}
+                    download={selectedFile.split('/').pop()}
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                    title="Download file"
                   >
                     <Download className="h-4 w-4" />
-                  </Button>
+                  </a>
                 </div>
               )}
             </div>
@@ -438,14 +516,6 @@ export function FileViewerModal({
             <div className="flex-1 overflow-auto p-4 bg-muted/30">
               {renderFileContent()}
             </div>
-            
-            {onSelectFile && selectedFile && fileContent && (
-              <div className="border-t p-3 flex justify-end">
-                <Button onClick={handleSelectFile}>
-                  Insert into message
-                </Button>
-              </div>
-            )}
           </div>
         </div>
       </DialogContent>
