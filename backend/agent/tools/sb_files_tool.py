@@ -288,125 +288,6 @@ class SandboxFilesTool(SandboxToolsBase):
         except Exception as e:
             return self.fail_response(f"Error deleting file: {str(e)}")
 
-    @openapi_schema({
-        "type": "function",
-        "function": {
-            "name": "search_files",
-            "description": "Search for text in files within a directory. The search is recursive by default.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Path to search in (directory or file)"
-                    },
-                    "pattern": {
-                        "type": "string",
-                        "description": "Text pattern to search for"
-                    },
-                    "recursive": {
-                        "type": "boolean",
-                        "description": "Whether to search recursively in subdirectories",
-                        "default": True
-                    }
-                },
-                "required": ["path", "pattern"]
-            }
-        }
-    })
-    @xml_schema(
-        tag_name="search-files",
-        mappings=[
-            {"param_name": "path", "node_type": "attribute", "path": "."},
-            {"param_name": "pattern", "node_type": "attribute", "path": "."},
-            {"param_name": "recursive", "node_type": "attribute", "path": "."}
-        ],
-        example='''
-        <search-files path="path/to/search" pattern="text-of-interest" recursive="true">
-        </search-files>
-        '''
-    )
-    async def search_files(self, path: str, pattern: str, recursive: bool = True) -> ToolResult:
-        try:
-            path = self.clean_path(path)
-            full_path = f"{self.workspace_path}/{path}" if not path.startswith(self.workspace_path) else path
-            results = self.sandbox.fs.find_files(
-                path=full_path,
-                pattern=pattern,
-                recursive=recursive
-            )
-            
-            formatted_results = []
-            for match in results:
-                formatted_results.append({
-                    "file": match.file,
-                    "line": match.line,
-                    "content": match.content
-                })
-            
-            return self.success_response({
-                "matches": formatted_results,
-                "count": len(formatted_results)
-            })
-        except Exception as e:
-            return self.fail_response(f"Error searching files: {str(e)}")
-
-    @openapi_schema({
-        "type": "function",
-        "function": {
-            "name": "replace_in_file",
-            "description": "Replace text in a single file. Use for updating specific content or fixing errors in code.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "file": {
-                        "type": "string",
-                        "description": "Path to the file to perform replacement in"
-                    },
-                    "pattern": {
-                        "type": "string",
-                        "description": "Text pattern to replace (exact match)"
-                    },
-                    "new_value": {
-                        "type": "string",
-                        "description": "New text to replace the pattern with"
-                    }
-                },
-                "required": ["file", "pattern", "new_value"]
-            }
-        }
-    })
-    @xml_schema(
-        tag_name="replace-in-file",
-        mappings=[
-            {"param_name": "file", "node_type": "attribute", "path": "."},
-            {"param_name": "pattern", "node_type": "element", "path": "pattern"},
-            {"param_name": "new_value", "node_type": "element", "path": "new_value"}
-        ],
-        example='''
-        <replace-in-file file="path/to/file.txt">
-            <pattern>old_text</pattern>
-            <new_value>new_text</new_value>
-        </replace-in-file>
-        '''
-    )
-    async def replace_in_file(self, file: str, pattern: str, new_value: str) -> ToolResult:
-        try:
-            file = self.clean_path(file)
-            full_path = f"{self.workspace_path}/{file}" if not file.startswith(self.workspace_path) else file
-            
-            # Use the same Daytona SDK method but with a single file
-            self.sandbox.fs.replace_in_files(
-                files=[full_path],
-                pattern=pattern,
-                new_value=new_value
-            )
-            
-            return self.success_response(f"Text replaced in file '{file}' successfully.")
-        except Exception as e:
-            return self.fail_response(f"Error replacing text in file: {str(e)}")
-
-
 
 async def test_files_tool():
     files_tool = SandboxFilesTool(
@@ -418,24 +299,7 @@ async def test_files_tool():
     print(res)
     print(await files_tool.get_workspace_state())
 
-    print("2)", "*"*10)  
-    res = await files_tool.search_files("/", "Hello")
-    print(res)
-    print(await files_tool.get_workspace_state())
-
-    print("3)", "*"*10)  
-
     res = await files_tool.str_replace("test.txt", "Hello", "Hi")
-    print(res)
-    print(await files_tool.get_workspace_state())
-
-    print("4)", "*"*10)  
-    res = await files_tool.search_files("/", "Hello")
-    print(res)
-    print(await files_tool.get_workspace_state())
-
-    print("5)", "*"*10)  
-    res = await files_tool.search_files("/", "Hi")
     print(res)
     print(await files_tool.get_workspace_state())
 
@@ -452,13 +316,5 @@ async def test_files_tool():
 
     print("8)", "*"*10)  
 
-    res = await files_tool.search_files("/", "Hello")
-    print(res)
-    print(await files_tool.get_workspace_state())
-
-    print("9)", "*"*10)  
-
-    res = await files_tool.replace_in_file("test.txt", "Hello", "Hi")
-    print(res)
-    print(await files_tool.get_workspace_state())        
+   
 

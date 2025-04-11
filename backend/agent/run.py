@@ -41,6 +41,7 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     # thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)
+    thread_manager.add_tool(MessageTool)
     files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_pass)
 
     system_message = { "role": "system", "content": get_system_prompt() }
@@ -69,20 +70,21 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
                 print(f"Last message was from assistant, stopping execution")
                 continue_execution = False
                 break
-        files_state = await files_tool.get_workspace_state()
-        
-        # Simple string representation
-        state_str = str(files_state)
 
-        state_message = {
-            "role": "user",
-            "content": f"""
-Current workspace state:
-<current_workspace_state>
-{state_str}
-</current_workspace_state>
-            """
-        }
+#         files_state = await files_tool.get_workspace_state()
+        
+#         # Simple string representation
+#         state_str = str(files_state)
+
+#         state_message = {
+#             "role": "user",
+#             "content": f"""
+# Current workspace state:
+# <current_workspace_state>
+# {state_str}
+# </current_workspace_state>
+#             """
+#         }
 
         # print(f"State message: {state_message}")
 
@@ -90,7 +92,7 @@ Current workspace state:
             thread_id=thread_id,
             system_prompt=system_message,
             stream=stream,
-            temporary_message=state_message,
+            # temporary_message=state_message,
             llm_model=model_name,
             llm_temperature=0.1,
             llm_max_tokens=64000,

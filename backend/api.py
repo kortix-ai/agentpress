@@ -14,6 +14,7 @@ import uuid
 
 # Import the agent API module
 from agent import api as agent_api
+from agent.sandbox_api import router as sandbox_router
 
 # Load environment variables
 load_dotenv()
@@ -66,6 +67,9 @@ app.add_middleware(
 
 # Include the agent router with a prefix
 app.include_router(agent_api.router, prefix="/api")
+
+# Include the sandbox router with a prefix
+app.include_router(sandbox_router, prefix="/api")
 
 @app.get("/api/health-check")
 async def health_check():
