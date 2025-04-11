@@ -60,12 +60,12 @@ export default function AccountSelector({ className, accountId, onAccountSelecte
             <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger asChild>
                     <Button
-                        variant="outline"
+                        variant="ghost"
                         role="combobox"
                         aria-expanded={open}
                         aria-label="Select a team"
                         className={cn(
-                            "flex items-center gap-2 h-full justify-between border-subtle dark:border-white/10 bg-transparent hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-card-title", 
+                            "flex items-center gap-2 h-9 pl-3 pr-2 rounded-full justify-between border border-subtle dark:border-white/10 bg-transparent hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/90", 
                             className
                         )}
                     >
@@ -76,11 +76,11 @@ export default function AccountSelector({ className, accountId, onAccountSelecte
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[250px] p-0 border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-xl shadow-custom">
-                    <Command className="rounded-lg">
-                        <CommandList>
-                            <CommandInput placeholder="Search account..." className="h-9" />
-                            <CommandEmpty>No account found.</CommandEmpty>
-                            <CommandGroup heading="Personal Account">
+                    <Command className="rounded-xl overflow-hidden bg-card-bg dark:bg-background-secondary border-0">
+                        <CommandList className="border-0 bg-card-bg dark:bg-background-secondary">
+                            <CommandInput placeholder="Search account..." className="h-9 border-0 focus:ring-0 rounded-t-xl bg-card-bg dark:bg-background-secondary text-foreground/90" />
+                            <CommandEmpty className="text-foreground/70 text-sm py-2">No account found.</CommandEmpty>
+                            <CommandGroup heading="Personal Account" className="text-xs font-medium text-foreground/70 bg-card-bg dark:bg-background-secondary">
                                 <CommandItem
                                     key={personalAccount?.account_id}
                                     onSelect={() => {
@@ -89,7 +89,7 @@ export default function AccountSelector({ className, accountId, onAccountSelecte
                                         }
                                         setOpen(false)
                                     }}
-                                    className="text-sm rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark aria-selected:bg-hover-bg dark:aria-selected:bg-hover-bg-dark"
+                                    className="text-sm rounded-md bg-card-bg dark:bg-background-secondary hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] aria-selected:!bg-[#f1eee7] dark:aria-selected:!bg-[#141413] text-foreground/90"
                                 >
                                     {personalAccount?.name}
                                     <Check
@@ -103,7 +103,7 @@ export default function AccountSelector({ className, accountId, onAccountSelecte
                                 </CommandItem>
                             </CommandGroup>
                             {Boolean(teamAccounts?.length) && (
-                                <CommandGroup heading="Teams">
+                                <CommandGroup heading="Teams" className="text-xs font-medium text-foreground/70 bg-card-bg dark:bg-background-secondary">
                                     {teamAccounts?.map((team) => (
                                         <CommandItem
                                             key={team.account_id}
@@ -114,7 +114,7 @@ export default function AccountSelector({ className, accountId, onAccountSelecte
 
                                                 setOpen(false)
                                             }}
-                                            className="text-sm rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark aria-selected:bg-hover-bg dark:aria-selected:bg-hover-bg-dark"
+                                            className="text-sm rounded-md bg-card-bg dark:bg-background-secondary hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] aria-selected:!bg-[#f1eee7] dark:aria-selected:!bg-[#141413] text-foreground/90"
                                         >
                                             {team.name}
                                             <Check
@@ -131,8 +131,8 @@ export default function AccountSelector({ className, accountId, onAccountSelecte
                             )}
                         </CommandList>
                         <CommandSeparator className="border-subtle dark:border-white/10" />
-                        <CommandList>
-                            <CommandGroup>
+                        <CommandList className="bg-card-bg dark:bg-background-secondary">
+                            <CommandGroup className="bg-card-bg dark:bg-background-secondary">
                                 <DialogTrigger asChild>
                                     <CommandItem
                                     value="new-team"
@@ -140,7 +140,7 @@ export default function AccountSelector({ className, accountId, onAccountSelecte
                                             setOpen(false)
                                             setShowNewTeamDialog(true)
                                         }}
-                                        className="text-sm rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark"
+                                        className="text-sm rounded-md bg-card-bg dark:bg-background-secondary hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] text-foreground/90"
                                     >
                                         <PlusCircle className="mr-2 h-4 w-4 text-primary" />
                                         Create Team
@@ -153,12 +153,12 @@ export default function AccountSelector({ className, accountId, onAccountSelecte
             </Popover>
             <DialogContent className="sm:max-w-[425px] border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-2xl shadow-custom">
                 <DialogHeader>
-                    <DialogTitle className="text-card-title">Create a new team</DialogTitle>
+                    <DialogTitle className="text-foreground">Create a new team</DialogTitle>
                     <DialogDescription className="text-foreground/70">
                         Create a team to collaborate with others.
                     </DialogDescription>
                 </DialogHeader>
-                <NewTeamForm  />
+                <NewTeamForm />
             </DialogContent>
         </Dialog>
     )
