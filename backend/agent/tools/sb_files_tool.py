@@ -2,15 +2,15 @@ from daytona_sdk.process import SessionExecuteRequest
 from typing import Optional
 
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
-from sandbox.sandbox import SandboxToolsBase
+from sandbox.sandbox import SandboxToolsBase, Sandbox
 from utils.files_utils import EXCLUDED_FILES, EXCLUDED_DIRS, EXCLUDED_EXT, should_exclude_file, clean_path
 import os
 
 class SandboxFilesTool(SandboxToolsBase):
     """Tool for executing file system operations in a Daytona sandbox. All operations are performed relative to the /workspace directory."""
 
-    def __init__(self, sandbox_id: str, password: str):
-        super().__init__(sandbox_id, password)
+    def __init__(self, sandbox: Sandbox):
+        super().__init__(sandbox)
         self.SNIPPET_LINES = 4  # Number of context lines to show around edits
         self.workspace_path = "/workspace"  # Ensure we're always operating in /workspace
 
@@ -387,34 +387,4 @@ class SandboxFilesTool(SandboxToolsBase):
     #         return self.fail_response(f"File '{file_path}' appears to be binary and cannot be read as text")
     #     except Exception as e:
     #         return self.fail_response(f"Error reading file: {str(e)}")
-
-
-async def test_files_tool():
-    files_tool = SandboxFilesTool(
-        sandbox_id="sandbox-15a2c059",
-        password="vvv"
-    )
-    print("1)", "*"*10)  
-    res = await files_tool.create_file("test.txt", "Hello, world!")
-    print(res)
-    print(await files_tool.get_workspace_state())
-
-    res = await files_tool.str_replace("test.txt", "Hello", "Hi")
-    print(res)
-    print(await files_tool.get_workspace_state())
-
-    print("6)", "*"*10)  
-    res = await files_tool.full_file_rewrite("test.txt", "FOOOOHi, world!")
-    print(res)
-    print(await files_tool.get_workspace_state())
-
-    print("7)", "*"*10)  
-
-    res = await files_tool.delete_file("test.txt")
-    print(res)
-    print(await files_tool.get_workspace_state())
-
-    print("8)", "*"*10)  
-
-   
 
