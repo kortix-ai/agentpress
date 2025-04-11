@@ -171,6 +171,7 @@ state.json
 /workspace/**
 
 *.venvy/*
+*.venvy*
 
 # SQLite
 *.db
