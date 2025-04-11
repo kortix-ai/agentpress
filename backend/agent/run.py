@@ -12,7 +12,7 @@ from agent.tools.sb_shell_tool import SandboxShellTool
 # from agent.tools.sb_website_tool import SandboxWebsiteTool
 from agent.tools.sb_files_tool import SandboxFilesTool
 from agent.prompt import get_system_prompt
-from agent.tools.utils.daytona_sandbox import daytona, create_sandbox, get_or_start_sandbox
+from sandbox.sandbox import daytona, create_sandbox, get_or_start_sandbox
 
 load_dotenv()
 

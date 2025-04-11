@@ -1,5 +1,5 @@
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
-from agent.tools.utils.daytona_sandbox import SandboxToolsBase
+from sandbox.sandbox import SandboxToolsBase
 
 # TODO: might want to be more granular with the tool names:
 # shell_exec - Execute commands in a specified shell session. Use for running code, installing packages, or managing files.

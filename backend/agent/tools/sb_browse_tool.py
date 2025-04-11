@@ -2,7 +2,7 @@ import traceback
 import requests
 
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
-from agent.tools.utils.daytona_sandbox import SandboxToolsBase
+from sandbox.sandbox import SandboxToolsBase
 from utils.logger import logger
 
 

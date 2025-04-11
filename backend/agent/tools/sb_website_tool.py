@@ -1,7 +1,7 @@
 from daytona_sdk.process import SessionExecuteRequest
 
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
-from agent.tools.utils.daytona_sandbox import SandboxToolsBase
+from sandbox.sandbox import SandboxToolsBase
 
 class SandboxWebsiteTool(SandboxToolsBase):
     """Tool for executing tasks in a Daytona sandbox with browser-use capabilities."""

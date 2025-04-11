@@ -80,6 +80,8 @@ export type Project = {
   description: string;
   user_id: string;
   created_at: string;
+  sandbox_id?: string;
+  sandbox_pass?: string;
 }
 
 export type Thread = {
@@ -692,4 +694,117 @@ export const streamAgent = (agentRunId: string, callbacks: {
       eventSourceInstance = null;
     }
   };
+};
+
+// Sandbox API Functions
+export const createSandboxFile = async (sandboxId: string, filePath: string, content: string): Promise<void> => {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
+
+    const response = await fetch(`${API_URL}/sandboxes/${sandboxId}/files`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        path: filePath,
+        content: content,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'No error details available');
+      console.error(`Error creating sandbox file: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Error creating sandbox file: ${response.statusText} (${response.status})`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error('Failed to create sandbox file:', error);
+    throw error;
+  }
+};
+
+export interface FileInfo {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number;
+  mod_time: string;
+  permissions?: string;
+}
+
+export const listSandboxFiles = async (sandboxId: string, path: string): Promise<FileInfo[]> => {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
+
+    const url = new URL(`${API_URL}/sandboxes/${sandboxId}/files`);
+    url.searchParams.append('path', path);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'No error details available');
+      console.error(`Error listing sandbox files: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Error listing sandbox files: ${response.statusText} (${response.status})`);
+    }
+    
+    const data = await response.json();
+    return data.files || [];
+  } catch (error) {
+    console.error('Failed to list sandbox files:', error);
+    throw error;
+  }
+};
+
+export const getSandboxFileContent = async (sandboxId: string, path: string): Promise<string | Blob> => {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
+
+    const url = new URL(`${API_URL}/sandboxes/${sandboxId}/files/content`);
+    url.searchParams.append('path', path);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'No error details available');
+      console.error(`Error getting sandbox file content: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Error getting sandbox file content: ${response.statusText} (${response.status})`);
+    }
+    
+    // Check if it's a text file or binary file based on content-type
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('text') || contentType?.includes('application/json')) {
+      return await response.text();
+    } else {
+      return await response.blob();
+    }
+  } catch (error) {
+    console.error('Failed to get sandbox file content:', error);
+    throw error;
+  }
 };
