@@ -37,31 +37,27 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     else:
         sandbox_pass = str(uuid4())
         sandbox = create_sandbox(sandbox_pass)
-        sandbox_id = sandbox.id
-        await client.table('projects').update({
-            'sandbox_id': sandbox_id,
-            'sandbox_pass': sandbox_pass
-        }).eq('project_id', project_id).execute()
+        await client.table('projects').update({ 'sandbox_id': sandbox.id, 'sandbox_pass': sandbox_pass }).eq('project_id', project_id).execute()
     ### ---
 
     print("Adding tools to thread manager...")
-    thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
-    thread_manager.add_tool(SandboxWebsiteTool, sandbox_id=sandbox_id, password=sandbox_pass)
-    thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
-    thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)
+    thread_manager.add_tool(SandboxBrowseTool, sandbox=sandbox)
+    thread_manager.add_tool(SandboxWebsiteTool, sandbox=sandbox)
+    thread_manager.add_tool(SandboxShellTool, sandbox=sandbox)
+    thread_manager.add_tool(SandboxFilesTool, sandbox=sandbox)
 
     system_message = { "role": "system", "content": get_system_prompt() }
 
-    # model_name = "anthropic/claude-3-5-sonnet-latest" 
-    model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0" 
+    model_name = "anthropic/claude-3-5-sonnet-latest" 
+    # model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0" 
     
     #anthropic/claude-3-5-sonnet-latest
     #anthropic/claude-3-7-sonnet-latest
-    model_name = "openai/gpt-4o"
+    # model_name = "openai/gpt-4o"
     #groq/deepseek-r1-distill-llama-70b
     #bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0
 
-    files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_pass)
+    files_tool = SandboxFilesTool(sandbox=sandbox)
 
     files_state = await files_tool.get_workspace_state()
 

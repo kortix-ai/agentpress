@@ -187,6 +187,7 @@ async def get_agent_run_with_access_check(client, agent_run_id: str, user_id: st
     Raises:
         HTTPException: If the user doesn't have access or the agent run doesn't exist
     """
+    print("FUCKK NOOO")
     agent_run = await client.table('agent_runs').select('*').eq('id', agent_run_id).execute()
     
     if not agent_run.data or len(agent_run.data) == 0:
@@ -213,7 +214,9 @@ async def _cleanup_agent_run(agent_run_id: str):
 @router.post("/thread/{thread_id}/agent/start")
 async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id)):
     """Start an agent for a specific thread in the background."""
+    print(f"********* FUCKCCKCK")
     logger.info(f"Starting new agent for thread: {thread_id}")
+
     client = await db.client
     
     # Verify user has access to this thread
@@ -221,6 +224,9 @@ async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id
     
     # Get the project_id for this thread
     thread_result = await client.table('threads').select('project_id').eq('thread_id', thread_id).execute()
+    print(f"*********")
+    print(f"Thread result: {thread_result}")
+    print(f"*********")
     if not thread_result.data:
         raise HTTPException(status_code=404, detail="Thread not found")
     

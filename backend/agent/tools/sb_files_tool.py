@@ -1,7 +1,7 @@
 from daytona_sdk.process import SessionExecuteRequest
 
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
-from agent.tools.utils.daytona_sandbox import SandboxToolsBase
+from agent.tools.utils.daytona_sandbox import SandboxToolsBase, Sandbox
 from agent.tools.utils.exclusions import EXCLUDED_FILES, EXCLUDED_DIRS, EXCLUDED_EXT, should_exclude_file
 import os
 
@@ -16,8 +16,8 @@ import os
 class SandboxFilesTool(SandboxToolsBase):
     """Tool for executing file system operations in a Daytona sandbox."""
 
-    def __init__(self, sandbox_id: str, password: str):
-        super().__init__(sandbox_id, password)
+    def __init__(self, sandbox: Sandbox):
+        super().__init__(sandbox)
         self.SNIPPET_LINES = 4  # Number of context lines to show around edits
 
     def _should_exclude_file(self, rel_path: str) -> bool:
