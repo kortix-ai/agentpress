@@ -1,4 +1,5 @@
 from daytona_sdk.process import SessionExecuteRequest
+from typing import Optional
 
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
 from sandbox.sandbox import SandboxToolsBase
@@ -14,11 +15,20 @@ import os
 
 
 class SandboxFilesTool(SandboxToolsBase):
-    """Tool for executing file system operations in a Daytona sandbox."""
+    """Tool for executing file system operations in a Daytona sandbox. All operations are performed relative to the /workspace directory."""
 
     def __init__(self, sandbox_id: str, password: str):
         super().__init__(sandbox_id, password)
         self.SNIPPET_LINES = 4  # Number of context lines to show around edits
+        self.workspace_path = "/workspace"  # Ensure we're always operating in /workspace
+
+    def clean_path(self, path: str) -> str:
+        """Clean and normalize a path to be relative to /workspace"""
+        # Remove any leading /workspace/ or / prefix
+        path = path.lstrip('/')
+        if path.startswith('workspace/'):
+            path = path[9:]
+        return path
 
     def _should_exclude_file(self, rel_path: str) -> bool:
         """Check if a file should be excluded based on path, name, or extension"""
@@ -68,13 +78,13 @@ class SandboxFilesTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "create_file",
-            "description": "Create a new file with the provided contents at a given path in the workspace",
+            "description": "Create a new file with the provided contents at a given path in the workspace. The path must be relative to /workspace (e.g., 'src/main.py' for /workspace/src/main.py)",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Path to the file to be created"
+                        "description": "Path to the file to be created, relative to /workspace (e.g., 'src/main.py')"
                     },
                     "file_contents": {
                         "type": "string",
@@ -97,7 +107,7 @@ class SandboxFilesTool(SandboxToolsBase):
             {"param_name": "file_contents", "node_type": "content", "path": "."}
         ],
         example='''
-        <create-file file_path="path/to/file">
+        <create-file file_path="src/main.py">
         File contents go here
         </create-file>
         '''
@@ -126,13 +136,13 @@ class SandboxFilesTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "str_replace",
-            "description": "Replace specific text in a file. Use this when you need to replace a unique string that appears exactly once in the file. Best for targeted changes where you know the exact text to replace.",
+            "description": "Replace specific text in a file. The file path must be relative to /workspace (e.g., 'src/main.py' for /workspace/src/main.py). Use this when you need to replace a unique string that appears exactly once in the file.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Path to the target file"
+                        "description": "Path to the target file, relative to /workspace (e.g., 'src/main.py')"
                     },
                     "old_str": {
                         "type": "string",
@@ -155,7 +165,7 @@ class SandboxFilesTool(SandboxToolsBase):
             {"param_name": "new_str", "node_type": "element", "path": "new_str"}
         ],
         example='''
-        <str-replace file_path="path/to/file">
+        <str-replace file_path="src/main.py">
             <old_str>text to replace (must appear exactly once in the file)</old_str>
             <new_str>replacement text that will be inserted instead</new_str>
         </str-replace>
@@ -198,13 +208,13 @@ class SandboxFilesTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "full_file_rewrite",
-            "description": "Completely rewrite an existing file with new content. Use this when you need to replace the entire file content or make extensive changes throughout the file. Safer than multiple str_replace operations for major rewrites.",
+            "description": "Completely rewrite an existing file with new content. The file path must be relative to /workspace (e.g., 'src/main.py' for /workspace/src/main.py). Use this when you need to replace the entire file content or make extensive changes throughout the file.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Path to the file to be rewritten"
+                        "description": "Path to the file to be rewritten, relative to /workspace (e.g., 'src/main.py')"
                     },
                     "file_contents": {
                         "type": "string",
@@ -227,7 +237,7 @@ class SandboxFilesTool(SandboxToolsBase):
             {"param_name": "file_contents", "node_type": "content", "path": "."}
         ],
         example='''
-        <full-file-rewrite file_path="path/to/file">
+        <full-file-rewrite file_path="src/main.py">
         This completely replaces the entire file content.
         Use when making major changes to a file or when the changes
         are too extensive for str-replace.
@@ -253,13 +263,13 @@ class SandboxFilesTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "delete_file",
-            "description": "Delete a file at the given path",
+            "description": "Delete a file at the given path. The path must be relative to /workspace (e.g., 'src/main.py' for /workspace/src/main.py)",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Path to the file to be deleted"
+                        "description": "Path to the file to be deleted, relative to /workspace (e.g., 'src/main.py')"
                     }
                 },
                 "required": ["file_path"]
@@ -272,7 +282,7 @@ class SandboxFilesTool(SandboxToolsBase):
             {"param_name": "file_path", "node_type": "attribute", "path": "."}
         ],
         example='''
-        <delete-file file_path="path/to/file">
+        <delete-file file_path="src/main.py">
         </delete-file>
         '''
     )
@@ -287,6 +297,101 @@ class SandboxFilesTool(SandboxToolsBase):
             return self.success_response(f"File '{file_path}' deleted successfully.")
         except Exception as e:
             return self.fail_response(f"Error deleting file: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read and return the contents of a file. This tool is essential for verifying data, checking file contents, and analyzing information. Always use this tool to read file contents before processing or analyzing data. The file path must be relative to /workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the file to read, relative to /workspace (e.g., 'src/main.py' for /workspace/src/main.py). Must be a valid file path within the workspace."
+                    },
+                    "start_line": {
+                        "type": "integer",
+                        "description": "Optional starting line number (1-based). Use this to read specific sections of large files. If not specified, reads from the beginning of the file.",
+                        "default": 1
+                    },
+                    "end_line": {
+                        "type": "integer",
+                        "description": "Optional ending line number (inclusive). Use this to read specific sections of large files. If not specified, reads to the end of the file.",
+                        "default": None
+                    }
+                },
+                "required": ["file_path"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="read-file",
+        mappings=[
+            {"param_name": "file_path", "node_type": "attribute", "path": "."},
+            {"param_name": "start_line", "node_type": "attribute", "path": ".", "required": False},
+            {"param_name": "end_line", "node_type": "attribute", "path": ".", "required": False}
+        ],
+        example='''
+        <!-- Example 1: Read entire file -->
+        <read-file file_path="src/main.py">
+        </read-file>
+
+        <!-- Example 2: Read specific lines (lines 10-20) -->
+        <read-file file_path="src/main.py" start_line="10" end_line="20">
+        </read-file>
+
+        <!-- Example 3: Read from line 5 to end -->
+        <read-file file_path="config.json" start_line="5">
+        </read-file>
+
+        <!-- Example 4: Read last 10 lines -->
+        <read-file file_path="logs/app.log" start_line="-10">
+        </read-file>
+        '''
+    )
+    async def read_file(self, file_path: str, start_line: int = 1, end_line: Optional[int] = None) -> ToolResult:
+        """Read file content with optional line range specification.
+        
+        Args:
+            file_path: Path to the file relative to /workspace
+            start_line: Starting line number (1-based), defaults to 1
+            end_line: Ending line number (inclusive), defaults to None (end of file)
+            
+        Returns:
+            ToolResult containing:
+            - Success: File content and metadata
+            - Failure: Error message if file doesn't exist or is binary
+        """
+        try:
+            file_path = self.clean_path(file_path)
+            full_path = f"{self.workspace_path}/{file_path}"
+            
+            if not self._file_exists(full_path):
+                return self.fail_response(f"File '{file_path}' does not exist")
+            
+            # Download and decode file content
+            content = self.sandbox.fs.download_file(full_path).decode()
+            
+            # Handle line range if specified
+            if start_line > 1 or end_line is not None:
+                lines = content.split('\n')
+                start_idx = max(0, start_line - 1)  # Convert to 0-based index
+                end_idx = end_line if end_line is not None else len(lines)
+                content = '\n'.join(lines[start_idx:end_idx])
+            
+            return self.success_response({
+                "content": content,
+                "file_path": file_path,
+                "start_line": start_line,
+                "end_line": end_line if end_line is not None else len(content.split('\n')),
+                "total_lines": len(content.split('\n'))
+            })
+            
+        except UnicodeDecodeError:
+            return self.fail_response(f"File '{file_path}' appears to be binary and cannot be read as text")
+        except Exception as e:
+            return self.fail_response(f"Error reading file: {str(e)}")
 
 
 async def test_files_tool():

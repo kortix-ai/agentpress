@@ -46,7 +46,7 @@ export function ChatInput({
   const [inputValue, setInputValue] = useState(value || "");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   
   // Allow controlled or uncontrolled usage
@@ -86,7 +86,7 @@ export function ChatInput({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!inputValue.trim() && !uploadedFile) || loading || (disabled && !isAgentRunning)) return;
+    if ((!inputValue.trim() && uploadedFiles.length === 0) || loading || (disabled && !isAgentRunning)) return;
     
     if (isAgentRunning && onStopAgent) {
       onStopAgent();
@@ -95,9 +95,11 @@ export function ChatInput({
     
     let message = inputValue;
     
-    // Add file information to the message if a file was uploaded
-    if (uploadedFile) {
-      const fileInfo = `[Uploaded file: ${uploadedFile.name} (${formatFileSize(uploadedFile.size)}) at ${uploadedFile.path}]`;
+    // Add file information to the message if files were uploaded
+    if (uploadedFiles.length > 0) {
+      const fileInfo = uploadedFiles.map(file => 
+        `[Uploaded file: ${file.name} (${formatFileSize(file.size)}) at ${file.path}]`
+      ).join('\n');
       message = message ? `${message}\n\n${fileInfo}` : fileInfo;
     }
     
@@ -107,8 +109,8 @@ export function ChatInput({
       setInputValue("");
     }
     
-    // Reset the uploaded file after sending
-    setUploadedFile(null);
+    // Reset the uploaded files after sending
+    setUploadedFiles([]);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -123,7 +125,7 @@ export function ChatInput({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if ((inputValue.trim() || uploadedFile) && !loading && (!disabled || isAgentRunning)) {
+      if ((inputValue.trim() || uploadedFiles.length > 0) && !loading && (!disabled || isAgentRunning)) {
         handleSubmit(e as React.FormEvent);
       }
     }
@@ -141,49 +143,56 @@ export function ChatInput({
     try {
       setIsUploading(true);
       
-      const file = event.target.files[0];
+      const files = Array.from(event.target.files);
+      const newUploadedFiles: UploadedFile[] = [];
       
-      if (file.size > 50 * 1024 * 1024) { // 50MB limit
-        toast.error("File size exceeds 50MB limit");
-        return;
+      for (const file of files) {
+        if (file.size > 50 * 1024 * 1024) { // 50MB limit
+          toast.error(`File size exceeds 50MB limit: ${file.name}`);
+          continue;
+        }
+        
+        // Create a FormData object
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        // Upload to workspace root by default
+        const uploadPath = `/workspace/${file.name}`;
+        formData.append('path', uploadPath);
+        
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session?.access_token) {
+          throw new Error('No access token available');
+        }
+        
+        // Upload using FormData
+        const response = await fetch(`${API_URL}/sandboxes/${sandboxId}/files`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: formData
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.statusText}`);
+        }
+        
+        // Add to uploaded files
+        newUploadedFiles.push({
+          name: file.name,
+          path: uploadPath,
+          size: file.size
+        });
+        
+        toast.success(`File uploaded: ${file.name}`);
       }
       
-      // Create a FormData object
-      const formData = new FormData();
-      formData.append('file', file);
+      // Update the uploaded files state
+      setUploadedFiles(prev => [...prev, ...newUploadedFiles]);
       
-      // Upload to workspace root by default
-      const uploadPath = `/workspace/${file.name}`;
-      formData.append('path', uploadPath);
-      
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error('No access token available');
-      }
-      
-      // Upload using FormData
-      const response = await fetch(`${API_URL}/sandboxes/${sandboxId}/files`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: formData
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
-      }
-      
-      // Set the uploaded file info
-      setUploadedFile({
-        name: file.name,
-        path: uploadPath,
-        size: file.size
-      });
-      
-      toast.success(`File uploaded: ${file.name}`);
     } catch (error) {
       console.error("File upload failed:", error);
       toast.error(typeof error === 'string' ? error : (error instanceof Error ? error.message : "Failed to upload file"));
@@ -200,31 +209,35 @@ export function ChatInput({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const removeUploadedFile = () => {
-    setUploadedFile(null);
+  const removeUploadedFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
     <div className="w-full">
       <form onSubmit={handleSubmit} className="relative">
-        {uploadedFile && (
-          <div className="mb-2 p-2 bg-secondary/20 rounded-md flex items-center justify-between">
-            <div className="flex items-center text-sm">
-              <File className="h-4 w-4 mr-2 text-primary" />
-              <span className="font-medium">{uploadedFile.name}</span>
-              <span className="text-xs text-muted-foreground ml-2">
-                ({formatFileSize(uploadedFile.size)})
-              </span>
-            </div>
-            <Button 
-              type="button" 
-              variant="ghost" 
-              size="icon" 
-              className="h-6 w-6"
-              onClick={removeUploadedFile}
-            >
-              <X className="h-3 w-3" />
-            </Button>
+        {uploadedFiles.length > 0 && (
+          <div className="mb-2 space-y-1">
+            {uploadedFiles.map((file, index) => (
+              <div key={index} className="p-2 bg-secondary/20 rounded-md flex items-center justify-between">
+                <div className="flex items-center text-sm">
+                  <File className="h-4 w-4 mr-2 text-primary" />
+                  <span className="font-medium">{file.name}</span>
+                  <span className="text-xs text-muted-foreground ml-2">
+                    ({formatFileSize(file.size)})
+                  </span>
+                </div>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6"
+                  onClick={() => removeUploadedFile(index)}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
           </div>
         )}
         
@@ -252,7 +265,7 @@ export function ChatInput({
             size="icon"
             className="h-8 w-8 rounded-full"
             disabled={loading || (disabled && !isAgentRunning) || isUploading}
-            aria-label="Upload file"
+            aria-label="Upload files"
           >
             {isUploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -267,6 +280,7 @@ export function ChatInput({
             ref={fileInputRef}
             className="hidden"
             onChange={processFileUpload}
+            multiple
           />
           
           {/* File browser button */}
@@ -290,7 +304,7 @@ export function ChatInput({
             variant="ghost"
             size="icon"
             className="h-8 w-8 rounded-full"
-            disabled={((!inputValue.trim() && !uploadedFile) && !isAgentRunning) || loading || (disabled && !isAgentRunning)}
+            disabled={((!inputValue.trim() && uploadedFiles.length === 0) && !isAgentRunning) || loading || (disabled && !isAgentRunning)}
             aria-label={isAgentRunning ? 'Stop agent' : 'Send message'}
           >
             {loading ? (
