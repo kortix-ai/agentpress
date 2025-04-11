@@ -40,6 +40,26 @@ RUN apt-get update && apt-get install -y \
     fonts-dejavu \
     fonts-dejavu-core \
     fonts-dejavu-extra \
+    # PDF Processing Tools
+    poppler-utils \
+    # Document Processing Tools
+    antiword \
+    unrtf \
+    catdoc \
+    xls2csv \
+    # Text Processing Tools
+    grep \
+    gawk \
+    sed \
+    # File Analysis Tools
+    file \
+    # Data Processing Tools
+    jq \
+    csvkit \
+    xmlstarlet \
+    # Additional Utilities
+    less \
+    vim \
     && rm -rf /var/lib/apt/lists/*
 
 # Install noVNC
