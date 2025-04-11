@@ -2,23 +2,120 @@
 
 
 :root {
-  --background: #fbf8f5;
-  --background-secondary: #f1efe6;
+  --background: #faf9f5;
+  --background-secondary: #f5f5ec;
   --white: #fefffe;
-  --foreground: #171717;
+  --foreground: #3c3c3a;
   --primary: #2562eb;
+  --border-color: #e9ebee;
+  --card-bg: #fefffe;
+  --card-title: #3c3c3a;
+  
+  /* UI Element Colors */
+  --hover-bg: rgba(241,238,231,255);
+  --hover-bg-dark: #141413;
+  --icon-color: rgba(60, 60, 58, 0.7);
+  --icon-color-dark: rgba(240, 240, 240, 0.6);
+  --button-hover: rgba(37, 98, 235, 0.1);
+  --button-hover-dark: rgba(37, 98, 235, 0.2);
+  
+  /* Shadow Colors */
+  --shadow-color: rgba(0, 0, 0, 0.05);
+  --shadow-color-dark: rgba(0, 0, 0, 0.2);
+  
+  /* Gradient Colors */
+  --gradient-start: #faf9f5;
+  --gradient-end: rgba(250, 249, 245, 0);
 }
 
 .dark {
-  --background: #121212;
-  --background-secondary: #1e1e1e;
+  --background: #272724;
+  --background-secondary: #1e1e1c;
   --white: #fefffe;
   --foreground: #f0f0f0;
   --primary: #2562eb;
+  --border-color: #2a2a2a;
+  --card-bg: #30302e;
+  --card-title: #c3c1b6;
+  
+  /* UI Element Colors */
+  --hover-bg: #141413;
+  --hover-bg-dark: #141413;
+  --icon-color: rgba(240, 240, 240, 0.6);
+  --icon-color-dark: rgba(240, 240, 240, 0.4);
+  --button-hover: rgba(37, 98, 235, 0.2);
+  --button-hover-dark: rgba(37, 98, 235, 0.3);
+  
+  /* Shadow Colors */
+  --shadow-color: rgba(0, 0, 0, 0.2);
+  --shadow-color-dark: rgba(0, 0, 0, 0.3);
+  
+  /* Gradient Colors */
+  --gradient-start: #272724;
+  --gradient-end: rgba(39, 39, 36, 0);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans, Arial, Helvetica, sans-serif);
+}
+
+/* Add custom utilities */
+.bg-white {
+  background-color: var(--card-bg);
+}
+
+.text-foreground {
+  color: var(--foreground);
+}
+
+.border-subtle {
+  border-color: var(--border-color);
+}
+
+/* New utility classes for card titles */
+.text-card-title {
+  color: var(--card-title);
+}
+
+/* Hover utilities */
+.hover-bg {
+  background-color: var(--hover-bg);
+}
+
+.dark .hover-bg {
+  background-color: var(--hover-bg-dark);
+}
+
+/* Icon utilities */
+.icon-color {
+  color: var(--icon-color);
+}
+
+.dark .icon-color {
+  color: var(--icon-color-dark);
+}
+
+/* Button utilities */
+.button-hover {
+  background-color: var(--button-hover);
+}
+
+.dark .button-hover {
+  background-color: var(--button-hover-dark);
+}
+
+/* Shadow utilities */
+.shadow-custom {
+  box-shadow: 0 2px 10px 0 var(--shadow-color);
+}
+
+.dark .shadow-custom {
+  box-shadow: 0 2px 10px 0 var(--shadow-color-dark);
+}
+
+/* Gradient utilities */
+.gradient-overlay {
+  background: linear-gradient(to top, var(--gradient-start) 0%, var(--gradient-end) 100%);
 }
