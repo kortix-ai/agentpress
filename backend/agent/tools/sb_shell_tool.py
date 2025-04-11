@@ -19,6 +19,7 @@ class SandboxShellTool(SandboxToolsBase):
     def __init__(self, sandbox_id: str, password: str):
         super().__init__(sandbox_id, password)
         self._sessions: Dict[str, str] = {}  # Maps session names to session IDs
+        self.workspace_path = "/workspace"  # Ensure we're always operating in /workspace
 
     async def _ensure_session(self, session_name: str = "default") -> str:
         """Ensure a session exists and return its ID."""
@@ -44,13 +45,13 @@ class SandboxShellTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "execute_command",
-            "description": "Execute a shell command in the workspace directory. Uses sessions to maintain state between commands. This tool is essential for running CLI tools, installing packages, and managing system operations. Always verify command outputs before using the data.",
+            "description": "Execute a shell command in the workspace directory. Uses sessions to maintain state between commands. This tool is essential for running CLI tools, installing packages, and managing system operations. Always verify command outputs before using the data. Commands can be chained using && for sequential execution, || for fallback execution, and | for piping output.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "The shell command to execute. Use this for running CLI tools, installing packages, or system operations. Example: 'pdftotext input.pdf -layout'"
+                        "description": "The shell command to execute. Use this for running CLI tools, installing packages, or system operations. Commands can be chained using &&, ||, and | operators. Example: 'find . -type f | sort && grep -r \"pattern\" . | awk \"{print $1}\" | sort | uniq -c'"
                     },
                     "folder": {
                         "type": "string",
@@ -95,14 +96,14 @@ class SandboxShellTool(SandboxToolsBase):
         pdftotext input.pdf -layout > output.txt
         </execute-command>
 
-        <!-- Example 4: Complex command with pipes -->
+        <!-- Example 4: Complex command with pipes and chaining -->
         <execute-command>
-        grep -r "pattern" . | awk '{print $1}' | sort | uniq -c
+        find . -type f -name "*.txt" | sort && grep -r "pattern" . | awk '{print $1}' | sort | uniq -c
         </execute-command>
 
-        <!-- Example 5: Command with error handling -->
+        <!-- Example 5: Command with error handling and chaining -->
         <execute-command>
-        pdftotext input.pdf -layout 2>&1 || echo "Error processing PDF"
+        pdftotext input.pdf -layout 2>&1 || echo "Error processing PDF" && ls -la output.txt
         </execute-command>
         '''
     )
@@ -123,11 +124,15 @@ class SandboxShellTool(SandboxToolsBase):
                 folder = folder.strip('/')
                 cwd = f"{self.workspace_path}/{folder}"
             
+            # Ensure we're in the correct directory before executing the command
+            command = f"cd {cwd} && {command}"
+            
             # Execute command in session
             from sandbox.sandbox import SessionExecuteRequest
             req = SessionExecuteRequest(
                 command=command,
-                var_async=False
+                var_async=False,
+                cwd=cwd  # Still set the working directory for reference
             )
             
             response = self.sandbox.process.execute_session_command(

@@ -192,20 +192,35 @@ def start_sandbox_browser_api(sandbox):
     sandbox.fs.upload_file(sandbox.get_user_root_dir() + "/browser_api.py", sandbox_browser_api)
     
     try:
-        # Always create new session without checking
-        logger.debug("Creating sandbox browser API session")
+        # Create tmux session for browser API
+        logger.debug("Creating tmux session for browser API")
         try:
-            sandbox.process.create_session('sandbox_browser_api')
+            # Check if session already exists
+            sandbox.process.execute_session_command('sandbox_browser_api', SessionExecuteRequest(
+                command="tmux has-session -t browser_api 2>/dev/null || tmux new-session -d -s browser_api",
+                var_async=True
+            ))
         except Exception as session_e:
-            # If session already exists, this will fail, but we can continue
-            logger.debug(f"Error creating session, might already exist: {str(session_e)}")
+            logger.debug(f"Error creating tmux session, might already exist: {str(session_e)}")
         
-        logger.debug("Executing browser API command in sandbox")
+        # Kill any existing process in the session
+        sandbox.process.execute_session_command('sandbox_browser_api', SessionExecuteRequest(
+            command="tmux send-keys -t browser_api C-c",
+            var_async=True
+        ))
+        
+        logger.debug("Executing browser API command in tmux session")
         rsp = sandbox.process.execute_session_command('sandbox_browser_api', SessionExecuteRequest(
-            command="python " + sandbox.get_user_root_dir() + "/browser_api.py",
+            command="tmux send-keys -t browser_api 'python " + sandbox.get_user_root_dir() + "/browser_api.py' C-m",
             var_async=True
         ))
         logger.debug(f"Browser API command execution result: {rsp}")
+        
+        # Verify the process is running
+        sandbox.process.execute_session_command('sandbox_browser_api', SessionExecuteRequest(
+            command="tmux list-panes -t browser_api -F '#{pane_pid}'",
+            var_async=True
+        ))
         
     except Exception as e:
         logger.error(f"Error starting browser API: {str(e)}")
@@ -215,23 +230,38 @@ def start_http_server(sandbox):
     """Start the HTTP server in the sandbox"""
     
     try:
-        # Always create new session without checking
-        logger.debug("Creating HTTP server session")
+        # Create tmux session for HTTP server
+        logger.debug("Creating tmux session for HTTP server")
         try:
-            sandbox.process.create_session('http_server')
+            # Check if session already exists
+            sandbox.process.execute_session_command('http_server', SessionExecuteRequest(
+                command="tmux has-session -t http_server 2>/dev/null || tmux new-session -d -s http_server",
+                var_async=True
+            ))
         except Exception as session_e:
-            # If session already exists, this will fail, but we can continue
-            logger.debug(f"Error creating session, might already exist: {str(session_e)}")
+            logger.debug(f"Error creating tmux session, might already exist: {str(session_e)}")
             
         # Create the server script file
         sandbox.fs.upload_file(sandbox.get_user_root_dir() + "/server.py", SERVER_SCRIPT.encode())
         
-        # Start the HTTP server using uvicorn with auto-reload 
+        # Kill any existing process in the session
+        sandbox.process.execute_session_command('http_server', SessionExecuteRequest(
+            command="tmux send-keys -t http_server C-c",
+            var_async=True
+        ))
+        
+        # Start the HTTP server using uvicorn with auto-reload in tmux session
         http_server_rsp = sandbox.process.execute_session_command('http_server', SessionExecuteRequest(
-            command="cd " + sandbox.get_user_root_dir() + " && pip install uvicorn fastapi && python server.py",
+            command="cd " + sandbox.get_user_root_dir() + " && tmux send-keys -t http_server 'pip install uvicorn fastapi && python server.py' C-m",
             var_async=True
         ))
         logger.info(f"HTTP server started: {http_server_rsp}")
+        
+        # Verify the process is running
+        sandbox.process.execute_session_command('http_server', SessionExecuteRequest(
+            command="tmux list-panes -t http_server -F '#{pane_pid}'",
+            var_async=True
+        ))
     
     except Exception as e:
         logger.error(f"Error starting HTTP server: {str(e)}")
@@ -328,7 +358,7 @@ def create_sandbox(password: str):
         logger.debug("OPENAI_API_KEY configured for sandbox")
     
     sandbox = daytona.create(CreateSandboxParams(
-        image="adamcohenhillel/kortix-browser-use:0.0.1",
+        image="kortixmarko/kortix-suna:0.0.2",
         env_vars={
             "CHROME_PERSISTENT_SESSION": "true",
             "RESOLUTION": "1920x1080x24",

@@ -1,12 +1,12 @@
 services:
-  kortix-browser-use:
+  kortix-suna:
     platform: linux/amd64
     build:
       context: .
       dockerfile: ${DOCKERFILE:-Dockerfile}
       args:
         TARGETPLATFORM: ${TARGETPLATFORM:-linux/amd64}
-    image: kortix-browser-use:0.0.1
+    image: kortixmarko/kortix-suna:0.0.2
     ports:
       - "7788:7788"  # Gradio default port
       - "6080:6080"  # noVNC web interface

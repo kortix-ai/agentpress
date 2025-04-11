@@ -41,19 +41,20 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     # thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)
-    thread_manager.add_tool(MessageTool)
-    files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_pass)
+    # thread_manager.add_tool(MessageTool)
+    
 
     system_message = { "role": "system", "content": get_system_prompt() }
 
-    # model_name = "anthropic/claude-3-7-sonnet-latest"
+    model_name = "anthropic/claude-3-7-sonnet-latest"
     # model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"         
     # model_name = "anthropic/claude-3-5-sonnet-latest" 
     # model_name = "anthropic/claude-3-7-sonnet-latest"
     # model_name = "openai/gpt-4o"
     # model_name = "groq/deepseek-r1-distill-llama-70b"
     # model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"
-    model_name = "bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0"
+    # model_name = "bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0"
+    # model_name = "bedrock/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
 
     iteration_count = 0
     continue_execution = True
@@ -71,7 +72,8 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
                 continue_execution = False
                 break
 
-#         files_state = await files_tool.get_workspace_state()
+        # files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_pass)
+        # files_state = await files_tool.get_workspace_state()
         
 #         # Simple string representation
 #         state_str = str(files_state)
@@ -94,7 +96,7 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
             stream=stream,
             # temporary_message=state_message,
             llm_model=model_name,
-            llm_temperature=0.1,
+            llm_temperature=0,
             llm_max_tokens=64000,
             tool_choice="auto",
             max_xml_tool_calls=1,
@@ -114,28 +116,28 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
             yield response 
             break
             
-        # Track if we see message_ask_user or idle tool calls
+        # Track if we see ask or complete tool calls
         last_tool_call = None
         
         async for chunk in response:
-            # Check if this is a tool call chunk for message_ask_user or idle
+            # Check if this is a tool call chunk for ask or complete
             if chunk.get('type') == 'tool_call':
                 tool_call = chunk.get('tool_call', {})
                 function_name = tool_call.get('function', {}).get('name', '')
-                if function_name in ['message_ask_user', 'idle']:
+                if function_name in ['ask', 'complete']:
                     last_tool_call = function_name
-            # Check for XML versions like <message_ask_user> or <idle> in content chunks
+            # Check for XML versions like <ask> or <complete> in content chunks
             elif chunk.get('type') == 'content' and 'content' in chunk:
                 content = chunk.get('content', '')
-                if '<message_ask_user>' in content or '<idle>' in content:
-                    xml_tool = 'message_ask_user' if '<message_ask_user>' in content else 'idle'
+                if '</ask>' in content or '</complete>' in content:
+                    xml_tool = 'ask' if '</ask>' in content else 'complete'
                     last_tool_call = xml_tool
                     print(f"Agent used XML tool: {xml_tool}")
                     
             yield chunk
         
         # Check if we should stop based on the last tool call
-        if last_tool_call in ['message_ask_user', 'idle']:
+        if last_tool_call in ['ask', 'complete']:
             print(f"Agent decided to stop with tool: {last_tool_call}")
             continue_execution = False
 
