@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     curl \
     unzip \
+    zip \
     xvfb \
     libgconf-2-4 \
     libxss1 \
@@ -40,13 +41,13 @@ RUN apt-get update && apt-get install -y \
     fonts-dejavu \
     fonts-dejavu-core \
     fonts-dejavu-extra \
+    tmux \
     # PDF Processing Tools
     poppler-utils \
     # Document Processing Tools
     antiword \
     unrtf \
     catdoc \
-    xls2csv \
     # Text Processing Tools
     grep \
     gawk \
@@ -60,6 +61,11 @@ RUN apt-get update && apt-get install -y \
     # Additional Utilities
     less \
     vim \
+    tree \
+    rsync \
+    lsof \
+    iputils-ping \
+    dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
 # Install noVNC
