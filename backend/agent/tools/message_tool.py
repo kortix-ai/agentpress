@@ -16,20 +16,20 @@ class MessageTool(Tool):
         "type": "function",
         "function": {
             "name": "message_notify_user",
-            "description": "Send a message to user without requiring a response. Use for acknowledging receipt of messages, providing progress updates, reporting task completion, or explaining changes in approach.",
+            "description": "Send a message to user without requiring a response. Use for: 1) Progress updates during long-running tasks, 2) Acknowledging receipt of user instructions, 3) Reporting completion of major milestones, 4) Explaining changes in approach or strategy, 5) Summarizing findings or results without requiring input.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "text": {
                         "type": "string",
-                        "description": "Message text to display to user"
+                        "description": "Message text to display to user - should be informative and actionable"
                     },
                     "attachments": {
                         "anyOf": [
                             {"type": "string"},
                             {"items": {"type": "string"}, "type": "array"}
                         ],
-                        "description": "(Optional) List of attachments to show to user, can be file paths or URLs"
+                        "description": "(Optional) List of attachments to show to user, can be file paths or URLs. Include when referencing created files, analysis results, or external resources."
                     }
                 },
                 "required": ["text"]
@@ -43,8 +43,8 @@ class MessageTool(Tool):
             {"param_name": "attachments", "node_type": "attribute", "path": ".", "required": False}
         ],
         example='''
-        <message-notify-user attachments="path/to/file1.txt,path/to/file2.pdf,https://example.com/doc.pdf">
-            Task completed successfully!
+        <message-notify-user attachments="output/analysis_results.csv,output/visualization.png">
+            I've completed the data analysis and generated visualizations of the key trends. The analysis shows a 15% increase in engagement metrics over the last quarter, with the most significant growth in mobile users.
         </message-notify-user>
         '''
     )
@@ -79,25 +79,25 @@ class MessageTool(Tool):
         "type": "function",
         "function": {
             "name": "message_ask_user",
-            "description": "Ask user a question and wait for response. Use for requesting clarification, asking for confirmation, or gathering additional information.",
+            "description": "Ask user a question and wait for response. Use for: 1) Requesting clarification on ambiguous requirements, 2) Seeking confirmation before proceeding with high-impact changes, 3) Gathering additional information needed to complete a task, 4) Offering options and requesting user preference, 5) Validating assumptions when critical to task success.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "text": {
                         "type": "string",
-                        "description": "Question text to present to user"
+                        "description": "Question text to present to user - should be specific and clearly indicate what information you need"
                     },
                     "attachments": {
                         "anyOf": [
                             {"type": "string"},
                             {"items": {"type": "string"}, "type": "array"}
                         ],
-                        "description": "(Optional) List of question-related files or reference materials"
+                        "description": "(Optional) List of question-related files or reference materials. Include when the question references specific content the user needs to see."
                     },
                     "suggest_user_takeover": {
                         "type": "string",
                         "enum": ["none", "browser"],
-                        "description": "(Optional) Suggested operation for user takeover"
+                        "description": "(Optional) Suggested operation for user takeover. Use 'browser' when user might need to access a website for authentication or manual interaction."
                     }
                 },
                 "required": ["text"]
@@ -112,8 +112,8 @@ class MessageTool(Tool):
             {"param_name": "suggest_user_takeover", "node_type": "attribute", "path": ".", "required": False}
         ],
         example='''
-        <message-ask-user attachments="path/to/file1.txt,path/to/file2.pdf" suggest_user_takeover="browser">
-            Would you like to continue with this approach?
+        <message-ask-user attachments="config/database_options.json,scripts/migration_plan.md" suggest_user_takeover="none">
+            I've prepared two database migration approaches (attached). The first minimizes downtime but requires more storage temporarily, while the second has longer downtime but uses less resources. Which approach would you prefer to implement?
         </message-ask-user>
         '''
     )
@@ -154,7 +154,7 @@ class MessageTool(Tool):
         "type": "function",
         "function": {
             "name": "idle",
-            "description": "A special tool to indicate you have completed all tasks and are about to enter idle state.",
+            "description": "A special tool to indicate you have completed all tasks and are about to enter idle state. Use ONLY when: 1) All tasks in todo.md are marked complete, 2) The user's original request has been fully addressed, 3) There are no pending actions or follow-ups required, 4) You've delivered all final outputs and results to the user.",
             "parameters": {
                 "type": "object"
             }
@@ -164,7 +164,10 @@ class MessageTool(Tool):
         tag_name="idle",
         mappings=[],
         example='''
-        <idle></idle>
+        <idle>
+        <!-- Use this tool only after completing all tasks and delivering all final outputs -->
+        <!-- All todo.md items must be marked complete [x] before using this tool -->
+        </idle>
         '''
     )
     async def idle(self) -> ToolResult:
