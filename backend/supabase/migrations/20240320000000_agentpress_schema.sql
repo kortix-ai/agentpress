@@ -1,9 +1,10 @@
+-- AGENTPRESS SCHEMA:
 -- Create projects table
 CREATE TABLE projects (
     project_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     description TEXT,
-    user_id UUID NOT NULL,
+    account_id UUID NOT NULL REFERENCES basejump.accounts(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -11,7 +12,7 @@ CREATE TABLE projects (
 -- Create threads table
 CREATE TABLE threads (
     thread_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID,
+    account_id UUID REFERENCES basejump.accounts(id) ON DELETE CASCADE,
     project_id UUID REFERENCES projects(project_id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
@@ -74,12 +75,12 @@ CREATE TRIGGER update_projects_updated_at
 
 -- Create indexes for better query performance
 CREATE INDEX idx_threads_created_at ON threads(created_at);
-CREATE INDEX idx_threads_user_id ON threads(user_id);
+CREATE INDEX idx_threads_account_id ON threads(account_id);
 CREATE INDEX idx_threads_project_id ON threads(project_id);
 CREATE INDEX idx_agent_runs_thread_id ON agent_runs(thread_id);
 CREATE INDEX idx_agent_runs_status ON agent_runs(status);
 CREATE INDEX idx_agent_runs_created_at ON agent_runs(created_at);
-CREATE INDEX idx_projects_user_id ON projects(user_id);
+CREATE INDEX idx_projects_account_id ON projects(account_id);
 CREATE INDEX idx_projects_created_at ON projects(created_at);
 CREATE INDEX idx_messages_thread_id ON messages(thread_id);
 CREATE INDEX idx_messages_created_at ON messages(created_at);
@@ -93,62 +94,62 @@ ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 -- Project policies
 CREATE POLICY project_select_policy ON projects
     FOR SELECT
-    USING (auth.uid() = user_id);
+    USING (basejump.has_role_on_account(account_id) = true);
 
 CREATE POLICY project_insert_policy ON projects
     FOR INSERT
-    WITH CHECK (auth.uid() IS NOT NULL);
+    WITH CHECK (basejump.has_role_on_account(account_id) = true);
 
 CREATE POLICY project_update_policy ON projects
     FOR UPDATE
-    USING (auth.uid() = user_id);
+    USING (basejump.has_role_on_account(account_id) = true);
 
 CREATE POLICY project_delete_policy ON projects
     FOR DELETE
-    USING (auth.uid() = user_id);
+    USING (basejump.has_role_on_account(account_id) = true);
 
--- Thread policies based on project ownership
+-- Thread policies based on project and account ownership
 CREATE POLICY thread_select_policy ON threads
     FOR SELECT
     USING (
-        auth.uid() = user_id OR 
+        basejump.has_role_on_account(account_id) = true OR 
         EXISTS (
             SELECT 1 FROM projects
             WHERE projects.project_id = threads.project_id
-            AND projects.user_id = auth.uid()
+            AND basejump.has_role_on_account(projects.account_id) = true
         )
     );
 
 CREATE POLICY thread_insert_policy ON threads
     FOR INSERT
     WITH CHECK (
-        auth.uid() = user_id OR 
+        basejump.has_role_on_account(account_id) = true OR 
         EXISTS (
             SELECT 1 FROM projects
             WHERE projects.project_id = threads.project_id
-            AND projects.user_id = auth.uid()
+            AND basejump.has_role_on_account(projects.account_id) = true
         )
     );
 
 CREATE POLICY thread_update_policy ON threads
     FOR UPDATE
     USING (
-        auth.uid() = user_id OR 
+        basejump.has_role_on_account(account_id) = true OR 
         EXISTS (
             SELECT 1 FROM projects
             WHERE projects.project_id = threads.project_id
-            AND projects.user_id = auth.uid()
+            AND basejump.has_role_on_account(projects.account_id) = true
         )
     );
 
 CREATE POLICY thread_delete_policy ON threads
     FOR DELETE
     USING (
-        auth.uid() = user_id OR 
+        basejump.has_role_on_account(account_id) = true OR 
         EXISTS (
             SELECT 1 FROM projects
             WHERE projects.project_id = threads.project_id
-            AND projects.user_id = auth.uid()
+            AND basejump.has_role_on_account(projects.account_id) = true
         )
     );
 
@@ -158,11 +159,11 @@ CREATE POLICY agent_run_select_policy ON agent_runs
     USING (
         EXISTS (
             SELECT 1 FROM threads
-            JOIN projects ON threads.project_id = projects.project_id
+            LEFT JOIN projects ON threads.project_id = projects.project_id
             WHERE threads.thread_id = agent_runs.thread_id
             AND (
-                threads.user_id = auth.uid() OR 
-                projects.user_id = auth.uid()
+                basejump.has_role_on_account(threads.account_id) = true OR 
+                basejump.has_role_on_account(projects.account_id) = true
             )
         )
     );
@@ -172,11 +173,11 @@ CREATE POLICY agent_run_insert_policy ON agent_runs
     WITH CHECK (
         EXISTS (
             SELECT 1 FROM threads
-            JOIN projects ON threads.project_id = projects.project_id
+            LEFT JOIN projects ON threads.project_id = projects.project_id
             WHERE threads.thread_id = agent_runs.thread_id
             AND (
-                threads.user_id = auth.uid() OR 
-                projects.user_id = auth.uid()
+                basejump.has_role_on_account(threads.account_id) = true OR 
+                basejump.has_role_on_account(projects.account_id) = true
             )
         )
     );
@@ -186,11 +187,11 @@ CREATE POLICY agent_run_update_policy ON agent_runs
     USING (
         EXISTS (
             SELECT 1 FROM threads
-            JOIN projects ON threads.project_id = projects.project_id
+            LEFT JOIN projects ON threads.project_id = projects.project_id
             WHERE threads.thread_id = agent_runs.thread_id
             AND (
-                threads.user_id = auth.uid() OR 
-                projects.user_id = auth.uid()
+                basejump.has_role_on_account(threads.account_id) = true OR 
+                basejump.has_role_on_account(projects.account_id) = true
             )
         )
     );
@@ -200,11 +201,11 @@ CREATE POLICY agent_run_delete_policy ON agent_runs
     USING (
         EXISTS (
             SELECT 1 FROM threads
-            JOIN projects ON threads.project_id = projects.project_id
+            LEFT JOIN projects ON threads.project_id = projects.project_id
             WHERE threads.thread_id = agent_runs.thread_id
             AND (
-                threads.user_id = auth.uid() OR 
-                projects.user_id = auth.uid()
+                basejump.has_role_on_account(threads.account_id) = true OR 
+                basejump.has_role_on_account(projects.account_id) = true
             )
         )
     );
@@ -218,8 +219,8 @@ CREATE POLICY message_select_policy ON messages
             LEFT JOIN projects ON threads.project_id = projects.project_id
             WHERE threads.thread_id = messages.thread_id
             AND (
-                threads.user_id = auth.uid() OR 
-                projects.user_id = auth.uid()
+                basejump.has_role_on_account(threads.account_id) = true OR 
+                basejump.has_role_on_account(projects.account_id) = true
             )
         )
     );
@@ -232,8 +233,8 @@ CREATE POLICY message_insert_policy ON messages
             LEFT JOIN projects ON threads.project_id = projects.project_id
             WHERE threads.thread_id = messages.thread_id
             AND (
-                threads.user_id = auth.uid() OR 
-                projects.user_id = auth.uid()
+                basejump.has_role_on_account(threads.account_id) = true OR 
+                basejump.has_role_on_account(projects.account_id) = true
             )
         )
     );
@@ -246,8 +247,8 @@ CREATE POLICY message_update_policy ON messages
             LEFT JOIN projects ON threads.project_id = projects.project_id
             WHERE threads.thread_id = messages.thread_id
             AND (
-                threads.user_id = auth.uid() OR 
-                projects.user_id = auth.uid()
+                basejump.has_role_on_account(threads.account_id) = true OR 
+                basejump.has_role_on_account(projects.account_id) = true
             )
         )
     );
@@ -260,8 +261,8 @@ CREATE POLICY message_delete_policy ON messages
             LEFT JOIN projects ON threads.project_id = projects.project_id
             WHERE threads.thread_id = messages.thread_id
             AND (
-                threads.user_id = auth.uid() OR 
-                projects.user_id = auth.uid()
+                basejump.has_role_on_account(threads.account_id) = true OR 
+                basejump.has_role_on_account(projects.account_id) = true
             )
         )
     );
@@ -272,7 +273,7 @@ GRANT ALL PRIVILEGES ON TABLE threads TO authenticated, service_role;
 GRANT ALL PRIVILEGES ON TABLE messages TO authenticated, service_role;
 GRANT ALL PRIVILEGES ON TABLE agent_runs TO authenticated, service_role;
 
--- Create a function that matches the Python get_llm_messages behavior
+-- Create a function that matches the Python get_messages behavior
 CREATE OR REPLACE FUNCTION get_llm_formatted_messages(p_thread_id UUID)
 RETURNS JSONB
 SECURITY INVOKER
@@ -280,13 +281,21 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     messages_array JSONB := '[]'::JSONB;
+    has_access BOOLEAN;
 BEGIN
-    -- Check if thread exists
-    IF NOT EXISTS (
+    -- Check if thread exists and user has access
+    SELECT EXISTS (
         SELECT 1 FROM threads t
+        LEFT JOIN projects p ON t.project_id = p.project_id
         WHERE t.thread_id = p_thread_id
-    ) THEN
-        RAISE EXCEPTION 'Thread not found';
+        AND (
+            basejump.has_role_on_account(t.account_id) = true OR 
+            basejump.has_role_on_account(p.account_id) = true
+        )
+    ) INTO has_access;
+    
+    IF NOT has_access THEN
+        RAISE EXCEPTION 'Thread not found or access denied';
     END IF;
 
     -- Parse content if it's stored as a string and return proper JSON objects
