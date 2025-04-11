@@ -5,51 +5,44 @@ import { SubmitButton } from "../ui/submit-button"
 import { editTeamSlug } from "@/lib/actions/teams";
 import { Label } from "../ui/label";
 import { GetAccountResponse } from "@usebasejump/shared";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../ui/card";
 
 type Props = {
     account: GetAccountResponse;
 }
 
 export default function EditTeamSlug({ account }: Props) {
-
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Team Identifier</CardTitle>
-                <CardDescription>
-                    Your team identifier must be unique
-                </CardDescription>
-            </CardHeader>
-            <form className="animate-in flex-1 text-foreground">
-                <input type="hidden" name="accountId" value={account.account_id} />
-                <CardContent className="flex flex-col gap-y-6">
-                    <div className="flex flex-col gap-y-2">
-                        <Label htmlFor="slug">
-                            Identifier
-                        </Label>
-                        <div className="flex items-center gap-x-2">
-                            <span className="text-sm text-muted-foreground whitespace-nowrap grow">
-                                https://your-app.com/
-                            </span>
-                            <Input
-                                defaultValue={account.slug}
-                                name="slug"
-                                placeholder="my-team"
-                                required
-                            />
-                        </div>
+        <form className="animate-in">
+            <input type="hidden" name="accountId" value={account.account_id} />
+            <div className="flex flex-col gap-y-4">
+                <div className="flex flex-col gap-y-2">
+                    <Label htmlFor="slug" className="text-sm font-medium text-foreground/90">
+                        Team URL Identifier
+                    </Label>
+                    <div className="flex items-center gap-x-2">
+                        <span className="text-sm text-foreground/70 whitespace-nowrap">
+                            https://your-app.com/
+                        </span>
+                        <Input
+                            defaultValue={account.slug}
+                            name="slug"
+                            id="slug"
+                            placeholder="my-team"
+                            required
+                            className="h-10 rounded-lg border-subtle dark:border-white/10 bg-white dark:bg-background-secondary"
+                        />
                     </div>
-                </CardContent>
-                <CardFooter>
+                </div>
+                <div className="flex justify-end mt-2">
                     <SubmitButton
                         formAction={editTeamSlug}
                         pendingText="Updating..."
+                        className="rounded-lg bg-primary hover:bg-primary/90 text-white h-10"
                     >
-                        Save
+                        Save Changes
                     </SubmitButton>
-                </CardFooter>
-            </form>
-        </Card>
+                </div>
+            </div>
+        </form>
     )
 }

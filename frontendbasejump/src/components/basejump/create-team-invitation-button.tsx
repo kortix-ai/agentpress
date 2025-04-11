@@ -19,13 +19,18 @@ export default function CreateTeamInvitationButton({accountId}: Props) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline">Invite new member</Button>
+        <Button 
+          variant="outline" 
+          className="rounded-lg h-9 border-subtle dark:border-white/10 hover:bg-hover-bg dark:hover:bg-hover-bg-dark"
+        >
+          Invite Member
+        </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-2xl shadow-custom">
         <DialogHeader>
-          <DialogTitle>Create a new invitation</DialogTitle>
-          <DialogDescription>
-            Invitation links can be given to anyone to join your team
+          <DialogTitle className="text-card-title">Invite Team Member</DialogTitle>
+          <DialogDescription className="text-foreground/70">
+            Send an email invitation to join your team
           </DialogDescription>
         </DialogHeader>
         <NewInvitationForm accountId={accountId} />
