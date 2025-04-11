@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cursor Clone V2</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: #111;
+            cursor: none;
+            overflow: hidden;
+        }
+
+        .cursor {
+            width: 20px;
+            height: 20px;
+            background-color: #fff;
+            border-radius: 50%;
+            position: fixed;
+            pointer-events: none;
+            z-index: 1000;
+            transform: translate(-50%, -50%);
+            transition: width 0.2s, height 0.2s;
+            mix-blend-mode: difference;
+        }
+
+        .cursor-trail {
+            position: fixed;
+            pointer-events: none;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 255, 255, 0.2);
+            mix-blend-mode: screen;
+            transition: transform 0.1s ease;
+        }
+
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            font-family: monospace;
+            z-index: 1001;
+        }
+
+        .controls button {
+            background: #333;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: monospace;
+            transition: background 0.3s;
+        }
+
+        .controls button:hover {
+            background: #444;
+        }
+
+        .controls div {
+            margin: 10px 0;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div>
+            <label>Trail Count: </label>
+            <input type="range" id="trailCount" min="1" max="20" value="10">
+            <span id="trailCountValue">10</span>
+        </div>
+        <div>
+            <label>Trail Size: </label>
+            <input type="range" id="trailSize" min="5" max="50" value="20">
+            <span id="trailSizeValue">20</span>
+        </div>
+        <div>
+            <label>Trail Speed: </label>
+            <input type="range" id="trailSpeed" min="1" max="20" value="10">
+            <span id="trailSpeedValue">10</span>
+        </div>
+        <div>
+            <button id="toggleRainbow">Toggle Rainbow</button>
+            <button id="togglePulse">Toggle Pulse</button>
+        </div>
+    </div>
+
+    <div class="cursor"></div>
+
+    <script>
+        const cursor = document.querySelector('.cursor');
+        const trailCountInput = document.getElementById('trailCount');
+        const trailSizeInput = document.getElementById('trailSize');
+        const trailSpeedInput = document.getElementById('trailSpeed');
+        const toggleRainbow = document.getElementById('toggleRainbow');
+        const togglePulse = document.getElementById('togglePulse');
+
+        let mouseX = 0;
+        let mouseY = 0;
+        let cursorX = 0;
+        let cursorY = 0;
+        let trails = [];
+        let positions = [];
+        let isRainbow = false;
+        let isPulsing = false;
+        let hue = 0;
+
+        // Update value displays
+        function updateValue(input, valueSpan) {
+            document.getElementById(valueSpan).textContent = input.value;
+        }
+
+        trailCountInput.addEventListener('input', () => {
+            updateValue(trailCountInput, 'trailCountValue');
+            createTrails();
+        });
+
+        trailSizeInput.addEventListener('input', () => {
+            updateValue(trailSizeInput, 'trailSizeValue');
+            updateTrailSizes();
+        });
+
+        trailSpeedInput.addEventListener('input', () => {
+            updateValue(trailSpeedInput, 'trailSpeedValue');
+        });
+
+        toggleRainbow.addEventListener('click', () => {
+            isRainbow = !isRainbow;
+            toggleRainbow.style.background = isRainbow ? '#666' : '#333';
+        });
+
+        togglePulse.addEventListener('click', () => {
+            isPulsing = !isPulsing;
+            togglePulse.style.background = isPulsing ? '#666' : '#333';
+        });
+
+        function createTrails() {
+            // Remove existing trails
+            trails.forEach(trail => trail.remove());
+            trails = [];
+            positions = [];
+
+            // Create new trails
+            const count = parseInt(trailCountInput.value);
+            for (let i = 0; i < count; i++) {
+                const trail = document.createElement('div');
+                trail.className = 'cursor-trail';
+                document.body.appendChild(trail);
+                trails.push(trail);
+                positions.push({ x: 0, y: 0 });
+            }
+            updateTrailSizes();
+        }
+
+        function updateTrailSizes() {
+            const baseSize = parseInt(trailSizeInput.value);
+            trails.forEach((trail, i) => {
+                const size = baseSize * (1 + i * 0.2);
+                trail.style.width = size + 'px';
+                trail.style.height = size + 'px';
+            });
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        function animate() {
+            // Smooth cursor movement
+            const speed = parseInt(trailSpeedInput.value) / 10;
+            cursorX += (mouseX - cursorX) * speed * 0.1;
+            cursorY += (mouseY - cursorY) * speed * 0.1;
+
+            cursor.style.left = cursorX + 'px';
+            cursor.style.top = cursorY + 'px';
+
+            // Update trail positions
+            positions.unshift({ x: cursorX, y: cursorY });
+            positions = positions.slice(0, trails.length);
+
+            // Update trails
+            trails.forEach((trail, i) => {
+                if (positions[i]) {
+                    trail.style.left = positions[i].x + 'px';
+                    trail.style.top = positions[i].y + 'px';
+
+                    if (isRainbow) {
+                        const hueOffset = (hue + i * 25) % 360;
+                        trail.style.backgroundColor = `hsla(${hueOffset}, 100%, 50%, 0.2)`;
+                    } else {
+                        trail.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+                    }
+
+                    if (isPulsing) {
+                        const scale = 1 + Math.sin((Date.now() / 1000 + i * 0.1) * 2) * 0.2;
+                        trail.style.transform = `translate(-50%, -50%) scale(${scale})`;
+                    } else {
+                        trail.style.transform = 'translate(-50%, -50%)';
+                    }
+                }
+            });
+
+            if (isRainbow) {
+                hue = (hue + 1) % 360;
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // Initialize
+        createTrails();
+        animate();
+
+        // Mouse interaction effects
+        document.addEventListener('mousedown', () => {
+            cursor.style.width = '15px';
+            cursor.style.height = '15px';
+            trails.forEach(trail => {
+                trail.style.transform = 'translate(-50%, -50%) scale(1.2)';
+            });
+        });
+
+        document.addEventListener('mouseup', () => {
+            cursor.style.width = '20px';
+            cursor.style.height = '20px';
+            trails.forEach(trail => {
+                trail.style.transform = 'translate(-50%, -50%) scale(1)';
+            });
+        });
+    </script>
+</body>
+</html>

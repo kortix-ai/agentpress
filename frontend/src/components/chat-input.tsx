@@ -320,10 +320,19 @@ export function ChatInput({
 
       {isAgentRunning && (
         <div className="mt-2 flex items-center justify-center gap-2">
-          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <div className="text-xs flex items-center gap-1.5">
             <span className="inline-flex items-center">
-              <Loader2 className="h-3 w-3 animate-spin mr-1" />
-              Agent is thinking...
+              <div className="relative animate-brain-gradient">
+                <Brain className="h-4 w-4 mr-1.5 text-transparent" style={{stroke: 'url(#brainGradientInput)'}} />
+                <svg width="0" height="0">
+                  <linearGradient id="brainGradientInput" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#d1d5db" />
+                    <stop offset="50%" stopColor="#f9fafb" />
+                    <stop offset="100%" stopColor="#d1d5db" />
+                  </linearGradient>
+                </svg>
+              </div>
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-gray-300 via-zinc-100 to-gray-300 animate-shimmer font-medium">Thinking</span>
             </span>
             <span className="text-muted-foreground/60 border-l pl-1.5">
               Press <kbd className="inline-flex items-center justify-center p-0.5 bg-muted border rounded text-xs"><Square className="h-2.5 w-2.5" /></kbd> to stop
