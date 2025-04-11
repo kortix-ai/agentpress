@@ -59,15 +59,65 @@ export default function DashboardLayout({
   rightPanelContent, 
   rightPanelTitle = "Details" 
 }: DashboardLayoutProps) {
+  // Initialize with default values
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(true);
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(true);
-  const [showRightSidebar, setShowRightSidebar] = useState(!!rightPanelContent);
+  const [showRightSidebar, setShowRightSidebar] = useState(false);
   
-  // State for draggable panel - initialized with default values and updated client-side
+  // State for draggable panel
   const [position, setPosition] = useState({ x: 20, y: 400 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const floatingPanelRef = useRef<HTMLDivElement>(null);
+  const layoutInitialized = useRef(false);
+
+  // Set initial showRightSidebar based on rightPanelContent prop
+  useEffect(() => {
+    setShowRightSidebar(!!rightPanelContent);
+  }, [rightPanelContent]);
+
+  // Load layout state from localStorage on initial render
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !layoutInitialized.current) {
+      try {
+        const savedLayout = localStorage.getItem('dashboardLayout');
+        if (savedLayout) {
+          const layout = JSON.parse(savedLayout);
+          setLeftSidebarCollapsed(layout.leftSidebarCollapsed);
+          
+          if (rightPanelContent) {
+            setRightSidebarCollapsed(layout.rightSidebarCollapsed);
+            setShowRightSidebar(layout.showRightSidebar);
+          }
+          
+          if (layout.position && typeof layout.position.x === 'number' && typeof layout.position.y === 'number') {
+            setPosition(layout.position);
+          }
+          
+          layoutInitialized.current = true;
+        }
+      } catch (error) {
+        console.error('Error loading layout from localStorage:', error);
+      }
+    }
+  }, [rightPanelContent]);
+
+  // Save layout state to localStorage whenever relevant state changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && layoutInitialized.current) {
+      try {
+        const layoutState = {
+          leftSidebarCollapsed,
+          rightSidebarCollapsed,
+          showRightSidebar,
+          position
+        };
+        localStorage.setItem('dashboardLayout', JSON.stringify(layoutState));
+      } catch (error) {
+        console.error('Error saving layout to localStorage:', error);
+      }
+    }
+  }, [leftSidebarCollapsed, rightSidebarCollapsed, showRightSidebar, position]);
 
   // Toggle left sidebar and ensure right sidebar is collapsed when left is expanded
   const toggleLeftSidebar = useCallback(() => {
@@ -144,7 +194,6 @@ export default function DashboardLayout({
 
   // Dragging functionality
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Skip if not clicking on the drag handle or if clicking on a button
     if (!(e.target as HTMLElement).closest('.drag-handle') || 
         (e.target as HTMLElement).closest('button')) {
       return;
@@ -152,57 +201,38 @@ export default function DashboardLayout({
     
     e.preventDefault();
     setIsDragging(true);
-    setDragStart({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    });
+    
+    const rect = floatingPanelRef.current?.getBoundingClientRect();
+    if (rect) {
+      setDragStart({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+    }
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging) return;
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging || !floatingPanelRef.current) return;
     
     e.preventDefault();
     const mainContent = document.querySelector('.main-content-area');
+    if (!mainContent) return;
     
-    if (mainContent && floatingPanelRef.current) {
-      const mainRect = mainContent.getBoundingClientRect();
-      const panelRect = floatingPanelRef.current.getBoundingClientRect();
-      
-      // Calculate new position
-      let newX = e.clientX - dragStart.x;
-      let newY = e.clientY - dragStart.y;
-      
-      // Constrain within bounds
-      newX = Math.max(0, Math.min(newX, mainRect.width - panelRect.width));
-      newY = Math.max(0, Math.min(newY, mainRect.height - panelRect.height));
-      
-      // Set position directly for immediate response
-      if (floatingPanelRef.current) {
-        floatingPanelRef.current.style.left = `${newX}px`;
-        floatingPanelRef.current.style.top = `${newY}px`;
-      }
-      
-      // Update state (will be used when dragging stops)
-      setPosition({ x: newX, y: newY });
-    }
-  };
+    const mainRect = mainContent.getBoundingClientRect();
+    const panelRect = floatingPanelRef.current.getBoundingClientRect();
+    
+    let newX = e.clientX - dragStart.x - mainRect.left;
+    let newY = e.clientY - dragStart.y - mainRect.top;
+    
+    // Constrain within bounds
+    newX = Math.max(0, Math.min(newX, mainRect.width - panelRect.width));
+    newY = Math.max(0, Math.min(newY, mainRect.height - panelRect.height));
+    
+    setPosition({ x: newX, y: newY });
+  }, [isDragging, dragStart]);
 
   const handleMouseUp = () => {
-    if (isDragging) {
-      setIsDragging(false);
-      
-      // Ensure state position matches final visual position
-      if (floatingPanelRef.current) {
-        const rect = floatingPanelRef.current.getBoundingClientRect();
-        const mainContent = document.querySelector('.main-content-area');
-        const mainRect = mainContent?.getBoundingClientRect() || { left: 0, top: 0 };
-        
-        setPosition({
-          x: rect.left - mainRect.left,
-          y: rect.top - mainRect.top
-        });
-      }
-    }
+    setIsDragging(false);
   };
 
   // Add and remove event listeners
@@ -216,7 +246,7 @@ export default function DashboardLayout({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragStart]);
+  }, [isDragging, handleMouseMove]);
 
   // Map navigation items to include icons if not provided
   const navItemsWithIcons = navigation.map((item, index) => {
@@ -344,7 +374,7 @@ export default function DashboardLayout({
           </div>
         </header>
         
-        <main className="flex-1 overflow-y-auto bg-transparent main-content-area">
+        <main className="flex-1 overflow-y-auto bg-transparent main-content-area relative">
           <div className={`mx-auto p-6 transition-all duration-300 ${
             // Increase container width when sidebars are collapsed
             leftSidebarCollapsed && (rightSidebarCollapsed || !showRightSidebar) 
@@ -359,14 +389,13 @@ export default function DashboardLayout({
             <div 
               ref={floatingPanelRef}
               className={`absolute bg-card-bg dark:bg-background-secondary border border-subtle dark:border-white/10 rounded-xl shadow-custom flex flex-col w-80 overflow-hidden ${
-                isDragging ? '' : 'transition-all duration-300 ease-in-out'
+                isDragging ? 'cursor-grabbing' : ''
               }`}
               style={{ 
-                left: position.x,
-                top: position.y,
+                left: `${position.x}px`,
+                top: `${position.y}px`,
                 backdropFilter: 'blur(8px)',
-                zIndex: 50,
-                cursor: isDragging ? 'grabbing' : 'default'
+                zIndex: 50
               }}
               onMouseDown={handleMouseDown}
             >

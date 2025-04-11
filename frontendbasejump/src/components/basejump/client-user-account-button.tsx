@@ -36,9 +36,9 @@ export default function ClientUserAccountButton({
             <DropdownMenuContent className="w-56 border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-xl shadow-custom" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal border-b border-subtle dark:border-white/10">
                     <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none text-card-title">{userName}</p>
+                        <p className="text-sm font-medium leading-none text-foreground">{userName}</p>
                         {userEmail && (
-                            <p className="text-xs leading-none text-muted-foreground">
+                            <p className="text-xs leading-none text-foreground/70">
                                 {userEmail}
                             </p>
                         )}

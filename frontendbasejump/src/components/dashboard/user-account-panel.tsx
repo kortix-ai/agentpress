@@ -37,7 +37,7 @@ export default function UserAccountPanel({
                     <AccountSelector
                         accountId={accountId}
                         onAccountSelected={(account) => router.push(account?.personal_account ? `/dashboard` : `/dashboard/${account?.slug}`)}
-                        className="w-10 h-10 justify-center !p-0"
+                        className="w-10 h-10 rounded-full border-0 justify-center !p-0"
                     />
                 </div>
                 
@@ -46,7 +46,7 @@ export default function UserAccountPanel({
                         <DropdownMenuTrigger asChild>
                             <Button 
                                 variant="ghost" 
-                                className="w-full h-full hover:bg-hover-bg dark:hover:bg-hover-bg-dark p-0"
+                                className="w-10 h-10 rounded-full border-0 hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] p-0"
                             >
                                 <UserIcon className="h-[1.2rem] w-[1.2rem] text-foreground/80" />
                                 <span className="sr-only">User menu</span>
@@ -55,29 +55,29 @@ export default function UserAccountPanel({
                         <DropdownMenuContent className="w-56 border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-xl shadow-custom" align="end" forceMount>
                             <DropdownMenuLabel className="font-normal border-b border-subtle dark:border-white/10">
                                 <div className="flex flex-col space-y-1">
-                                    <p className="text-sm font-medium leading-none text-card-title">{userName}</p>
+                                    <p className="text-sm font-medium leading-none text-foreground">{userName}</p>
                                     {userEmail && (
-                                        <p className="text-xs leading-none text-muted-foreground">
+                                        <p className="text-xs leading-none text-foreground/70">
                                             {userEmail}
                                         </p>
                                     )}
                                 </div>
                             </DropdownMenuLabel>
                             <DropdownMenuGroup className="p-1">
-                                <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer">
+                                <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
                                     <Link href="/dashboard" className="flex w-full h-full text-foreground/90">My Account</Link>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer">
+                                <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
                                     <Link href="/dashboard/settings" className="flex w-full h-full text-foreground/90">Settings</Link>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer">
+                                <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
                                     <Link href="/dashboard/settings/teams" className="flex w-full h-full text-foreground/90">Teams</Link>
                                 </DropdownMenuItem>
                             </DropdownMenuGroup>
                             <DropdownMenuSeparator className="border-subtle dark:border-white/10" />
                             <div className="p-1">
-                                <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/90 cursor-pointer">
-                                    <Link href="/api/auth/signout" className="flex w-full h-full">Log out</Link>
+                                <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
+                                    <Link href="/api/auth/signout" className="flex w-full h-full text-foreground/90">Log out</Link>
                                 </DropdownMenuItem>
                             </div>
                         </DropdownMenuContent>
@@ -107,7 +107,7 @@ export default function UserAccountPanel({
                 <DropdownMenuTrigger asChild>
                     <Button 
                         variant="ghost" 
-                        className="h-9 w-9 rounded-full border border-subtle dark:border-white/10 hover:bg-hover-bg dark:hover:bg-hover-bg-dark p-0"
+                        className="h-9 w-9 rounded-full border border-subtle dark:border-white/10 hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] p-0"
                     >
                         <UserIcon className="h-[1.2rem] w-[1.2rem] text-foreground/80" />
                         <span className="sr-only">User menu</span>
@@ -116,29 +116,29 @@ export default function UserAccountPanel({
                 <DropdownMenuContent className="w-56 border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-xl shadow-custom" align="end" forceMount>
                     <DropdownMenuLabel className="font-normal border-b border-subtle dark:border-white/10">
                         <div className="flex flex-col space-y-1">
-                            <p className="text-sm font-medium leading-none text-card-title">{userName}</p>
+                            <p className="text-sm font-medium leading-none text-foreground">{userName}</p>
                             {userEmail && (
-                                <p className="text-xs leading-none text-muted-foreground">
+                                <p className="text-xs leading-none text-foreground/70">
                                     {userEmail}
                                 </p>
                             )}
                         </div>
                     </DropdownMenuLabel>
                     <DropdownMenuGroup className="p-1">
-                        <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer">
+                        <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
                             <Link href="/dashboard" className="flex w-full h-full text-foreground/90">My Account</Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer">
+                        <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
                             <Link href="/dashboard/settings" className="flex w-full h-full text-foreground/90">Settings</Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer">
+                        <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
                             <Link href="/dashboard/settings/teams" className="flex w-full h-full text-foreground/90">Teams</Link>
                         </DropdownMenuItem>
                     </DropdownMenuGroup>
                     <DropdownMenuSeparator className="border-subtle dark:border-white/10" />
                     <div className="p-1">
-                        <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/90 cursor-pointer">
-                            <Link href="/api/auth/signout" className="flex w-full h-full">Log out</Link>
+                        <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
+                            <Link href="/api/auth/signout" className="flex w-full h-full text-foreground/90">Log out</Link>
                         </DropdownMenuItem>
                     </div>
                 </DropdownMenuContent>
