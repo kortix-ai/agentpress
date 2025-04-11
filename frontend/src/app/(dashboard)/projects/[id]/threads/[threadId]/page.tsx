@@ -17,7 +17,7 @@ type ThreadParams = { id: string; threadId: string };
 interface ApiMessage {
   role: string;
   content: string;
-  type?: 'content' | 'tool_call';
+  type?: 'content' | 'tool_call' | string;
   name?: string;
   arguments?: string;
   tool_call?: {
@@ -29,6 +29,7 @@ interface ApiMessage {
     type: string;
     index: number;
   };
+  created_at?: string;
 }
 
 interface ApiAgentRun {
@@ -40,6 +41,82 @@ interface ApiAgentRun {
   responses: ApiMessage[];
   error: string | null;
 }
+
+// Helper function to determine tool icon
+const getToolIcon = (toolName: string | undefined) => {
+  if (!toolName) return <File className="h-4 w-4" />;
+  
+  const toolNameLower = toolName.toLowerCase();
+  
+  if (toolNameLower.includes('terminal') || toolNameLower.includes('execute_command')) {
+    return <Terminal className="h-4 w-4" />;
+  } else if (toolNameLower.includes('file') || toolNameLower.includes('read') || toolNameLower.includes('write') || toolNameLower.includes('create')) {
+    return <FileText className="h-4 w-4" />;
+  } else if (toolNameLower.includes('search') || toolNameLower.includes('grep')) {
+    return <Search className="h-4 w-4" />;
+  } else if (toolNameLower.includes('message') || toolNameLower.includes('ask')) {
+    return <MessageSquare className="h-4 w-4" />;
+  } else {
+    return <File className="h-4 w-4" />; // Default icon
+  }
+};
+
+// Helper function to get friendly description of what the tool is doing
+const getToolDescription = (toolName: string | undefined, args: string | undefined) => {
+  if (!toolName) return "";
+  
+  const toolNameLower = toolName.toLowerCase();
+  let argObj: Record<string, unknown> = {};
+  
+  // Try to parse arguments as JSON if available
+  if (args) {
+    try {
+      argObj = JSON.parse(args);
+    } catch {
+      // If not valid JSON, use as is
+    }
+  }
+  
+  // Extract specific information based on tool type
+  if (toolNameLower.includes('execute_command')) {
+    const command = typeof argObj === 'object' && argObj.command ? String(argObj.command).substring(0, 30) : '';
+    return command || 'execute_command';
+  } else if (toolNameLower.includes('read_file')) {
+    const path = typeof argObj === 'object' && argObj.path ? String(argObj.path) : '';
+    const filename = path.split('/').pop() || path;
+    return filename || 'read_file';
+  } else if (toolNameLower.includes('write') || toolNameLower.includes('create_file')) {
+    const path = typeof argObj === 'object' && argObj.file_path 
+      ? String(argObj.file_path) 
+      : (typeof argObj === 'object' && argObj.path ? String(argObj.path) : '');
+    const filename = path.split('/').pop() || path;
+    return filename || 'create_file';
+  } else if (toolNameLower.includes('delete_file')) {
+    const path = typeof argObj === 'object' && argObj.file_path ? String(argObj.file_path) : '';
+    const filename = path.split('/').pop() || path;
+    return filename || 'delete_file';
+  } else if (toolNameLower.includes('grep_search')) {
+    const query = typeof argObj === 'object' && argObj.query ? String(argObj.query) : '';
+    return query || 'grep_search';
+  } else if (toolNameLower.includes('file_search')) {
+    const query = typeof argObj === 'object' && argObj.query ? String(argObj.query) : '';
+    return query || 'file_search';
+  } else if (toolNameLower.includes('list_dir')) {
+    const path = typeof argObj === 'object' && argObj.relative_workspace_path ? String(argObj.relative_workspace_path) : '';
+    return path || 'list_dir';
+  } else if (toolNameLower.includes('str_replace')) {
+    const path = typeof argObj === 'object' && argObj.file_path ? String(argObj.file_path) : '';
+    const filename = path.split('/').pop() || path;
+    return filename || 'str_replace';
+  } else if (toolNameLower.includes('message_ask_user')) {
+    return 'message_ask_user';
+  } else if (toolNameLower.includes('idle')) {
+    return 'idle';
+  } else {
+    // Just return a cleaned up version of the tool name
+    return toolName.replace(/_/g, ' ');
+  }
+};
 
 export default function ThreadPage({ params }: { params: Promise<ThreadParams> }) {
   const unwrappedParams = React.use(params);
@@ -149,126 +226,45 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                   
                   // Attempt to load fresh messages
                   if (threadId) {
-                    console.log('[PAGE] 🚨 Force fetching messages after completion');
-                    // Fire and forget - we don't need to await this
+                    console.log('[PAGE] 🚨 Loading fresh messages after run completion');
                     getMessages(threadId)
                       .then(updatedMsgs => {
-                        console.log('[PAGE] 🚨 Forcefully updated messages after completion');
+                        console.log('[PAGE] 🚨 Updated messages after run completion');
                         setMessages(updatedMsgs);
                         setStreamContent('');
                       })
-                      .catch(err => console.error('[PAGE] Failed force message update:', err));
+                      .catch(err => console.error('[PAGE] Failed run completion message update:', err));
                   }
                 } catch (forceErr) {
-                  console.error('[PAGE] Error in forced completion handling:', forceErr);
-                }
-                
-                // Continue with normal status verification
-                if (runId) {
-                  try {
-                    // Force the verification request and log its execution
-                    console.log(`[PAGE] ⚠️ EXPLICITLY verifying agent run status with backend for runId: ${runId}`);
-                    let agentStatusResult;
-                    try {
-                      agentStatusResult = await getAgentStatus(runId);
-                      console.log(`[PAGE] ✅ Backend agent status API response:`, agentStatusResult);
-                    } catch (statusError) {
-                      console.error(`[PAGE] ❌ Failed to get agent status from API:`, statusError);
-                      throw statusError;
-                    }
-                    
-                    // Ensure the stream is cleaned up first
-                    if (streamCleanupRef.current) {
-                      console.log('[PAGE] Explicitly cleaning up stream due to completion status');
-                      streamCleanupRef.current();
-                      streamCleanupRef.current = null;
-                    }
-                    
-                    // Log and fetch messages
-                    console.log('[PAGE] Fetching final messages after completion');
-                    let updatedMessages;
-                    try {
-                      updatedMessages = await getMessages(threadId);
-                      console.log('[PAGE] ✅ Successfully fetched messages:', updatedMessages.length);
-                    } catch (messagesError) {
-                      console.error('[PAGE] ❌ Failed to fetch messages:', messagesError);
-                      throw messagesError;
-                    }
-                    
-                    // Update messages
-                    setMessages(updatedMessages);
-                    
-                    // Clear streaming content after a tiny delay for smooth transition
-                    setTimeout(() => {
-                      console.log('[PAGE] Clearing streaming content');
-                      setStreamContent('');
-                    }, 50);
-                    
-                    // Set agent run ID to null to prevent lingering state
-                    setAgentRunId(null);
-                    console.log('[PAGE] ✅ Completion fully handled!');
-                    
-                  } catch (err) {
-                    console.error('[PAGE] Error verifying agent status:', err);
-                    // If verification fails, still mark as completed to avoid hanging UI
-                    setAgentStatus('idle');
-                    setIsStreaming(false);
-                    setAgentRunId(null);
-                    
-                    // Clear streaming content
-                    setStreamContent('');
-                  }
-                } else {
-                  console.warn('[PAGE] Received completion status but no runId is available');
-                  // Still update UI to avoid hanging
-                  setAgentStatus('idle');
-                  setIsStreaming(false);
-                  setAgentRunId(null);
+                  console.error('[PAGE] Error in run completion handling:', forceErr);
                 }
                 
                 return;
               }
               
-              // Handle tool call chunks with data: prefix
-              if (jsonData?.type === 'content' && jsonData?.tool_call) {
-                console.log('[PAGE] Processing prefixed tool call chunk:', jsonData.tool_call);
+              // Handle tool status messages
+              if (jsonData?.type === 'tool_status') {
+                console.log('[PAGE] Received tool status message:', jsonData);
                 
-                const { id, function: toolFunction, type, index } = jsonData.tool_call;
+                if (jsonData?.status === 'completed' || jsonData?.status === 'failed' || jsonData?.status === 'error') {
+                  console.log('[PAGE] Tool completed/failed/error, resetting toolCallData');
+                  // Reset tool call data when a tool execution completes
+                  setToolCallData(null);
+                }
                 
-                // Update tool call data - accumulate arguments
-                setToolCallData(prev => ({
-                  id,
-                  name: toolFunction?.name,
-                  arguments: prev && prev.id === id ? 
-                    (prev.arguments || '') + (toolFunction?.arguments || '') : 
-                    toolFunction?.arguments,
-                  index
-                }));
-                
-                // Don't update streamContent directly for tool calls
                 return;
               }
               
-              // Handle regular content with data: prefix
-              if (jsonData?.type === 'content' && jsonData?.content) {
-                // Reset tool call data when switching to content
+              // Handle tool result messages
+              if (jsonData?.type === 'tool_result') {
+                console.log('[PAGE] Received tool output message, resetting toolCallData');
                 setToolCallData(null);
                 
-                // For regular content, just append to the existing content
-                setStreamContent(prev => prev + jsonData?.content);
-                console.log('[PAGE] Added content from prefixed data:', jsonData?.content.substring(0, 30) + '...');
-                return;
-              }
-              
-              // Handle tool calls with data: prefix
-              if (jsonData?.type === 'tool_call') {
-                const toolContent = jsonData.name 
-                  ? `Tool: ${jsonData.name}\n${jsonData.arguments || ''}`
-                  : jsonData.arguments || '';
-                
-                // Update UI with tool call content
-                setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
-                console.log('[PAGE] Added tool call content from prefixed data:', toolContent.substring(0, 30) + '...');
+                // For tool output, also append to stream content
+                if (jsonData?.content) {
+                  setStreamContent(prev => prev + jsonData?.content);
+                  console.log('[PAGE] Added tool output content:', jsonData?.content.substring(0, 30) + '...');
+                }
                 return;
               }
             } catch (e) {
@@ -332,6 +328,56 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               return;
             }
             
+            // Handle tool output messages - reset toolCallData when we receive a tool output
+            if (jsonData && 'role' in jsonData && jsonData.role === 'tool') {
+              console.log('[PAGE] Received standard tool output message, resetting toolCallData');
+              
+              // Parse file extension to determine language when receiving tool output
+              let language = 'plaintext';
+              let fileName = '';
+              
+              // Try to extract file info from content
+              if (jsonData?.content) {
+                // Try to detect a file path
+                const filePathMatch = jsonData.content.match(/Contents of file: (.+?)($|\n)/);
+                const fileCreatedMatch = jsonData.content.match(/(Created|Updated|Edited) file: (.+?)($|\n)/);
+                
+                if (filePathMatch && filePathMatch[1]) {
+                  fileName = filePathMatch[1].split('/').pop() || '';
+                } else if (fileCreatedMatch && fileCreatedMatch[2]) {
+                  fileName = fileCreatedMatch[2].split('/').pop() || '';
+                }
+                
+                // Determine language based on extension
+                if (fileName) {
+                  const ext = fileName.split('.').pop()?.toLowerCase();
+                  if (ext === 'js' || ext === 'jsx') language = 'javascript';
+                  else if (ext === 'ts' || ext === 'tsx') language = 'typescript';
+                  else if (ext === 'html' || ext === 'xml') language = 'html';
+                  else if (ext === 'css') language = 'css';
+                  else if (ext === 'md') language = 'markdown';
+                  else if (ext === 'json') language = 'json';
+                  else if (ext === 'py') language = 'python';
+                }
+              }
+              
+              // Set tool call data with the determined language before clearing it
+              // This ensures the language is properly tracked for the last tool output
+              setToolCallData(prev => prev ? { ...prev, language, fileName } : null);
+              
+              // Then clear the tool call data after a short delay
+              setTimeout(() => {
+                setToolCallData(null);
+              }, 500);
+              
+              // For tool output, also append to stream content
+              if (jsonData?.content) {
+                setStreamContent(prev => prev + jsonData?.content);
+                console.log('[PAGE] Added standard tool output content:', jsonData?.content.substring(0, 30) + '...');
+              }
+              return;
+            }
+            
             // Skip empty messages
             if (!jsonData?.content && !jsonData?.arguments && !jsonData?.tool_call) return;
             
@@ -339,7 +385,37 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
             if (jsonData?.type === 'content' && jsonData?.tool_call) {
               console.log('[PAGE] Processing tool call chunk:', jsonData.tool_call);
               
-              const { id, function: toolFunction, type, index } = jsonData.tool_call;
+              const { id, function: toolFunction } = jsonData.tool_call;
+              
+              // Detect file paths and language from tool call
+              let fileName = '';
+              let language = 'plaintext';
+              
+              try {
+                // Try to parse arguments as they come in
+                // Sometimes they may be incomplete, so we handle errors gracefully
+                const partialArgs = toolFunction.arguments;
+                
+                // Look for common file path patterns
+                const filePathMatch = partialArgs.match(/"(file_path|target_file|path)":\s*"([^"]+)"/);
+                if (filePathMatch && filePathMatch[2]) {
+                  fileName = filePathMatch[2].split('/').pop() || '';
+                  
+                  // Determine language based on file extension
+                  const ext = fileName.split('.').pop()?.toLowerCase();
+                  if (ext === 'js' || ext === 'jsx') language = 'javascript';
+                  else if (ext === 'ts' || ext === 'tsx') language = 'typescript';
+                  else if (ext === 'html' || ext === 'xml') language = 'html';
+                  else if (ext === 'css') language = 'css';
+                  else if (ext === 'md') language = 'markdown';
+                  else if (ext === 'json') language = 'json';
+                  else if (ext === 'py') language = 'python';
+                  else language = 'plaintext'; // Default fallback
+                }
+              } catch {
+                // Ignore parsing errors for partial data
+                console.debug('[PAGE] Error parsing partial tool arguments');
+              }
               
               // Update tool call data - accumulate arguments
               setToolCallData(prev => ({
@@ -348,24 +424,70 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                 arguments: prev && prev.id === id ? 
                   (prev.arguments || '') + (toolFunction?.arguments || '') : 
                   toolFunction?.arguments,
-                index
+                fileName,
+                language
               }));
               
-              // Don't update streamContent directly for tool calls
+              // Don't update streamContent directly for tool calls - they go to the secondary view
+              return;
+            } else if (jsonData?.type === 'tool_status') {
+              // Handle tool status messages
+              console.log('[PAGE] Received tool status message:', jsonData);
+              
+              if (jsonData?.status === 'completed' || jsonData?.status === 'failed' || jsonData?.status === 'error') {
+                console.log('[PAGE] Tool completed/failed/error, resetting toolCallData');
+                // Reset tool call data when a tool execution completes
+                setToolCallData(prev => prev ? {...prev, status: jsonData?.status} : null);
+                
+                // After a short delay, clear the tool call data
+                setTimeout(() => {
+                  setToolCallData(null);
+                }, 1000);
+              }
+              
               return;
             } else if (jsonData?.type === 'tool_call') {
-              const toolContent = jsonData.name 
-                ? `Tool: ${jsonData.name}\n${jsonData.arguments || ''}`
-                : jsonData.arguments || '';
+              // Create proper tool call object for secondary view
+              if (jsonData?.name && jsonData?.arguments) {
+                setToolCallData(prev => {
+                  // If it's an update to the current tool, update arguments
+                  if (prev && !prev.id) {
+                    return {
+                      ...prev,
+                      id: String(Date.now()), // Generate an ID if none exists
+                      name: jsonData?.name || prev.name,
+                      arguments: jsonData?.arguments || ''
+                    };
+                  }
+                  // Otherwise create a new tool call
+                  return {
+                    id: String(Date.now()),
+                    name: jsonData?.name || '',
+                    arguments: jsonData?.arguments || '',
+                    status: 'running'
+                  };
+                });
+              }
+              
+              // For the main view, format the tool call as a message
+              const toolContent = jsonData?.name 
+                ? `Tool: ${jsonData?.name}\n${jsonData?.arguments || ''}`
+                : jsonData?.arguments || '';
               
               // Update UI with tool call content
               setStreamContent(prev => prev + (prev ? '\n' : '') + toolContent);
-              console.log('[PAGE] Added tool call content:', toolContent.substring(0, 30) + '...');
+              console.log('[PAGE] Added tool call content from prefixed data:', toolContent.substring(0, 30) + '...');
             } else if (jsonData?.type === 'content' && jsonData?.content) {
-              // Reset tool call data when switching to content
-              setToolCallData(null);
+              // Only reset tool call data if we're receiving regular content and no tool is currently active
+              // This prevents explanation text from interrupting a streaming tool display
+              if (!toolCallData || toolCallData.status === 'completed') {
+                console.log('[PAGE] Resetting tool call data for regular content');
+                setToolCallData(null);
+              } else {
+                console.log('[PAGE] Keeping tool call data active while receiving content', toolCallData);
+              }
               
-              // For regular content, just append to the existing content
+              // For regular content, just append to the existing content in main view
               setStreamContent(prev => prev + jsonData?.content);
               console.log('[PAGE] Added content:', jsonData?.content.substring(0, 30) + '...');
             }
@@ -581,7 +703,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       scrollToBottom();
       
       // Send to the API and start agent in parallel
-      const [messageResult, agentResult] = await Promise.all([
+      const [, agentResult] = await Promise.all([
         addUserMessage(threadId, userMessage.content),
         startAgent(threadId)
       ]);
@@ -910,6 +1032,13 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                     ref={index === messages.length - 1 && message.role === 'assistant' ? latestMessageRef : null}
                     className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
+                    {/* Add timestamp above for user messages - only visible on hover */}
+                    {message.role === 'user' && message.created_at && (
+                      <div className="text-xs text-zinc-400 mb-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        {new Date(message.created_at).toLocaleString()}
+                      </div>
+                    )}
+                    
                     <div 
                       className={`max-w-[85%] rounded-lg px-4 py-3 text-sm ${
                         message.role === 'user' 
@@ -959,35 +1088,421 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                       <div className="whitespace-pre-wrap break-words">
                         {toolCallData ? (
                           <div className="font-mono text-xs">
-                            <div className="flex items-center gap-2 mb-1 text-muted-foreground">
-                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10">
-                                <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
+                            <div className="mt-1 p-3 bg-secondary/0 rounded-md overflow-hidden relative border border-zinc-100">
+                              {/* Metallic pulse overlay */}
+                              <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
+                                <div 
+                                  className="h-full w-40 absolute top-0 left-0" 
+                                  style={{ 
+                                    animation: 'toolPulse 3s linear infinite',
+                                    background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%)',
+                                    mixBlendMode: 'overlay',
+                                    zIndex: 20
+                                  }}
+                                />
                               </div>
-                              <span>Tool: {toolCallData.name}</span>
+                              
+                              {/* Tool execution status with clear indication of what's running */}
+                              <div className="flex items-center gap-3 text-sm">
+                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                
+                                <span className="text-zinc-700">
+                                  {(() => {
+                                    // Enhanced tool description display with parsing for all tool types
+                                    if (!toolCallData.arguments) return "Processing...";
+                                    
+                                    try {
+                                      const args = JSON.parse(toolCallData.arguments);
+                                      
+                                      // Create/write file operation
+                                      if (toolCallData.name?.toLowerCase().includes('create_file') || 
+                                          toolCallData.name?.toLowerCase().includes('write')) {
+                                        const filePath = args.file_path || args.path;
+                                        if (filePath) {
+                                          const fileName = filePath.split('/').pop();
+                                          return <>Creating file: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                        }
+                                      }
+                                      
+                                      // Read file operation
+                                      else if (toolCallData.name?.toLowerCase().includes('read_file')) {
+                                        const filePath = args.target_file || args.path;
+                                        if (filePath) {
+                                          const fileName = filePath.split('/').pop();
+                                          return <>Reading file: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                        }
+                                      }
+                                      
+                                      // Delete file operation
+                                      else if (toolCallData.name?.toLowerCase().includes('delete_file')) {
+                                        const filePath = args.target_file || args.file_path;
+                                        if (filePath) {
+                                          const fileName = filePath.split('/').pop();
+                                          return <>Deleting file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                        }
+                                      }
+                                      
+                                      // Edit file operation
+                                      else if (toolCallData.name?.toLowerCase().includes('edit_file')) {
+                                        const filePath = args.target_file;
+                                        if (filePath) {
+                                          const fileName = filePath.split('/').pop();
+                                          return <>Editing file: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                        }
+                                      }
+                                      
+                                      // Execute command
+                                      else if (toolCallData.name?.toLowerCase().includes('command') || 
+                                              toolCallData.name?.toLowerCase().includes('terminal')) {
+                                        const command = args.command;
+                                        if (command) {
+                                          return <>Running: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{command.substring(0, 40)}{command.length > 40 ? '...' : ''}</span></>;
+                                        }
+                                      }
+                                      
+                                      // Search operations
+                                      else if (toolCallData.name?.toLowerCase().includes('search') || 
+                                              toolCallData.name?.toLowerCase().includes('grep')) {
+                                        const query = args.query;
+                                        if (query) {
+                                          return <>Searching for: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{query.substring(0, 40)}{query.length > 40 ? '...' : ''}</span></>;
+                                        }
+                                      }
+                                      
+                                      // List directory
+                                      else if (toolCallData.name?.toLowerCase().includes('list_dir')) {
+                                        const path = args.relative_workspace_path;
+                                        if (path) {
+                                          return <>Listing directory <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{path}</span></>;
+                                        }
+                                      }
+                                    } catch {
+                                      // If JSON parsing fails, try regex approach for common patterns
+                                      if (toolCallData.arguments) {
+                                        const filePathMatch = toolCallData.arguments.match(/"(?:file_path|target_file|path)"\s*:\s*"([^"]+)"/);
+                                        if (filePathMatch && filePathMatch[1]) {
+                                          const filePath = filePathMatch[1];
+                                          const fileName = filePath.split('/').pop();
+                                          
+                                          if (toolCallData.name?.toLowerCase().includes('create') || 
+                                              toolCallData.name?.toLowerCase().includes('write')) {
+                                            return <>Creating file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                          } else if (toolCallData.name?.toLowerCase().includes('read')) {
+                                            return <>Reading file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                          } else if (toolCallData.name?.toLowerCase().includes('edit')) {
+                                            return <>Editing file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                          } else if (toolCallData.name?.toLowerCase().includes('delete')) {
+                                            return <>Deleting file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                          }
+                                          return <>Processing file <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{fileName}</span></>;
+                                        }
+                                        
+                                        const commandMatch = toolCallData.arguments.match(/"command"\s*:\s*"([^"]+)"/);
+                                        if (commandMatch && commandMatch[1]) {
+                                          const command = commandMatch[1];
+                                          return <>Running: <span className="text-zinc-500 font-mono pl-1.5" style={{fontFamily: 'monospace'}}>{command.substring(0, 40)}{command.length > 40 ? '...' : ''}</span></>;
+                                        }
+                                      }
+                                    }
+                                    
+                                    // Fallback to the original getToolDescription with formatted output
+                                    const desc = getToolDescription(toolCallData.name, toolCallData.arguments);
+                                    const parts = desc.split(':');
+                                    if (parts.length > 1) {
+                                      return <>{parts[0]}: <span className="text-zinc-500 font-mono pl-1" style={{fontFamily: 'monospace'}}>{parts.slice(1).join(':')}</span></>;
+                                    }
+                                    return desc;
+                                  })()}
+                                </span>
+                              </div>
                             </div>
-                            <div className="mt-1 p-3 bg-secondary/20 rounded-md overflow-x-auto">
-                              {toolCallData.arguments || ''}
-                            </div>
-                          </div>
-                        ) : (
-                          streamContent
-                        )}
-                        {isStreaming && (
-                          <span className="inline-flex items-center ml-0.5">
-                            <span 
-                              className="inline-block h-4 w-0.5 bg-foreground/50 mx-px"
-                              style={{ 
-                                opacity: 0.7,
-                                animation: 'cursorBlink 1s ease-in-out infinite',
-                              }}
-                            />
+                            
                             <style jsx global>{`
-                              @keyframes cursorBlink {
-                                0%, 100% { opacity: 1; }
-                                50% { opacity: 0; }
+                              @keyframes toolPulse {
+                                0% { transform: translateX(-100%); }
+                                100% { transform: translateX(400%); }
                               }
                             `}</style>
-                          </span>
+                          </div>
+                        ) : (
+                          <div 
+                            className={`whitespace-pre-wrap break-words ${
+                              message.role === 'user' ? 'cursor-pointer relative' : ''
+                            }`} 
+                            onClick={() => message.role === 'user' ? handleEditMessage(index) : null}
+                          >
+                            {message.type === 'tool_call' ? (
+                              <div className="font-mono text-xs">
+                                <div className="mt-0.5 p-2 bg-secondary/20 rounded-md overflow-hidden">
+                                  {/* Action line with icon */}
+                                  <div className="flex items-center gap-2 mb-1 pb-1 border-b border-gray-200/30 text-muted-foreground">
+                                    <div className="flex items-center justify-center">
+                                      {getToolIcon(message.name)}
+                                    </div>
+                                    <span>{getToolDescription(message.name, message.arguments)}</span>
+                                  </div>
+
+                                  {/* Arguments */}
+                                  <div className="overflow-x-auto">
+                                    {message.arguments}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : message.role === 'tool' ? (
+                              <div className="font-mono text-xs w-full relative group">
+                                {message.created_at && (
+                                  <div className="absolute -right-6 top-2 text-xs text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+                                    {new Date(message.created_at).toLocaleString()}
+                                  </div>
+                                )}
+                                <div className="inline-block max-w-full">
+                                  {(() => {
+                                    const toolNameLower = message.name?.toLowerCase() || '';
+                                    
+                                    // Try to parse tool output as JSON
+                                    let jsonOutput = null;
+                                    try {
+                                      jsonOutput = JSON.parse(message.content);
+                                    } catch {
+                                      // Not JSON, continue with regular formatting
+                                    }
+
+                                    // File creation/write result
+                                    if ((toolNameLower.includes('create_file') || toolNameLower.includes('write')) && message.content) {
+                                      const filePath = message.content.match(/Created file: (.*)/)?.[1] || 
+                                                      message.content.match(/Updated file: (.*)/)?.[1] ||
+                                                      message.content.match(/path: "(.*?)"/)?.[1];
+                                      const fileName = filePath?.split('/').pop();
+                                      
+                                      // Look for file content in the tool result
+                                      let fileContent = '';
+                                      if (jsonOutput?.output) {
+                                        fileContent = jsonOutput.output.includes('File created') ? 
+                                          message.content.split('\n').slice(1).join('\n') : jsonOutput.output;
+                                      }
+                                      
+                                      return (
+                                        <div 
+                                          className="mt-0 rounded-md overflow-hidden inline-block cursor-pointer hover:border-success/40 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center justify-between py-2 bg-success/10">
+                                            <div className="flex items-center gap-2">
+                                              <FileText className="h-4 w-4 text-success" />
+                                              <span className="font-normal text-success/90">File created successfully</span>
+                                            </div>
+                                            <span className="text-xs text-success/70 ml-3">{fileName}</span>
+                                          </div>
+                                          {fileContent && (
+                                            <div className="px-3 py-2 bg-white max-h-60 overflow-y-auto">
+                                              <pre className="text-xs text-slate-700">{fileContent}</pre>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    }
+                                    
+                                    // Read file result
+                                    else if (toolNameLower.includes('read_file') && message.content) {
+                                      const filePath = message.content.match(/Contents of file: (.*)/)?.[1] || 
+                                                    message.content.match(/path: "(.*?)"/)?.[1];
+                                      const fileName = filePath?.split('/').pop() || filePath;
+                                      
+                                      // Get file content - remove any "Contents of file:" prefix
+                                      const fileContent = message.content.includes('Contents of file:') ? 
+                                        message.content.split('\n').slice(1).join('\n') : message.content;
+                                      
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-blue-200 inline-block cursor-pointer hover:border-blue-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center justify-between px-2 py-1.5 bg-blue-50">
+                                            <div className="flex items-center gap-2">
+                                              <FileText className="h-4 w-4 text-blue-500" />
+                                              <span className="font-normal text-blue-600">File contents</span>
+                                            </div>
+                                            <span className="text-xs text-blue-500 ml-3">{fileName}</span>
+                                          </div>
+                                          <div className="px-3 py-2 bg-white max-h-60 overflow-y-auto">
+                                            <pre className="text-xs text-slate-700">{fileContent}</pre>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    
+                                    // Delete file result
+                                    else if (toolNameLower.includes('delete_file') && message.content) {
+                                      const filePath = message.content.match(/Deleted file: (.*)/)?.[1] || 
+                                                    message.content.match(/path: "(.*?)"/)?.[1];
+                                      const fileName = filePath?.split('/').pop() || filePath;
+                                      
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-orange-200 inline-block cursor-pointer hover:border-orange-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="px-2 py-1.5 bg-orange-50">
+                                            <div className="flex items-center gap-2">
+                                              <Trash2 className="h-4 w-4 text-orange-500" />
+                                              <span className="font-normal text-orange-600">File deleted: {fileName}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    
+                                    // Edit file result
+                                    else if (toolNameLower.includes('edit_file') && message.content) {
+                                      const filePath = message.content.match(/Edited file: (.*)/)?.[1] || 
+                                                    message.content.match(/path: "(.*?)"/)?.[1];
+                                      const fileName = filePath?.split('/').pop() || filePath;
+                                      
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-purple-200 inline-block cursor-pointer hover:border-purple-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center justify-between px-2 py-1.5 bg-purple-50">
+                                            <div className="flex items-center gap-2">
+                                              <Edit className="h-4 w-4 text-purple-500" />
+                                              <span className="font-normal text-purple-600">File edited successfully</span>
+                                            </div>
+                                            <span className="text-xs text-purple-500 ml-3">{fileName}</span>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    
+                                    // Terminal/command result
+                                    else if ((toolNameLower.includes('command') || toolNameLower.includes('terminal')) && message.content) {
+                                      const commandOutput = message.content;
+                                      
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-zinc-200 inline-block cursor-pointer hover:border-zinc-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center px-3 py-2 bg-zinc-50">
+                                            <div className="flex items-center gap-2">
+                                              <Terminal className="h-4 w-4 text-zinc-600" />
+                                              <span className="font-normal text-zinc-700">Command output</span>
+                                            </div>
+                                          </div>
+                                          <div className="p-2 bg-black max-h-80 overflow-y-auto">
+                                            <pre className="text-xs text-green-400">{commandOutput}</pre>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    
+                                    // Search results
+                                    else if ((toolNameLower.includes('search') || toolNameLower.includes('grep')) && message.content) {
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-amber-200 inline-block cursor-pointer hover:border-amber-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center px-2 py-1.5 bg-amber-50">
+                                            <div className="flex items-center gap-2">
+                                              <Search className="h-4 w-4 text-amber-600" />
+                                              <span className="font-normal text-amber-700">Search results</span>
+                                            </div>
+                                          </div>
+                                          <div className="p-2 bg-white max-h-60 overflow-y-auto">
+                                            <pre className="text-xs text-slate-700 whitespace-pre-wrap">{message.content}</pre>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    
+                                    // List directory results
+                                    else if (toolNameLower.includes('list_dir') && message.content) {
+                                      return (
+                                        <div 
+                                          className="mt-0.5 rounded-md overflow-hidden border border-teal-200 inline-block cursor-pointer hover:border-teal-300 transition-all relative"
+                                          onClick={() => handleToolClick(message)}
+                                        >
+                                          <div className="flex items-center px-2 py-1.5 bg-teal-50">
+                                            <div className="flex items-center gap-2">
+                                              <FolderOpen className="h-4 w-4 text-teal-600" />
+                                              <span className="font-normal text-teal-700">Directory contents</span>
+                                            </div>
+                                          </div>
+                                          <div className="p-2 bg-white max-h-60 overflow-y-auto">
+                                            <pre className="text-xs text-slate-700">{message.content}</pre>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                    
+                                    // Default tool result display
+                                    return (
+                                      <div 
+                                        className="mt-0.5 p-2 bg-success/5 rounded-md inline-block cursor-pointer hover:bg-success/10 transition-all relative"
+                                        onClick={() => handleToolClick(message)}
+                                      >
+                                        <pre className="whitespace-pre-wrap">{message.content}</pre>
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                {message.content}
+                                {/* Add reaction icons for assistant messages */}
+                                {message.role === 'assistant' && (
+                                  <div className={`flex justify-end mt-1 pt-0.5 gap-2 ${index === messages.length - 1 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Handle thumbs up
+                                        toast.success('Response rated as helpful');
+                                      }}
+                                      className="p-1 rounded-md hover:bg-zinc-100 transition-colors duration-200"
+                                      title="Helpful"
+                                    >
+                                      <ThumbsUp className="h-3.5 w-3.5 text-zinc-400 hover:text-zinc-600" />
+                                    </button>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Handle thumbs down
+                                        toast.info('Response rated as not helpful');
+                                      }}
+                                      className="p-1 rounded-md hover:bg-zinc-100 transition-colors duration-200"
+                                      title="Not helpful"
+                                    >
+                                      <ThumbsDown className="h-3.5 w-3.5 text-zinc-400 hover:text-zinc-600" />
+                                    </button>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Copy assistant message
+                                        copyToClipboard(message.content);
+                                      }}
+                                      className="p-1 rounded-md hover:bg-zinc-100 transition-colors duration-200"
+                                      title="Copy response"
+                                    >
+                                      <Copy className="h-3.5 w-3.5 text-zinc-400 hover:text-zinc-600" />
+                                    </button>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Handle share
+                                        toast.info('Sharing options coming soon');
+                                      }}
+                                      className="p-1 rounded-md hover:bg-zinc-100 transition-colors duration-200"
+                                      title="Share"
+                                    >
+                                      <Share className="h-3.5 w-3.5 text-zinc-400 hover:text-zinc-600" />
+                                    </button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1001,30 +1516,74 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
                       <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-150" />
                       <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-300" />
                     </div>
-                  </div>
-                )}
-                
-                <div ref={messagesEndRef} />
-              </div>
-            )}
-          </div>
-          
-          <div 
-            className="sticky bottom-6 flex justify-center"
-            style={{ 
-              opacity: buttonOpacity,
-              transition: 'opacity 0.3s ease-in-out',
-              visibility: showScrollButton ? 'visible' : 'hidden'
-            }}
-          >
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm hover:bg-background"
-              onClick={handleScrollButtonClick}
+                  )}
+                  
+                  {agentStatus === 'running' && !streamContent && (
+                    <div className="flex justify-start">
+                      <div className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 max-w-full">
+                        <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-150" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-foreground/50 animate-pulse delay-300" />
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+            
+            <div 
+              className="sticky bottom-6 flex justify-center"
+              style={{ 
+                opacity: buttonOpacity,
+                transition: 'opacity 0.3s ease-in-out',
+                visibility: showScrollButton ? 'visible' : 'hidden'
+              }}
             >
-              <ArrowDown className="h-4 w-4" />
-            </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm hover:bg-background z-[200]"
+                onClick={handleScrollButtonClick}
+              >
+                <ArrowDown className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="absolute inset-x-0 bottom-0 bg-background z-50">
+            <div className="mx-auto max-w-2xl px-4 mb-4">
+              {/* Connector component above chat input */}
+              <div className="flex items-center justify-center rounded-t-md border-t border-x border-zinc-200 mx-2 pt-3 pb-1 relative">
+                {/* Zinc rectangle button that extends above the connector */}
+                <div 
+                  className="absolute left-5 -top-17 h-20 w-36 bg-zinc-200 rounded-md border border-zinc-300 flex items-center justify-center cursor-pointer hover:bg-zinc-300 transition-colors"
+                  onClick={() => setIsSecondaryViewOpen(prev => !prev)}
+                >
+                  <PlusCircle className="h-6 w-6 text-zinc-600 mr-2" />
+                  <span className="text-sm text-zinc-600">{isSecondaryViewOpen ? 'Hide Panel' : 'Show Panel'}</span>
+                </div>
+                
+                <div className="flex space-x-2">
+                  <div className="h-1 w-8 rounded-full bg-zinc-200"></div>
+                  <div className="h-1 w-12 rounded-full bg-muted-foreground/30"></div>
+                  <div className="h-1 w-8 rounded-full bg-muted-foreground/20"></div>
+                </div>
+              </div>
+              
+              <ChatInput
+                value={newMessage}
+                onChange={setNewMessage}
+                onSubmit={handleSubmitMessage}
+                placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+                loading={isSending}
+                disabled={isSending}
+                isAgentRunning={agentStatus === 'running'}
+                onStopAgent={handleStopAgent}
+                autoFocus={!isLoading}
+              />
+            </div>
           </div>
         </div>
 
@@ -1053,7 +1612,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               />
             )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

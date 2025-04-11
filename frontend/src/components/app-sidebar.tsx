@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
 import { useParams, usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
+import dynamic from 'next/dynamic'
 
 import { NavUser } from "@/components/nav-user"
 import {
@@ -28,6 +29,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { CreateProjectDialog } from "@/components/create-project-dialog"
 import { useRouter } from "next/navigation"
 import { User } from "@supabase/supabase-js"
+
+// Import Spline dynamically with no SSR to avoid async issues in client component
+const Spline = dynamic(() => import('@splinetool/react-spline'), { 
+  ssr: false,
+  loading: () => <div className="h-8 w-28 bg-zinc-100 animate-pulse rounded" />
+})
 
 interface ApiProject {
   project_id: string;
@@ -512,19 +519,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             whileTap="tap"
             variants={sidebarLogoMotion}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mr-2.5 h-5 w-5 text-black transition-colors group-hover:text-zinc-800"
-            >
-              <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
-            </svg>
-            <span className="text-lg font-medium tracking-tight group-hover:text-zinc-800">AgentPress</span>
+            <div className="h-12 w-16 flex items-center justify-center">
+              <Spline
+                scene="https://prod.spline.design/UBkdpJsne-eB6mDZ/scene.splinecode"
+                style={{ transform: 'scale(0.5)', transformOrigin: 'left' }}
+              />
+            </div>
           </motion.div>
         </Link>
       </SidebarHeader>
