@@ -1,44 +1,64 @@
-import { Input } from "@/components/ui/input"
-import { SubmitButton } from "../ui/submit-button"
+"use client"
+
+import { useFormState } from "react-dom";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { createTeam } from "@/lib/actions/teams";
-import { Label } from "../ui/label";
+import { SubmitButton } from "@/components/ui/submit-button";
+
+const initialState = {
+    message: "",
+};
 
 export default function NewTeamForm() {
-
+    const [state, formAction] = useFormState(createTeam, initialState);
 
     return (
-        <form className="animate-in flex-1 flex flex-col w-full justify-center gap-y-6 text-foreground">
-            <div className="flex flex-col gap-y-2">
-                <Label htmlFor="email">
+        <form className="space-y-4">
+            <div className="space-y-2">
+                <Label htmlFor="name" className="text-sm font-medium text-foreground/90">
                     Team Name
                 </Label>
                 <Input
+                    id="name"
                     name="name"
-                    placeholder="My Team"
+                    placeholder="Enter team name"
+                    className="h-10 rounded-lg border-subtle dark:border-white/10 bg-white dark:bg-background-secondary"
                     required
                 />
             </div>
-            <div className="flex flex-col gap-y-2">
-                <Label htmlFor="password">
-                    Identifier
+            
+            <div className="space-y-2">
+                <Label htmlFor="slug" className="text-sm font-medium text-foreground/90">
+                    Team URL
                 </Label>
                 <div className="flex items-center gap-x-2">
-                    <span className="text-sm text-muted-foreground whitespace-nowrap grow">
-                        https://your-app.com/
+                    <span className="text-sm text-foreground/60 whitespace-nowrap">
+                        your-app.com/
                     </span>
                     <Input
+                        id="slug"
                         name="slug"
                         placeholder="my-team"
+                        className="h-10 rounded-lg border-subtle dark:border-white/10 bg-white dark:bg-background-secondary"
                         required
                     />
                 </div>
             </div>
+            
+            {state?.message && (
+                <div className="text-sm text-red-500 bg-red-50 dark:bg-red-950/20 p-2 rounded-lg border border-red-100 dark:border-red-900/20">
+                    {state.message}
+                </div>
+            )}
+            
             <SubmitButton
-                formAction={createTeam}
-                pendingText="Creating..."
+                formAction={formAction}
+                pendingText="Creating team..."
+                className="w-full rounded-lg bg-primary hover:bg-primary/90 text-white"
             >
-                Create team
+                Create Team
             </SubmitButton>
         </form>
-    )
+    );
 }

@@ -1,76 +1,149 @@
 @tailwind base;
-  @tailwind components;
-  @tailwind utilities;
+@tailwind components;
+@tailwind utilities;
 
-  @layer base {
-    :root {
-      --background: 0 0% 100%;
-      --foreground: 222.2 84% 4.9%;
+@layer base {
+  :root {
+    /* Base theme colors */
+    --background: 60 30% 96%;  /* Updated to match #faf9f5 */
+    --foreground: 60 2% 23%;   /* Updated to match #3c3c3a */
 
-      --card: 0 0% 100%;
-      --card-foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
 
-      --popover: 0 0% 100%;
-      --popover-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
 
-      --primary: 222.2 47.4% 11.2%;
-      --primary-foreground: 210 40% 98%;
+    --primary: 222 82% 53%;    /* Updated to match #2562eb */
+    --primary-foreground: 210 40% 98%;
 
-      --secondary: 210 40% 96.1%;
-      --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
 
-      --muted: 210 40% 96.1%;
-      --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-      --accent: 210 40% 96.1%;
-      --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
 
-      --destructive: 0 84.2% 60.2%;
-      --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
-      --border: 214.3 31.8% 91.4%;
-      --input: 214.3 31.8% 91.4%;
-      --ring: 222.2 84% 4.9%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
 
-      --radius: 0.5rem;
-    }
-
-    .dark {
-      --background: 222.2 84% 4.9%;
-      --foreground: 210 40% 98%;
-
-      --card: 222.2 84% 4.9%;
-      --card-foreground: 210 40% 98%;
-
-      --popover: 222.2 84% 4.9%;
-      --popover-foreground: 210 40% 98%;
-
-      --primary: 210 40% 98%;
-      --primary-foreground: 222.2 47.4% 11.2%;
-
-      --secondary: 217.2 32.6% 17.5%;
-      --secondary-foreground: 210 40% 98%;
-
-      --muted: 217.2 32.6% 17.5%;
-      --muted-foreground: 215 20.2% 65.1%;
-
-      --accent: 217.2 32.6% 17.5%;
-      --accent-foreground: 210 40% 98%;
-
-      --destructive: 0 62.8% 30.6%;
-      --destructive-foreground: 210 40% 98%;
-
-      --border: 217.2 32.6% 17.5%;
-      --input: 217.2 32.6% 17.5%;
-      --ring: 212.7 26.8% 83.9%;
-    }
+    --radius: 0.5rem;
+    
+    /* Custom UI Colors */
+    --background-secondary: #f5f5ec;
+    --white: #fefffe;
+    --foreground-custom: #3c3c3a;
+    --primary-custom: #2562eb;
+    --border-color: #e9ebee;
+    --card-bg: #fefffe;
+    --card-title: #3c3c3a;
+    
+    /* UI Element Colors */
+    --hover-bg: rgba(241,238,231,255);
+    --hover-bg-dark: #141413;
+    --icon-color: rgba(60, 60, 58, 0.7);
+    --icon-color-dark: rgba(240, 240, 240, 0.6);
+    --button-hover: rgba(37, 98, 235, 0.1);
+    --button-hover-dark: rgba(37, 98, 235, 0.2);
+    
+    /* Shadow Colors */
+    --shadow-color: rgba(0, 0, 0, 0.05);
+    --shadow-color-dark: rgba(0, 0, 0, 0.2);
+    
+    /* Gradient Colors */
+    --gradient-start: #faf9f5;
+    --gradient-end: rgba(250, 249, 245, 0);
   }
 
-  @layer base {
-    * {
-      @apply border-border;
-    }
-    body {
-      @apply bg-background text-foreground;
-    }
+  .dark {
+    /* Base theme colors */
+    --background: 60 5% 15%;     /* Updated to match #272724 */
+    --foreground: 0 0% 94%;      /* Updated to match #f0f0f0 */
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 222 82% 53%;    /* Updated to match #2562eb */
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    
+    /* Custom UI Colors */
+    --background-secondary: #1e1e1c;
+    --white: #fefffe;
+    --foreground-custom: #f0f0f0;
+    --primary-custom: #2562eb;
+    --border-color: #2a2a2a;
+    --card-bg: #30302e;
+    --card-title: #c3c1b6;
+    
+    /* UI Element Colors */
+    --hover-bg: #141413;
+    --hover-bg-dark: #141413;
+    --icon-color: rgba(240, 240, 240, 0.6);
+    --icon-color-dark: rgba(240, 240, 240, 0.4);
+    --button-hover: rgba(37, 98, 235, 0.2);
+    --button-hover-dark: rgba(37, 98, 235, 0.3);
+    
+    /* Shadow Colors */
+    --shadow-color: rgba(0, 0, 0, 0.2);
+    --shadow-color-dark: rgba(0, 0, 0, 0.3);
+    
+    /* Gradient Colors */
+    --gradient-start: #272724;
+    --gradient-end: rgba(39, 39, 36, 0);
   }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .bg-hover {
+    background-color: var(--hover-bg);
+  }
+  .dark .bg-hover {
+    background-color: var(--hover-bg-dark);
+  }
+  .text-icon {
+    color: var(--icon-color);
+  }
+  .dark .text-icon {
+    color: var(--icon-color-dark);
+  }
+  .shadow-custom {
+    box-shadow: 0 2px 10px 0 var(--shadow-color);
+  }
+  .dark .shadow-custom {
+    box-shadow: 0 2px 10px 0 var(--shadow-color-dark);
+  }
+}

@@ -6,7 +6,6 @@ export default async function Index() {
     <div className="w-full flex flex-col items-center">
       <span>Landing Page Goes Here</span>
         <Link href="/dashboard">Dashboard</Link>
-     
     </div>
   )
 }

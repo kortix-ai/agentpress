@@ -56,11 +56,29 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        'background-secondary': "var(--background-secondary)",
+        'card-bg': "var(--card-bg)",
+        'card-title': "var(--card-title)",
+        'border-subtle': "var(--border-color)",
+        'hover-bg': "var(--hover-bg)",
+        'hover-bg-dark': "var(--hover-bg-dark)",
+        'icon-color': "var(--icon-color)",
+        'icon-color-dark': "var(--icon-color-dark)",
+        'button-hover': "var(--button-hover)",
+        'button-hover-dark': "var(--button-hover-dark)",
+      },
+      boxShadow: {
+        'custom': '0 2px 10px 0 var(--shadow-color)',
+        'custom-dark': '0 2px 10px 0 var(--shadow-color-dark)',
+      },
+      backgroundImage: {
+        'gradient-overlay': 'linear-gradient(to top, var(--gradient-start) 0%, var(--gradient-end) 100%)',
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        '2xl': '1rem',
       },
       keyframes: {
         "accordion-down": {

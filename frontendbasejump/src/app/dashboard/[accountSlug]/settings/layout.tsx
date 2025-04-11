@@ -9,14 +9,16 @@ export default function TeamSettingsPage({children, params: {accountSlug}}: {chi
         { name: "Billing", href: `/dashboard/${accountSlug}/settings/billing` },
     ]
     return (
-        <div className="hidden space-y-6 pb-16 md:block">
+        <div className="space-y-6 w-full">
             <DashboardTitle title="Settings" description="Manage your team account settings." />
-            <Separator />
-            <div className="flex flex-col space-y-8 lg:flex-row lg:space-x-12 lg:space-y-0 w-full max-w-6xl mx-auto">
-                <aside className="-mx-4 lg:w-1/5">
+            <Separator className="border-subtle dark:border-white/10" />
+            <div className="flex flex-col space-y-8 lg:flex-row lg:space-x-12 lg:space-y-0 w-full max-w-6xl mx-auto px-4">
+                <aside className="lg:w-1/4 p-1">
                     <SettingsNavigation items={items} />
                 </aside>
-                <div className="grow">{children}</div>
+                <div className="flex-1 bg-card-bg dark:bg-background-secondary p-6 rounded-2xl border border-subtle dark:border-white/10 shadow-custom">
+                    {children}
+                </div>
             </div>
         </div>
     )

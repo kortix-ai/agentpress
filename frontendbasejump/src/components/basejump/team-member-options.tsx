@@ -1,14 +1,12 @@
 'use client'
 
-import { Ellipsis } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu";
+import { MoreHorizontal } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
 import { GetAccountMembersResponse } from "@usebasejump/shared";
 import { useEffect, useState } from "react";
-import { DialogHeader, Dialog, DialogContent, DialogTitle, DialogDescription, DialogTrigger, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
+import { DialogHeader, Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import EditTeamMemberRoleForm from "./edit-team-member-role-form";
-import { SubmitButton } from "../ui/submit-button";
-import { removeTeamMember as removeTeamMemberAction } from "@/lib/actions/members";
 import DeleteTeamMemberForm from "./delete-team-member-form";
 
 type Props = {
@@ -26,32 +24,53 @@ export default function TeamMemberOptions({ teamMember, accountId, isPrimaryOwne
             toggleUpdateTeamRole(false);
         }
     }, [teamMember.account_role])
+    
     return (
         <>
             <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button variant="ghost"><Ellipsis className="w-4 h-4" /></Button></DropdownMenuTrigger>
-                <DropdownMenuContent>
-                    <DropdownMenuItem onSelect={() => toggleUpdateTeamRole(true)}>Change role</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => toggleRemoveTeamMember(true)} className="text-red-600">Remove member</DropdownMenuItem>
+                <DropdownMenuTrigger asChild>
+                    <Button 
+                        variant="ghost" 
+                        className="h-8 w-8 p-0 rounded-full hover:bg-hover-bg dark:hover:bg-hover-bg-dark"
+                    >
+                        <MoreHorizontal className="h-4 w-4 text-foreground/70" />
+                        <span className="sr-only">Open menu</span>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="min-w-[160px] border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-xl shadow-custom">
+                    <DropdownMenuItem 
+                        onSelect={() => toggleUpdateTeamRole(true)}
+                        className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer text-foreground/90"
+                    >
+                        Change role
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                        onSelect={() => toggleRemoveTeamMember(true)} 
+                        className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer text-red-500 dark:text-red-400"
+                    >
+                        Remove member
+                    </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
+            
             <Dialog open={updateTeamRole} onOpenChange={toggleUpdateTeamRole}>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-[425px] border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-2xl shadow-custom">
                     <DialogHeader>
-                        <DialogTitle>Update team member role</DialogTitle>
-                        <DialogDescription>
+                        <DialogTitle className="text-card-title">Update team member role</DialogTitle>
+                        <DialogDescription className="text-foreground/70">
                             Update a member's role in your team
                         </DialogDescription>
                     </DialogHeader>
                     <EditTeamMemberRoleForm teamMember={teamMember} accountId={accountId} isPrimaryOwner={isPrimaryOwner} />
                 </DialogContent>
             </Dialog>
+            
             <Dialog open={removeTeamMember} onOpenChange={toggleRemoveTeamMember}>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-[425px] border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-2xl shadow-custom">
                     <DialogHeader>
-                        <DialogTitle>Remove team member</DialogTitle>
-                        <DialogDescription>
-                            Remove this user from the team
+                        <DialogTitle className="text-card-title">Remove team member</DialogTitle>
+                        <DialogDescription className="text-foreground/70">
+                            Are you sure you want to remove this user from the team?
                         </DialogDescription>
                     </DialogHeader>
                     <DeleteTeamMemberForm teamMember={teamMember} accountId={accountId} />

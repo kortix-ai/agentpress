@@ -25,22 +25,42 @@ export default function DeleteTeamInvitationButton({invitationId}: Props) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost"><Trash className="text-red-600 w-4 h-4" /></Button>
+        <Button 
+          variant="ghost" 
+          className="h-8 w-8 p-0 rounded-full hover:bg-hover-bg dark:hover:bg-hover-bg-dark"
+        >
+          <Trash className="text-red-500 dark:text-red-400 w-4 h-4" />
+          <span className="sr-only">Delete invitation</span>
+        </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-2xl shadow-custom">
         <DialogHeader>
-          <DialogTitle>Cancel pending invitation</DialogTitle>
-          <DialogDescription>
-            Are you sure? This cannot be undone
+          <DialogTitle className="text-card-title">Delete Invitation</DialogTitle>
+          <DialogDescription className="text-foreground/70">
+            Are you sure you want to delete this invitation? This cannot be undone.
           </DialogDescription>
         </DialogHeader>
-        <form>
-            <input type="hidden" name="invitationId" value={invitationId} />
-            <input type="hidden" name="returnPath" value={returnPath} />
-            <SubmitButton variant="destructive" formAction={deleteInvitation} pendingText="Cancelling...">
-                Cancel invitation
-            </SubmitButton>
-        </form>
+        <div className="flex gap-2 justify-end mt-4">
+          <Button 
+            variant="outline" 
+            onClick={() => setOpen(false)}
+            className="rounded-lg h-9 border-subtle dark:border-white/10 hover:bg-hover-bg dark:hover:bg-hover-bg-dark"
+          >
+            Cancel
+          </Button>
+          <form>
+              <input type="hidden" name="invitationId" value={invitationId} />
+              <input type="hidden" name="returnPath" value={returnPath} />
+              <SubmitButton 
+                variant="destructive" 
+                formAction={deleteInvitation} 
+                pendingText="Deleting..."
+                className="rounded-lg h-9 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
+              >
+                  Delete
+              </SubmitButton>
+          </form>
+        </div>
       </DialogContent>
     </Dialog>
   )

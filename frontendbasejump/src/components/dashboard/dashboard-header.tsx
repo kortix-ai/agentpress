@@ -1,9 +1,10 @@
 import Link from "next/link";
 import UserAccountButton from "@/components/basejump/user-account-button";
 import BasejumpLogo from "@/components/getting-started/basejump-logo";
-import NavigatingAccountSelector from "@/components/dashboard/navigation-account-selector";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "../ui/sheet";
 import { Menu } from "lucide-react";
+import AccountSelector from "@/components/basejump/account-selector";
+import { useRouter } from "next/navigation";
 
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
     }[]
 }
 export default function DashboardHeader({ accountId, navigation = [] }: Props) {
+    const router = useRouter();
 
     return (
         <nav className="w-full p-4 flex justify-between items-center border-b">
@@ -21,7 +23,10 @@ export default function DashboardHeader({ accountId, navigation = [] }: Props) {
                 <div className="flex items-center gap-x-4">
                     <Link href="/"><BasejumpLogo logoOnly /></Link>
                     <span className="border-l rotate-12 h-6" />
-                    <NavigatingAccountSelector accountId={accountId} />
+                    <AccountSelector
+                        accountId={accountId}
+                        onAccountSelected={(account) => router.push(account?.personal_account ? `/dashboard` : `/dashboard/${account?.slug}`)}
+                    />
                 </div>
                 {navigation.map((navItem) => (
                     <Link key={navItem.name} href={navItem.href} className="text-sm font-medium transition-colors hover:text-primary">
@@ -37,7 +42,10 @@ export default function DashboardHeader({ accountId, navigation = [] }: Props) {
                     </div>
 
                     <div className="pt-12 -mx-4 text-center flex flex-col gap-y-4 items-center">
-                        <NavigatingAccountSelector accountId={accountId} />
+                        <AccountSelector
+                            accountId={accountId}
+                            onAccountSelected={(account) => router.push(account?.personal_account ? `/dashboard` : `/dashboard/${account?.slug}`)}
+                        />
 
                         <div className="flex flex-col items-start gap-y-2 w-full">
                         {navigation.map((navItem) => (
