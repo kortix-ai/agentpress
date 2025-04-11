@@ -813,14 +813,6 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     setFileViewerOpen(true);
   };
 
-  // Handle file selection from the file viewer
-  const handleSelectFile = (path: string, content: string) => {
-    // Insert file path and first few lines as a message
-    const previewContent = content.split('\n').slice(0, 5).join('\n');
-    const fileMessage = `File: ${path}\n\n\`\`\`\n${previewContent}${content.split('\n').length > 5 ? '\n...' : ''}\n\`\`\``;
-    setNewMessage(fileMessage);
-  };
-
   // Only show a full-screen loader on the very first load
   if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {
     return (
@@ -1052,26 +1044,12 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               sandboxId={sandboxId || undefined}
             />
             
-            {sandboxId && (
-              <div className="mt-2 flex justify-end">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleOpenFileViewer}
-                >
-                  <File className="h-4 w-4 mr-2" />
-                  Workspace Files
-                </Button>
-              </div>
-            )}
-            
             {/* File Viewer Modal */}
             {sandboxId && (
               <FileViewerModal
                 open={fileViewerOpen}
                 onOpenChange={setFileViewerOpen}
                 sandboxId={sandboxId}
-                onSelectFile={handleSelectFile}
               />
             )}
           </div>

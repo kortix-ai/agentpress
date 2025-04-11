@@ -706,6 +706,11 @@ export const createSandboxFile = async (sandboxId: string, filePath: string, con
       throw new Error('No access token available');
     }
 
+    // Determine if content is likely binary (contains non-printable characters)
+    const isProbablyBinary = /[\x00-\x08\x0E-\x1F\x80-\xFF]/.test(content) ||
+                            content.startsWith('data:') || 
+                            /^[A-Za-z0-9+/]*={0,2}$/.test(content);
+    
     const response = await fetch(`${API_URL}/sandboxes/${sandboxId}/files`, {
       method: 'POST',
       headers: {
@@ -715,6 +720,7 @@ export const createSandboxFile = async (sandboxId: string, filePath: string, con
       body: JSON.stringify({
         path: filePath,
         content: content,
+        is_base64: isProbablyBinary
       }),
     });
     

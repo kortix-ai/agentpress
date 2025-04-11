@@ -299,14 +299,14 @@ async def get_or_start_sandbox(sandbox_id: str):
                 logger.info("Browser API is not running. Starting it...")
                 start_sandbox_browser_api(sandbox)
                 wait_for_api_ready(sandbox)
+                start_http_server(sandbox)
                 
         except requests.exceptions.RequestException:
             logger.info("Browser API is not accessible. Starting it...")
             start_sandbox_browser_api(sandbox)
             wait_for_api_ready(sandbox)
+            start_http_server(sandbox)
             
-        # Ensure HTTP server is running
-        start_http_server(sandbox)
             
         logger.info(f"Sandbox {sandbox_id} is ready")
         return sandbox

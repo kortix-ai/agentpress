@@ -1,8 +1,8 @@
 import os
-from typing import List, Optional, Union, BinaryIO
+from typing import List, Optional
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Form
+from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
 
 from utils.logger import logger
@@ -19,31 +19,56 @@ class FileInfo(BaseModel):
     mod_time: str
     permissions: Optional[str] = None
 
-class FileContentRequest(BaseModel):
-    """Request model for file content operations"""
-    path: str
-    content: str
-
 # Create a router for the Sandbox API
 router = APIRouter(tags=["sandbox"])
 
 @router.post("/sandboxes/{sandbox_id}/files")
-async def create_file(sandbox_id: str, file_request: FileContentRequest):
-    """Create a file in the sandbox"""
+async def create_file(
+    sandbox_id: str, 
+    path: str = Form(...),
+    file: UploadFile = File(...)
+):
+    """Create a file in the sandbox using direct file upload"""
     try:
-        # Get or start sandbox instance using the async function
+        # Get or start sandbox instance
         sandbox = await get_or_start_sandbox(sandbox_id)
         
-        # Prepare content
-        content = file_request.content
+        # Read file content directly from the uploaded file
+        content = await file.read()
+        
+        # Create file using raw binary content
+        sandbox.fs.upload_file(path, content)
+        logger.info(f"File created at {path} in sandbox {sandbox_id}")
+        
+        return {"status": "success", "created": True, "path": path}
+    except Exception as e:
+        logger.error(f"Error creating file in sandbox {sandbox_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# For backward compatibility, keep the JSON version too
+@router.post("/sandboxes/{sandbox_id}/files/json")
+async def create_file_json(sandbox_id: str, file_request: dict):
+    """Create a file in the sandbox using JSON (legacy support)"""
+    try:
+        # Get or start sandbox instance
+        sandbox = await get_or_start_sandbox(sandbox_id)
+        
+        # Get file path and content
+        path = file_request.get("path")
+        content = file_request.get("content", "")
+        
+        if not path:
+            raise HTTPException(status_code=400, detail="File path is required")
+        
+        # Convert string content to bytes
         if isinstance(content, str):
             content = content.encode('utf-8')
         
         # Create file
-        sandbox.fs.upload_file(file_request.path, content)
-        logger.info(f"File created at {file_request.path} in sandbox {sandbox_id}")
+        sandbox.fs.upload_file(path, content)
+        logger.info(f"File created at {path} in sandbox {sandbox_id}")
         
-        return {"status": "success", "created": True}
+        return {"status": "success", "created": True, "path": path}
     except Exception as e:
         logger.error(f"Error creating file in sandbox {sandbox_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -86,8 +111,7 @@ async def read_file(sandbox_id: str, path: str):
         # Read file
         content = sandbox.fs.download_file(path)
         
-        # Instead of using FileResponse with content parameter (which doesn't exist),
-        # return a Response object with the content directly
+        # Return a Response object with the content directly
         filename = os.path.basename(path)
         return Response(
             content=content,
