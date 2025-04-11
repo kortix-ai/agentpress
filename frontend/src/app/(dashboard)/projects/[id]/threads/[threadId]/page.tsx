@@ -4,11 +4,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
-import { ArrowDown } from 'lucide-react';
-import { addUserMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns } from '@/lib/api';
+import { ArrowDown, File } from 'lucide-react';
+import { addUserMessage, getMessages, startAgent, stopAgent, getAgentStatus, streamAgent, getAgentRuns, getProject } from '@/lib/api';
 import { toast } from 'sonner';
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChatInput } from '@/components/chat-input';
+import { FileViewerModal } from '@/components/file-viewer-modal';
 
 // Define a type for the params to make React.use() work properly
 type ThreadParams = { id: string; threadId: string };
@@ -70,6 +71,8 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const [buttonOpacity, setButtonOpacity] = useState(0);
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const hasInitiallyScrolled = useRef<boolean>(false);
+  const [sandboxId, setSandboxId] = useState<string | null>(null);
+  const [fileViewerOpen, setFileViewerOpen] = useState(false);
 
   const handleStreamAgent = useCallback(async (runId: string) => {
     // Clean up any existing stream
@@ -470,54 +473,60 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
           throw new Error('Invalid project or thread ID');
         }
         
-        // Load messages only if not already loaded
-        if (!messagesLoadedRef.current) {
-          const messagesData = await getMessages(threadId) as unknown as ApiMessage[];
-          if (isMounted) {
-            setMessages(messagesData);
-            messagesLoadedRef.current = true;
-            
-            // Only scroll to bottom on initial page load
-            if (!hasInitiallyScrolled.current) {
-              scrollToBottom('auto');
-              hasInitiallyScrolled.current = true;
-            }
-          }
-        }
-
-        // Check for active agent runs only once per thread
-        if (!agentRunsCheckedRef.current) {
-          try {
-            // Get agent runs for this thread using the proper API function
-            const agentRuns = await getAgentRuns(threadId) as unknown as ApiAgentRun[];
-            agentRunsCheckedRef.current = true;
-            
-            // Look for running agent runs
-            const activeRuns = agentRuns.filter(run => run.status === 'running');
-            if (activeRuns.length > 0 && isMounted) {
-              // Sort by start time to get the most recent
-              activeRuns.sort((a, b) => 
-                new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
-              );
+        // Fetch project details to get sandbox_id
+        const projectData = await getProject(projectId);
+        if (isMounted && projectData && projectData.sandbox_id) {
+          setSandboxId(projectData.sandbox_id);
+          
+          // Load messages only if not already loaded
+          if (!messagesLoadedRef.current) {
+            const messagesData = await getMessages(threadId) as unknown as ApiMessage[];
+            if (isMounted) {
+              setMessages(messagesData);
+              messagesLoadedRef.current = true;
               
-              // Set the current agent run
-              const latestRun = activeRuns[0];
-              if (latestRun) {
-                setAgentRunId(latestRun.id);
-                setAgentStatus('running');
-                
-                // Start streaming only on initial page load
-                console.log('Starting stream for active run on initial page load');
-                handleStreamAgent(latestRun.id);
+              // Only scroll to bottom on initial page load
+              if (!hasInitiallyScrolled.current) {
+                scrollToBottom('auto');
+                hasInitiallyScrolled.current = true;
               }
             }
-          } catch (err) {
-            console.error('Error checking for active runs:', err);
           }
+
+          // Check for active agent runs only once per thread
+          if (!agentRunsCheckedRef.current) {
+            try {
+              // Get agent runs for this thread using the proper API function
+              const agentRuns = await getAgentRuns(threadId) as unknown as ApiAgentRun[];
+              agentRunsCheckedRef.current = true;
+              
+              // Look for running agent runs
+              const activeRuns = agentRuns.filter(run => run.status === 'running');
+              if (activeRuns.length > 0 && isMounted) {
+                // Sort by start time to get the most recent
+                activeRuns.sort((a, b) => 
+                  new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
+                );
+                
+                // Set the current agent run
+                const latestRun = activeRuns[0];
+                if (latestRun) {
+                  setAgentRunId(latestRun.id);
+                  setAgentStatus('running');
+                  
+                  // Start streaming only on initial page load
+                  console.log('Starting stream for active run on initial page load');
+                  handleStreamAgent(latestRun.id);
+                }
+              }
+            } catch (err) {
+              console.error('Error checking for active runs:', err);
+            }
+          }
+          
+          // Mark that we've completed the initial load
+          initialLoadCompleted.current = true;
         }
-        
-        // Mark that we've completed the initial load
-        initialLoadCompleted.current = true;
       } catch (err) {
         console.error('Error loading thread data:', err);
         if (isMounted) {
@@ -799,6 +808,19 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     }
   }, [isStreaming, agentRunId, agentStatus]);
 
+  // Open the file viewer modal
+  const handleOpenFileViewer = () => {
+    setFileViewerOpen(true);
+  };
+
+  // Handle file selection from the file viewer
+  const handleSelectFile = (path: string, content: string) => {
+    // Insert file path and first few lines as a message
+    const previewContent = content.split('\n').slice(0, 5).join('\n');
+    const fileMessage = `File: ${path}\n\n\`\`\`\n${previewContent}${content.split('\n').length > 5 ? '\n...' : ''}\n\`\`\``;
+    setNewMessage(fileMessage);
+  };
+
   // Only show a full-screen loader on the very first load
   if (isAuthLoading || (isLoading && !initialLoadCompleted.current)) {
     return (
@@ -874,18 +896,6 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
-      {/* <div className="flex items-center justify-between border-b px-6 py-4">
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold">{projectName}</h1>
-          <div className="text-muted-foreground">•</div>
-          <div className="text-sm text-muted-foreground">Thread {thread?.thread_id ? thread.thread_id.slice(0, 8) : '...'}</div>
-        </div>
-        <div className="flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-xs">
-          <div className={`h-1.5 w-1.5 rounded-full ${isStreaming ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-          <span className="font-medium">{isStreaming ? 'Live' : 'Offline'}</span>
-        </div>
-      </div> */}
-
       <div className="relative flex-1 flex flex-col">
         <div 
           ref={messagesContainerRef}
@@ -1038,7 +1048,32 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
               isAgentRunning={agentStatus === 'running'}
               onStopAgent={handleStopAgent}
               autoFocus={!isLoading}
+              onFileBrowse={handleOpenFileViewer}
+              sandboxId={sandboxId || undefined}
             />
+            
+            {sandboxId && (
+              <div className="mt-2 flex justify-end">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleOpenFileViewer}
+                >
+                  <File className="h-4 w-4 mr-2" />
+                  Workspace Files
+                </Button>
+              </div>
+            )}
+            
+            {/* File Viewer Modal */}
+            {sandboxId && (
+              <FileViewerModal
+                open={fileViewerOpen}
+                onOpenChange={setFileViewerOpen}
+                sandboxId={sandboxId}
+                onSelectFile={handleSelectFile}
+              />
+            )}
           </div>
         </div>
       </div>

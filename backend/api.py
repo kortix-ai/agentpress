@@ -1,8 +1,5 @@
-from fastapi import FastAPI, Request, BackgroundTasks, HTTPException, Depends, Body
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from agentpress.thread_manager import ThreadManager
 from services.supabase import DBConnection
@@ -14,7 +11,7 @@ import uuid
 
 # Import the agent API module
 from agent import api as agent_api
-from agent.sandbox_api import router as sandbox_router
+from sandbox.api import router as sandbox_router
 
 # Load environment variables
 load_dotenv()

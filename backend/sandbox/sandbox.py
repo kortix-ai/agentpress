@@ -36,7 +36,6 @@ else:
 daytona = Daytona(config)
 logger.debug("Daytona client initialized")
 
-
 sandbox_browser_api = b'''
 import traceback
 from fastapi import FastAPI, HTTPException
@@ -167,7 +166,6 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
 '''
 
-# Server script to be used for HTTP server
 SERVER_SCRIPT = """from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 import uvicorn

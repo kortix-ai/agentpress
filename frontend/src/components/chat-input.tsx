@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Send, Square, Loader2 } from "lucide-react";
+import { Send, Square, Loader2, File } from "lucide-react";
 
 interface ChatInputProps {
   onSubmit: (message: string) => void;
@@ -15,6 +15,8 @@ interface ChatInputProps {
   autoFocus?: boolean;
   value?: string;
   onChange?: (value: string) => void;
+  onFileBrowse?: () => void;
+  sandboxId?: string;
 }
 
 export function ChatInput({
@@ -26,7 +28,9 @@ export function ChatInput({
   onStopAgent,
   autoFocus = true,
   value,
-  onChange
+  onChange,
+  onFileBrowse,
+  sandboxId
 }: ChatInputProps) {
   const [inputValue, setInputValue] = useState(value || "");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -118,23 +122,39 @@ export function ChatInput({
           rows={1}
         />
         
-        <Button 
-          type={isAgentRunning ? 'button' : 'submit'}
-          onClick={isAgentRunning ? onStopAgent : undefined}
-          variant="ghost"
-          size="icon"
-          className="absolute right-2 bottom-2 h-8 w-8 rounded-full"
-          disabled={(!inputValue.trim() && !isAgentRunning) || loading || (disabled && !isAgentRunning)}
-          aria-label={isAgentRunning ? 'Stop agent' : 'Send message'}
-        >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : isAgentRunning ? (
-            <Square className="h-4 w-4" />
-          ) : (
-            <Send className="h-4 w-4" />
+        <div className="absolute right-2 bottom-2 flex items-center space-x-1">
+          {onFileBrowse && (
+            <Button 
+              type="button"
+              onClick={onFileBrowse}
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              disabled={loading || (disabled && !isAgentRunning)}
+              aria-label="Browse files"
+            >
+              <File className="h-4 w-4" />
+            </Button>
           )}
-        </Button>
+          
+          <Button 
+            type={isAgentRunning ? 'button' : 'submit'}
+            onClick={isAgentRunning ? onStopAgent : undefined}
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-full"
+            disabled={(!inputValue.trim() && !isAgentRunning) || loading || (disabled && !isAgentRunning)}
+            aria-label={isAgentRunning ? 'Stop agent' : 'Send message'}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : isAgentRunning ? (
+              <Square className="h-4 w-4" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       </form>
 
       {isAgentRunning && (
