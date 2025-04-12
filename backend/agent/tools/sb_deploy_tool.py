@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
 from sandbox.sandbox import SandboxToolsBase
 from utils.files_utils import clean_path
+from agent.tools.sb_shell_tool import SandboxShellTool
 
 # Load environment variables
 load_dotenv()
@@ -14,6 +15,7 @@ class SandboxDeployTool(SandboxToolsBase):
         super().__init__(sandbox_id, password)
         self.workspace_path = "/workspace"  # Ensure we're always operating in /workspace
         self.cloudflare_api_token = os.getenv("CLOUDFLARE_API_TOKEN")
+        self.shell_tool = SandboxShellTool(sandbox_id, password)
 
     def clean_path(self, path: str) -> str:
         """Clean and normalize a path to be relative to /workspace"""
@@ -43,14 +45,16 @@ class SandboxDeployTool(SandboxToolsBase):
     @xml_schema(
         tag_name="deploy",
         mappings=[
-            {"param_name": "name", "node_type": "attribute", "path": "."},
-            {"param_name": "directory_path", "node_type": "attribute", "path": "."}
+            {"param_name": "name", "node_type": "attribute", "path": "name"},
+            {"param_name": "directory_path", "node_type": "attribute", "path": "directory_path"}
         ],
         example='''
         <!-- 
         IMPORTANT: Only use this tool when:
         1. The user explicitly requests permanent deployment to production
         2. You have a complete, ready-to-deploy directory 
+        
+        NOTE: If the same name is used, it will redeploy to the same project as before
                 -->
 
         <deploy name="my-site" directory_path="website">
@@ -89,36 +93,52 @@ class SandboxDeployTool(SandboxToolsBase):
                 if not self.cloudflare_api_token:
                     return self.fail_response("CLOUDFLARE_API_TOKEN environment variable not set")
                     
-                # Build the deployment command with authentication included
-                deploy_cmd = (
-                    f"export CLOUDFLARE_API_TOKEN='{self.cloudflare_api_token}' && "
-                    # Verify authentication first
-                    f"npx wrangler whoami > /dev/null && "
-                    # Then deploy
-                    f"npx wrangler pages deploy {full_path} "
-                    f"--project-name {name} "
-                    f"--branch main "
-                    f"--commit-dirty=true"
+                # Single command that creates the project if it doesn't exist and then deploys
+                project_name = f"{self.sandbox_id}-{name}"
+                deploy_cmd = f'''export CLOUDFLARE_API_TOKEN={self.cloudflare_api_token} && 
+                    (npx wrangler pages deploy {full_path} --project-name {project_name} || 
+                    (npx wrangler pages project create {project_name} --production-branch production && 
+                    npx wrangler pages deploy {full_path} --project-name {project_name}))'''
+
+                # Execute command using shell_tool.execute_command
+                response = await self.shell_tool.execute_command(
+                    command=deploy_cmd,
+                    folder=None,  # Use the workspace root
+                    timeout=300   # Increased timeout for deployments
                 )
                 
-                # Execute command directly using process.exec
-                response = self.sandbox.process.exec(deploy_cmd, cwd=self.workspace_path)
+                print(f"Deployment response: {response}")
                 
-                if response.exit_code == 0:
+                if response.success:
                     return self.success_response({
                         "message": f"Website deployed successfully",
-                        "url": f"https://{name}.kortix.cloud",
-                        "details": {
-                            "output": response.stdout,
-                            "project_name": name,
-                            "url": f"https://{name}.kortix.cloud"
-                        }
+                        "output": response.output
                     })
                 else:
-                    return self.fail_response(f"Deployment failed: {response.stderr or 'Deployment failed with no error message'}")
+                    return self.fail_response(f"Deployment failed: {response.output}")
             except Exception as e:
                 return self.fail_response(f"Error during deployment: {str(e)}")
-        
         except Exception as e:
             return self.fail_response(f"Error deploying website: {str(e)}")
+
+if __name__ == "__main__":
+    import asyncio
+    import sys
+    
+    async def test_deploy():
+        # Replace these with actual values for testing
+        sandbox_id = "sandbox-ccb30b35"
+        password = "test-password"
+        
+        # Initialize the deploy tool
+        deploy_tool = SandboxDeployTool(sandbox_id, password)
+        
+        # Test deployment - replace with actual directory path and site name
+        result = await deploy_tool.deploy(
+            name="test-site-1x",
+            directory_path="website"  # Directory containing static site files
+        )
+        print(f"Deployment result: {result}")
+            
+    asyncio.run(test_deploy())
 

@@ -103,6 +103,7 @@ You have the ability to execute operations using both Python and CLI tools:
 - WEBSITE DEPLOYMENT:
   * Only use the 'deploy' tool when users explicitly request permanent deployment to a production environment
   * The deploy tool publishes static HTML+CSS+JS sites to a public URL using Cloudflare Pages
+  * If the same name is used for deployment, it will redeploy to the same project as before
   * For temporary or development purposes, serve files locally instead of using the deployment tool
   * Always confirm with the user before deploying to production - ask if permanent deployment is needed
   * When deploying, ensure all assets (images, scripts, stylesheets) use relative paths to work correctly
