@@ -2,7 +2,7 @@ import os
 import requests
 from time import sleep
 
-from daytona_sdk import Daytona, DaytonaConfig, CreateSandboxParams, SessionExecuteRequest
+from daytona_sdk import Daytona, DaytonaConfig, CreateSandboxParams, SessionExecuteRequest, Sandbox
 from daytona_api_client.models.workspace_state import WorkspaceState
 from dotenv import load_dotenv
 
@@ -384,17 +384,17 @@ class SandboxToolsBase(Tool):
     # Class variable to track if sandbox URLs have been printed
     _urls_printed = False
     
-    def __init__(self, sandbox_id: str, password: str):
+    def __init__(self, sandbox: Sandbox):
         super().__init__()
-        self.sandbox = None
+        self.sandbox = sandbox
         self.daytona = daytona
         self.workspace_path = "/workspace"
 
-        self.sandbox_id = sandbox_id
+        self.sandbox_id = sandbox.id
         # logger.info(f"Initializing SandboxToolsBase with sandbox ID: {sandbox_id}")
         
         try:
-            logger.debug(f"Retrieving sandbox with ID: {sandbox_id}")
+            logger.debug(f"Retrieving sandbox with ID: {self.sandbox_id}")
             self.sandbox = self.daytona.get_current_sandbox(self.sandbox_id)
             # logger.info(f"Successfully retrieved sandbox: {self.sandbox.id}")
         except Exception as e:

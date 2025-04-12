@@ -5,6 +5,7 @@ CREATE TABLE projects (
     name TEXT NOT NULL,
     description TEXT,
     account_id UUID NOT NULL REFERENCES basejump.accounts(id) ON DELETE CASCADE,
+    sandbox JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );

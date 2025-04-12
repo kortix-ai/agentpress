@@ -1,7 +1,7 @@
 from typing import Optional, Dict, List
 from uuid import uuid4
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
-from sandbox.sandbox import SandboxToolsBase
+from sandbox.sandbox import SandboxToolsBase, Sandbox
 
 # TODO: might want to be more granular with the tool names:
 # shell_exec - Execute commands in a specified shell session. Use for running code, installing packages, or managing files.
@@ -16,8 +16,8 @@ class SandboxShellTool(SandboxToolsBase):
     """Tool for executing tasks in a Daytona sandbox with browser-use capabilities. 
     Uses sessions for maintaining state between commands and provides comprehensive process management."""
 
-    def __init__(self, sandbox_id: str, password: str):
-        super().__init__(sandbox_id, password)
+    def __init__(self, sandbox: Sandbox):
+        super().__init__(sandbox)
         self._sessions: Dict[str, str] = {}  # Maps session names to session IDs
 
     async def _ensure_session(self, session_name: str = "default") -> str:
@@ -163,14 +163,3 @@ class SandboxShellTool(SandboxToolsBase):
         """Clean up all sessions."""
         for session_name in list(self._sessions.keys()):
             await self._cleanup_session(session_name)
-
-
-
-async def test_shell_tool():
-    shell_tool = SandboxShellTool(
-        sandbox_id="sandbox-15a2c059",
-        password="vvv"
-    )
-    print("1)", "*"*10)  
-    res = await shell_tool.execute_command("ls -l")
-    print(res)
