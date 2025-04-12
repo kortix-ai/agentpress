@@ -65,7 +65,7 @@ export default function AccountSelector({ className, accountId, onAccountSelecte
                         aria-expanded={open}
                         aria-label="Select a team"
                         className={cn(
-                            "flex items-center gap-2 h-9 pl-3 pr-2 rounded-full justify-between border border-subtle dark:border-white/10 bg-transparent hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/90", 
+                            "w-full flex items-center gap-2 h-9 pl-3 pr-2 rounded-md justify-between border border-subtle dark:border-white/10 bg-transparent hover:bg-hover-bg text-foreground/90", 
                             className
                         )}
                     >

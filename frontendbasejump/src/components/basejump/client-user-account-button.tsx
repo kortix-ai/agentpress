@@ -27,7 +27,7 @@ export default function ClientUserAccountButton({
             <DropdownMenuTrigger asChild>
                 <Button 
                     variant="ghost" 
-                    className="h-9 w-9 rounded-full border border-subtle dark:border-white/10 hover:bg-hover-bg dark:hover:bg-hover-bg-dark p-0"
+                    className="h-9 w-9 rounded-full border border-subtle dark:border-white/10 hover:bg-hover-bg p-0"
                 >
                     <UserIcon className="h-[1.2rem] w-[1.2rem] text-foreground/80" />
                     <span className="sr-only">User menu</span>
@@ -45,19 +45,19 @@ export default function ClientUserAccountButton({
                     </div>
                 </DropdownMenuLabel>
                 <DropdownMenuGroup className="p-1">
-                    <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer">
+                    <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg cursor-pointer">
                         <Link href="/dashboard" className="flex w-full h-full text-foreground/90">My Account</Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer">
+                    <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg cursor-pointer">
                         <Link href="/dashboard/settings" className="flex w-full h-full text-foreground/90">Settings</Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer">
+                    <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg cursor-pointer">
                         <Link href="/dashboard/settings/teams" className="flex w-full h-full text-foreground/90">Teams</Link>
                     </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator className="border-subtle dark:border-white/10" />
                 <div className="p-1">
-                    <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/90 cursor-pointer">
+                    <DropdownMenuItem asChild className="rounded-md hover:bg-hover-bg text-foreground/90 cursor-pointer">
                         <Link href="/api/auth/signout" className="flex w-full h-full">Log out</Link>
                     </DropdownMenuItem>
                 </div>

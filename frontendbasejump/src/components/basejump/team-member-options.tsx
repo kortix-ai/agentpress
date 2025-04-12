@@ -40,13 +40,13 @@ export default function TeamMemberOptions({ teamMember, accountId, isPrimaryOwne
                 <DropdownMenuContent className="min-w-[160px] border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-xl shadow-custom">
                     <DropdownMenuItem 
                         onSelect={() => toggleUpdateTeamRole(true)}
-                        className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer text-foreground/90"
+                        className="rounded-md hover:bg-hover-bg cursor-pointer text-foreground/90"
                     >
                         Change role
                     </DropdownMenuItem>
                     <DropdownMenuItem 
                         onSelect={() => toggleRemoveTeamMember(true)} 
-                        className="rounded-md hover:bg-hover-bg dark:hover:bg-hover-bg-dark cursor-pointer text-red-500 dark:text-red-400"
+                        className="rounded-md hover:bg-hover-bg cursor-pointer text-red-500 dark:text-red-400"
                     >
                         Remove member
                     </DropdownMenuItem>
