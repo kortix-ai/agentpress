@@ -1,7 +1,7 @@
 import os
 from vncdotool import api
 import time
-from typing import Optional, List, Union
+from typing import Optional
 from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 import base64
 from PIL import Image

@@ -13,18 +13,6 @@ services:
       - "5901:5901"  # VNC port
       - "9222:9222"  # Chrome remote debugging port
     environment:
-      - OPENAI_ENDPOINT=${OPENAI_ENDPOINT:-https://api.openai.com/v1}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_ENDPOINT=${ANTHROPIC_ENDPOINT:-https://api.anthropic.com}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
-      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
-      - DEEPSEEK_ENDPOINT=${DEEPSEEK_ENDPOINT:-https://api.deepseek.com}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      - OLLAMA_ENDPOINT=${OLLAMA_ENDPOINT:-http://localhost:11434}
-
-      - BROWSER_USE_LOGGING_LEVEL=${BROWSER_USE_LOGGING_LEVEL:-info}
       - ANONYMIZED_TELEMETRY=${ANONYMIZED_TELEMETRY:-false}
       - CHROME_PATH=/usr/bin/google-chrome
       - CHROME_USER_DATA=/app/data/chrome_data

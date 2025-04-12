@@ -3,6 +3,7 @@ from uuid import uuid4
 from typing import Optional
 
 from agent.tools.message_tool import MessageTool
+from agent.tools.web_search_tool import WebSearchTool
 from dotenv import load_dotenv
 
 from agentpress.thread_manager import ThreadManager
@@ -39,12 +40,14 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     # thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)
+    thread_manager.add_tool(WebSearchTool)
     thread_manager.add_tool(MessageTool)
     
 
     system_message = { "role": "system", "content": get_system_prompt() }
 
     model_name = "anthropic/claude-3-7-sonnet-latest"
+    # model_name = "openrouter/qwen/qwen2.5-vl-72b-instruct"
     # model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"         
     # model_name = "anthropic/claude-3-5-sonnet-latest" 
     # model_name = "anthropic/claude-3-7-sonnet-latest"
