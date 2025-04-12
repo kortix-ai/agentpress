@@ -36,7 +36,7 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
             'sandbox_id': sandbox_id,
             'sandbox_pass': sandbox_pass
         }).eq('project_id', project_id).execute()
-    # thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
+
     thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(WebSearchTool)

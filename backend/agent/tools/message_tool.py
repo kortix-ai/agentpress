@@ -77,7 +77,7 @@ class MessageTool(Tool):
             if attachments and isinstance(attachments, str):
                 attachments = [attachments]
                 
-            return self.success_response({"status": "success"})
+            return self.success_response({"status": "Awaiting user response..."})
         except Exception as e:
             return self.fail_response(f"Error asking user: {str(e)}")
 
