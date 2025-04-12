@@ -3,7 +3,7 @@ from typing import Optional
 
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
 from sandbox.sandbox import SandboxToolsBase
-from utils.exclusions import EXCLUDED_FILES, EXCLUDED_DIRS, EXCLUDED_EXT, should_exclude_file
+from utils.files_utils import EXCLUDED_FILES, EXCLUDED_DIRS, EXCLUDED_EXT, should_exclude_file, clean_path
 import os
 
 class SandboxFilesTool(SandboxToolsBase):
@@ -16,11 +16,7 @@ class SandboxFilesTool(SandboxToolsBase):
 
     def clean_path(self, path: str) -> str:
         """Clean and normalize a path to be relative to /workspace"""
-        # Remove any leading /workspace/ or / prefix
-        path = path.lstrip('/')
-        if path.startswith('workspace/'):
-            path = path[9:]
-        return path
+        return clean_path(path, self.workspace_path)
 
     def _should_exclude_file(self, rel_path: str) -> bool:
         """Check if a file should be excluded based on path, name, or extension"""

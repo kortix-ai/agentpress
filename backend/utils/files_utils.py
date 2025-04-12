@@ -1,9 +1,3 @@
-"""
-Exclusion patterns for file operations.
-
-This module contains constants and utility functions for
-excluding certain files and directories from operations.
-"""
 
 import os
 
@@ -69,3 +63,29 @@ def should_exclude_file(rel_path: str) -> bool:
         return True
 
     return False 
+
+def clean_path(path: str, workspace_path: str = "/workspace") -> str:
+    """Clean and normalize a path to be relative to the workspace
+    
+    Args:
+        path: The path to clean
+        workspace_path: The base workspace path to remove (default: "/workspace")
+        
+    Returns:
+        The cleaned path, relative to the workspace
+    """
+    # Remove any leading slash
+    path = path.lstrip('/')
+    
+    # Remove workspace prefix if present
+    if path.startswith(workspace_path.lstrip('/')):
+        path = path[len(workspace_path.lstrip('/')):]
+    
+    # Remove workspace/ prefix if present
+    if path.startswith('workspace/'):
+        path = path[9:]
+    
+    # Remove any remaining leading slash
+    path = path.lstrip('/')
+    
+    return path 

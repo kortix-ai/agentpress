@@ -68,7 +68,7 @@ class WebSearchTool(Tool):
         <web-search 
             query="current weather in New York City" 
             summary="true"
-            num_results="10">
+            num_results="20">
         </web-search>
         
         <!-- Another search example -->

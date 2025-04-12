@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 from agentpress.tool import Tool
 from utils.logger import logger
+from utils.files_utils import clean_path
 
 load_dotenv()
 
@@ -36,349 +37,8 @@ else:
 daytona = Daytona(config)
 logger.debug("Daytona client initialized")
 
-sandbox_browser_api = b'''
-import traceback
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from browser_use import Agent, Browser
-from browser_use.browser.context import BrowserContextConfig, BrowserContextWindowSize
-from langchain_openai import ChatOpenAI
-import uvicorn
-from contextlib import asynccontextmanager
-import logging
-import logging.handlers
-import os
-
-# Configure logging
-log_dir = "/var/log/kortix"
-os.makedirs(log_dir, exist_ok=True)
-log_file = os.path.join(log_dir, "kortix_api.log")
-
-logger = logging.getLogger("kortix_api")
-logger.setLevel(logging.INFO)
-
-# Create rotating file handler
-file_handler = logging.handlers.RotatingFileHandler(
-    log_file,
-    maxBytes=10485760,  # 10MB
-    backupCount=5
-)
-file_handler.setFormatter(
-    logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-)
-logger.addHandler(file_handler)
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Initialize browser on startup
-    global browser
-    try:
-        browser = Browser()
-        logger.info("Browser initialized successfully")
-    except Exception as e:
-        logger.error(f"Error initializing browser: {str(e)}")
-        logger.error(traceback.format_exc())
-    yield
-    # Clean up resources at shutdown if needed
-
-app = FastAPI(lifespan=lifespan)
-
-# Global variables to maintain browser state
-browser = None
-browser_context = None
-agent = None
-
-class TaskRequest(BaseModel):
-    task_description: str
-
-@app.post("/run-task")
-async def run_task(request: TaskRequest):
-    global browser, browser_context, agent
-    
-    if not browser:
-        try:
-            browser = Browser()
-        except Exception as e:
-            error_msg = f"Failed to initialize browser: {str(e)}"
-            logger.error(error_msg)
-            raise HTTPException(status_code=500, detail=error_msg)
-    
-    try:
-        # Create a browser context if it doesn't exist
-        if not browser_context:
-            browser_context = await browser.new_context(
-                config=BrowserContextConfig(
-                    browser_window_size=BrowserContextWindowSize(
-                        width=1280, height=800
-                    ),
-                )
-            )
-            logger.info("Created new browser context")
-        
-        # Create a new agent for each task
-        agent = Agent(
-            task=request.task_description,
-            llm=ChatOpenAI(model="gpt-4o"),
-            browser=browser,
-            browser_context=browser_context
-        )
-        logger.info(f"Starting task: {request.task_description}")
-        
-        result = await agent.run()
-        
-        # Format the history for response
-        history = []
-        for h in result.history:
-            logger.debug(f"Task history entry: {h}")
-            history.append(str(h))
-            
-        logger.info("Task completed successfully")
-        return {
-            "status": "success", 
-            "history": history
-        }
-        
-    except Exception as e:
-        error_traceback = traceback.format_exc()
-        logger.error(f"Error during task execution: {str(e)}")
-        logger.error(error_traceback)
-        raise HTTPException(
-            status_code=500, 
-            detail={
-                "status": "error", 
-                "error": str(e), 
-                "traceback": error_traceback
-            }
-        )
-
-@app.get("/health")
-async def health_check():
-    status = {
-        "status": "healthy",
-        "browser_initialized": browser is not None,
-        "context_initialized": browser_context is not None
-    }
-    logger.debug(f"Health check: {status}")
-    return status
-
-if __name__ == "__main__":
-    logger.info("Starting Kortix API server")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-'''
-
-SERVER_SCRIPT = """from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-import uvicorn
-import os
-
-# Ensure we're serving from the /workspace directory
-workspace_dir = "/workspace"
-os.makedirs(workspace_dir, exist_ok=True)
-
-app = FastAPI()
-app.mount('/', StaticFiles(directory=workspace_dir, html=True), name='site')
-
-# This is needed for the import string approach with uvicorn
-if __name__ == '__main__':
-    print(f"Starting server with auto-reload, serving files from: {workspace_dir}")
-    # Don't use reload directly in the run call
-    uvicorn.run("server:app", host="0.0.0.0", port=8080, reload=True)
-"""
-
-def start_sandbox_browser_api(sandbox):
-    """Start the browser API service in the sandbox"""
-    
-    logger.debug("Uploading browser API script to sandbox")
-    sandbox.fs.upload_file(sandbox.get_user_root_dir() + "/browser_api.py", sandbox_browser_api)
-    
-    try:
-        # Create tmux session for browser API
-        logger.debug("Creating tmux session for browser API")
-        
-        # Create a session ID for this browser API
-        session_id = 'browser_api_session'
-        
-        # First create the session properly using create_session
-        try:
-            # Create a new session
-            logger.debug(f"Creating new session with ID: {session_id}")
-            sandbox.process.create_session(session_id)
-            sleep(2)  # Wait for session initialization
-        except Exception as session_e:
-            logger.debug(f"Error creating session: {str(session_e)}")
-            # Try to delete and recreate if it exists
-            try:
-                sandbox.process.delete_session(session_id)
-                sleep(1)
-                sandbox.process.create_session(session_id)
-                sleep(2)
-            except Exception as e:
-                logger.debug(f"Error recreating session: {str(e)}")
-        
-        # Now execute commands in the created session
-        max_retries = 3
-        retry_count = 0
-        success = False
-        
-        while retry_count < max_retries and not success:
-            try:
-                # Execute tmux command in the session
-                logger.debug(f"Creating tmux in session {session_id}")
-                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
-                    command="tmux new-session -d -s browser_api || true",
-                    var_async=True
-                ))
-                sleep(2)
-                
-                # Kill any existing process in the tmux session
-                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
-                    command="tmux send-keys -t browser_api C-c",
-                    var_async=True
-                ))
-                
-                logger.debug("Executing browser API command in tmux session")
-                rsp = sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
-                    command="tmux send-keys -t browser_api 'python " + sandbox.get_user_root_dir() + "/browser_api.py' C-m",
-                    var_async=True
-                ))
-                logger.debug(f"Browser API command execution result: {rsp}")
-                
-                # Verify the process is running
-                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
-                    command="tmux list-panes -t browser_api -F '#{pane_pid}'",
-                    var_async=True
-                ))
-                
-                success = True
-                logger.debug("Browser API started successfully")
-                
-            except Exception as e:
-                retry_count += 1
-                logger.warning(f"Attempt {retry_count}/{max_retries} to start browser API failed: {str(e)}")
-                sleep(2)  # Wait before retrying
-                
-                if retry_count >= max_retries:
-                    logger.error(f"Error starting browser API after {max_retries} attempts: {str(e)}")
-                    raise e
-        
-    except Exception as e:
-        logger.error(f"Error starting browser API: {str(e)}")
-        raise e
-
-def start_http_server(sandbox):
-    """Start the HTTP server in the sandbox"""
-    
-    try:
-        # Create tmux session for HTTP server
-        logger.debug("Creating tmux session for HTTP server")
-        
-        # Create a session ID for this HTTP server
-        session_id = 'http_server_session'
-        
-        # First create the session properly using create_session
-        try:
-            # Create a new session
-            logger.debug(f"Creating new session with ID: {session_id}")
-            sandbox.process.create_session(session_id)
-            sleep(2)  # Wait for session initialization
-        except Exception as session_e:
-            logger.debug(f"Error creating session: {str(session_e)}")
-            # Try to delete and recreate if it exists
-            try:
-                sandbox.process.delete_session(session_id)
-                sleep(1)
-                sandbox.process.create_session(session_id)
-                sleep(2)
-            except Exception as e:
-                logger.debug(f"Error recreating session: {str(e)}")
-        
-        # Create the server script file
-        sandbox.fs.upload_file(sandbox.get_user_root_dir() + "/server.py", SERVER_SCRIPT.encode())
-        
-        # Now execute commands in the created session
-        max_retries = 3
-        retry_count = 0
-        success = False
-        
-        while retry_count < max_retries and not success:
-            try:
-                # Execute tmux command in the session
-                logger.debug(f"Creating tmux in session {session_id}")
-                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
-                    command="tmux new-session -d -s http_server || true",
-                    var_async=True
-                ))
-                sleep(2)
-                
-                # Kill any existing process in the tmux session
-                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
-                    command="tmux send-keys -t http_server C-c",
-                    var_async=True
-                ))
-                
-                # Start the HTTP server using uvicorn with auto-reload in tmux session
-                http_server_rsp = sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
-                    command="cd " + sandbox.get_user_root_dir() + " && tmux send-keys -t http_server 'pip install uvicorn fastapi && python server.py' C-m",
-                    var_async=True
-                ))
-                logger.info(f"HTTP server started: {http_server_rsp}")
-                
-                # Verify the process is running
-                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
-                    command="tmux list-panes -t http_server -F '#{pane_pid}'",
-                    var_async=True
-                ))
-                
-                success = True
-                logger.debug("HTTP server started successfully")
-                
-            except Exception as e:
-                retry_count += 1
-                logger.warning(f"Attempt {retry_count}/{max_retries} to start HTTP server failed: {str(e)}")
-                sleep(2)  # Wait before retrying
-                
-                if retry_count >= max_retries:
-                    logger.error(f"Error starting HTTP server after {max_retries} attempts: {str(e)}")
-                    raise e
-    
-    except Exception as e:
-        logger.error(f"Error starting HTTP server: {str(e)}")
-        raise e
-
-def wait_for_api_ready(sandbox):
-    """Wait for the sandbox API to be ready and responsive"""
-    
-    times = 0
-    success = False
-    api_url = sandbox.get_preview_link(8000)
-    logger.info(f"Waiting for API to be ready at {api_url}")
-    
-    while times < 10:
-        times += 1
-        logger.info(f"Waiting for API to be ready... Attempt {times}/10")
-        try:
-            # Make the API call to our FastAPI endpoint
-            response = requests.get(f"{api_url}/health")
-            if response.status_code == 200:
-                logger.info(f"API call completed successfully: {response.status_code}")
-                success = True
-                break
-            else:
-                logger.warning(f"API health check failed with status code: {response.status_code}")
-                sleep(1)
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"API request error on attempt {times}: {str(e)}")
-            sleep(1)
-
-    if not success:
-        logger.error("API health check failed after maximum attempts")
-        raise Exception("API call failed after maximum attempts")
-    
-    return api_url
-
 async def get_or_start_sandbox(sandbox_id: str):
-    """Retrieve a sandbox by ID, check its state, and start it if needed.
-    Also ensure the sandbox_browser_api and HTTP server services are running."""
+    """Retrieve a sandbox by ID, check its state, and start it if needed."""
     
     logger.info(f"Getting or starting sandbox with ID: {sandbox_id}")
     
@@ -391,31 +51,13 @@ async def get_or_start_sandbox(sandbox_id: str):
             try:
                 daytona.start(sandbox)
                 # Wait a moment for the sandbox to initialize
-                sleep(5)
+                # sleep(5)
                 # Refresh sandbox state after starting
                 sandbox = daytona.get_current_sandbox(sandbox_id)
             except Exception as e:
                 logger.error(f"Error starting sandbox: {e}")
                 raise e
         
-        # Ensure browser API is running
-        try:
-            api_url = sandbox.get_preview_link(8000)
-            response = requests.get(f"{api_url}/health")
-            
-            if response.status_code != 200:
-                logger.info("Browser API is not running. Starting it...")
-                start_sandbox_browser_api(sandbox)
-                wait_for_api_ready(sandbox)
-                start_http_server(sandbox)
-                
-        except requests.exceptions.RequestException:
-            logger.info("Browser API is not accessible. Starting it...")
-            start_sandbox_browser_api(sandbox)
-            wait_for_api_ready(sandbox)
-            start_http_server(sandbox)
-            
-            
         logger.info(f"Sandbox {sandbox_id} is ready")
         return sandbox
         
@@ -436,7 +78,7 @@ def create_sandbox(password: str):
         logger.debug("OPENAI_API_KEY configured for sandbox")
     
     sandbox = daytona.create(CreateSandboxParams(
-        image="kortixmarko/kortix-suna:0.0.2",
+        image="kortixmarko/kortix-suna:0.0.3",
         public=True,
         env_vars={
             "CHROME_PERSISTENT_SESSION": "true",
@@ -457,20 +99,12 @@ def create_sandbox(password: str):
             5900,  # VNC port
             5901,  # VNC port
             9222,  # Chrome remote debugging port
-            8000,  # FastAPI port
             8080   # HTTP website port
         ]
     ))
     logger.info(f"Sandbox created with ID: {sandbox.id}")
     
-    # Start the browser API
-    start_sandbox_browser_api(sandbox)
-    
-    # Start HTTP server
-    start_http_server(sandbox)
-    
-    # Wait for API to be ready
-    wait_for_api_ready(sandbox)
+    # HTTP server is now started automatically by Docker
     
     logger.info(f"Sandbox environment successfully initialized")
     return sandbox
@@ -499,9 +133,6 @@ class SandboxToolsBase(Tool):
             logger.error(f"Error retrieving sandbox: {str(e)}", exc_info=True)
             raise e
 
-        self.api_url = self.sandbox.get_preview_link(8000)
-        logger.debug(f"Sandbox API URL: {self.api_url}")
-        
         # Get and log preview links
         vnc_url = self.sandbox.get_preview_link(6080)
         website_url = self.sandbox.get_preview_link(8080)
@@ -517,6 +148,6 @@ class SandboxToolsBase(Tool):
             SandboxToolsBase._urls_printed = True
 
     def clean_path(self, path: str) -> str:
-        cleaned_path = path.replace(self.workspace_path, "").lstrip("/")
+        cleaned_path = clean_path(path, self.workspace_path)
         logger.debug(f"Cleaned path: {path} -> {cleaned_path}")
         return cleaned_path
