@@ -3,15 +3,6 @@ from uuid import uuid4
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
 from sandbox.sandbox import SandboxToolsBase
 
-# TODO: might want to be more granular with the tool names:
-# shell_exec - Execute commands in a specified shell session. Use for running code, installing packages, or managing files.
-# shell_view - View the content of a specified shell session. Use for checking command execution results or monitoring output.
-# shell_wait - Wait for the running process in a specified shell session to return. Use after running commands that require longer runtime.
-# shell_write_to_process - Write input to a running process in a specified shell session. Use for responding to interactive command prompts.
-# shell_kill_process - Terminate a running process in a specified shell session. Use for stopping long-running processes or handling frozen commands.
-
-
-
 class SandboxShellTool(SandboxToolsBase):
     """Tool for executing tasks in a Daytona sandbox with browser-use capabilities. 
     Uses sessions for maintaining state between commands and provides comprehensive process management."""

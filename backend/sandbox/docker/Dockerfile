@@ -94,7 +94,6 @@ RUN playwright install-deps
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV BROWSER_USE_LOGGING_LEVEL=info
 ENV CHROME_PATH=/ms-playwright/chromium-*/chrome-linux/chrome
 ENV ANONYMIZED_TELEMETRY=false
 ENV DISPLAY=:99

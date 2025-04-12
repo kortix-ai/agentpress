@@ -6,14 +6,6 @@ from sandbox.sandbox import SandboxToolsBase
 from utils.exclusions import EXCLUDED_FILES, EXCLUDED_DIRS, EXCLUDED_EXT, should_exclude_file
 import os
 
-# TODO: might want to be more granular with the tool names:
-# file_read - Read file content. Use for checking file contents, analyzing logs, or reading configuration files.
-# file_write - Overwrite or append content to a file. Use for creating new files, appending content, or modifying existing files.
-# file_str_replace - Replace specified string in a file. Use for updating specific content in files or fixing errors in code.
-# file_find_in_content - Search for matching text within file content. Use for finding specific content or patterns in files.
-# file_find_by_name - Find files by name pattern in specified directory. Use for locating files with specific naming patterns.
-
-
 class SandboxFilesTool(SandboxToolsBase):
     """Tool for executing file system operations in a Daytona sandbox. All operations are performed relative to the /workspace directory."""
 
