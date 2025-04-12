@@ -22,7 +22,7 @@ export default async function ManageTeamMembers({accountId}: Props) {
             <Table>
                 <TableBody>
                     {members?.map((member: any) => (
-                        <TableRow key={member.user_id} className="hover:bg-hover-bg dark:hover:bg-hover-bg-dark border-subtle dark:border-white/10">
+                        <TableRow key={member.user_id} className="hover:bg-hover-bg border-subtle dark:border-white/10">
                             <TableCell>
                                 <div className="flex items-center gap-x-2">
                                     <span className="font-medium text-card-title">{member.name}</span>

@@ -3,8 +3,6 @@ import Link from "next/link";
 import { ReactNode, useState, useEffect, useRef, useCallback } from "react";
 
 import {
-  ChevronLeft,
-  ChevronRight,
   X,
   Maximize2,
   GripHorizontal,
@@ -14,13 +12,25 @@ import {
   MessagesSquare,
   ArrowRight,
   PanelLeft,
-  Wrench
+  Laptop,
+  UserIcon,
+  Search,
+  Minimize2,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { getProjects, getThreads } from "@/lib/api";
 import { useToolsPanel } from "@/lib/hooks/use-tools-panel";
 
 import UserAccountPanel from "@/components/dashboard/user-account-panel";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuGroup,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -34,19 +44,19 @@ const NavItem = ({ icon, label, href, isCollapsed, hideIconWhenCollapsed = false
   return (
     <Link
       href={href}
-      className={`flex items-center gap-2 py-1.5 px-2 hover:bg-hover-bg dark:hover:bg-hover-bg-dark transition-all duration-200 group text-sm ${
+      className={`flex items-center gap-2 py-1.5 px-2 hover:bg-hover-bg transition-all duration-200 group text-sm ${
         isCollapsed ? "justify-center" : ""
       }`}
     >
       {(!isCollapsed || !hideIconWhenCollapsed) && (
-        <div className="text-icon-color dark:text-icon-color-dark flex-shrink-0">
+        <div className="text-icon-color flex-shrink-0">
           {icon}
         </div>
       )}
       {!isCollapsed && <span className="text-foreground/90 truncate">{label}</span>}
       {isCollapsed && !hideIconWhenCollapsed && (
         <div className="absolute left-full ml-2 scale-0 group-hover:scale-100 transition-all duration-200 origin-left z-50">
-          <div className="bg-background-secondary dark:bg-background-secondary p-2 shadow-custom border border-subtle dark:border-white/10">
+          <div className="bg-background p-2 shadow-custom border border-subtle dark:border-white/10">
             <span className="whitespace-nowrap text-foreground text-xs">{label}</span>
           </div>
         </div>
@@ -82,6 +92,11 @@ export default function DashboardLayout({
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(true);
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(true);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
+  
+  // Add search state for agents
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredAgents, setFilteredAgents] = useState<{name: string, href: string}[]>([]);
+  const [showSearchInput, setShowSearchInput] = useState(false);
 
   // Use our tools panel hook
   const { 
@@ -99,8 +114,11 @@ export default function DashboardLayout({
     if (showPanel) {
       setShowRightSidebar(true);
       setRightSidebarCollapsed(false);
+    } else if (!rightPanelContent) {
+      // If the tools panel is hidden and there's no other content, hide the sidebar
+      setShowRightSidebar(false);
     }
-  }, [showPanel]);
+  }, [showPanel, rightPanelContent]);
 
   // State for draggable panel
   const [position, setPosition] = useState({ x: 20, y: 400 });
@@ -114,6 +132,18 @@ export default function DashboardLayout({
   // State for dynamic agents list
   const [agents, setAgents] = useState<{name: string, href: string}[]>([]);
   const [isLoadingAgents, setIsLoadingAgents] = useState(true);
+  
+  // Filter agents when search query changes
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredAgents(agents);
+    } else {
+      const filtered = agents.filter(agent => 
+        agent.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredAgents(filtered);
+    }
+  }, [searchQuery, agents]);
   
   // Load agents dynamically from the API
   useEffect(() => {
@@ -150,7 +180,10 @@ export default function DashboardLayout({
 
   // Set initial showRightSidebar based on rightPanelContent prop
   useEffect(() => {
-    setShowRightSidebar(!!effectiveRightPanelContent);
+    // Only set initial visibility, don't override user choices later
+    if (!layoutInitialized.current) {
+      setShowRightSidebar(!!effectiveRightPanelContent);
+    }
   }, [effectiveRightPanelContent]);
 
   // Load layout state from localStorage on initial render
@@ -229,18 +262,22 @@ export default function DashboardLayout({
   // Toggle right sidebar visibility
   const toggleRightSidebarVisibility = useCallback(() => {
     const newVisibility = !showRightSidebar;
-    setRightSidebarCollapsed(false);
     setShowRightSidebar(newVisibility);
-
-    // If showing right sidebar, make sure left is collapsed
+    
     if (newVisibility) {
+      // When showing the sidebar, expand it and collapse the left sidebar
+      setRightSidebarCollapsed(false);
       setLeftSidebarCollapsed(true);
+    } else {
+      // When hiding the sidebar, make sure it's fully collapsed
+      setRightSidebarCollapsed(true);
     }
   }, [
     showRightSidebar,
     setShowRightSidebar,
     setRightSidebarCollapsed,
     setLeftSidebarCollapsed,
+    effectiveRightPanelContent
   ]);
 
   // Update position based on window height (client-side only)
@@ -349,7 +386,7 @@ export default function DashboardLayout({
   }, [isDragging, handleMouseMove]);
 
   // Get only the latest 20 agents for the sidebar
-  const recentAgents = agents.slice(0, 20);
+  const recentAgents = filteredAgents.slice(0, 20);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground relative">
@@ -361,7 +398,7 @@ export default function DashboardLayout({
       >
         {/* Left Sidebar */}
         <div
-          className="flex flex-col h-full bg-background-secondary dark:bg-background-secondary"
+          className="flex flex-col h-full bg-background"
           style={{ backdropFilter: "blur(8px)" }}
         >
           <div className="h-12 p-2 flex items-center justify-between">
@@ -370,14 +407,24 @@ export default function DashboardLayout({
             </div>
             <button
               onClick={toggleLeftSidebar}
-              className={`p-1 hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/60 transition-all duration-200 ${leftSidebarCollapsed ? "mx-auto" : ""}`}
+              className={`p-1 hover:bg-hover-bg text-foreground/60 transition-all duration-200 ${leftSidebarCollapsed ? "mx-auto" : ""}`}
               aria-label={leftSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              {leftSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+              <PanelLeft size={14} className={`transition-transform duration-200 ${leftSidebarCollapsed ? "rotate-180" : ""}`} />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          {/* User Account Panel at the top */}
+          <div className="px-2 pb-2 border-b border-subtle dark:border-white/10">
+            <UserAccountPanel
+              accountId={accountId}
+              userName={userName}
+              userEmail={userEmail}
+              isCollapsed={leftSidebarCollapsed}
+            />
+          </div>
+
+          <div className="flex-1 overflow-y-auto pt-2">
             {/* Platform Section */}
             <div className="py-1 px-2">
               <div className={`text-xs font-medium text-foreground/50 mb-1 ${leftSidebarCollapsed ? "hidden" : "block"}`}>
@@ -403,10 +450,59 @@ export default function DashboardLayout({
             <div className="py-1 px-2 mt-2">
               <div className={`flex justify-between items-center mb-1 ${leftSidebarCollapsed ? "hidden" : "block"}`}>
                 <Link href="/dashboard/agents" className="text-xs font-medium text-foreground/50">Agents</Link>
-                <Link href="/dashboard" className="text-xs text-foreground/50 hover:text-foreground">
-                  + New
-                </Link>
+                <div className="flex items-center gap-1">
+                  {!leftSidebarCollapsed && (
+                    <button
+                      onClick={() => setShowSearchInput(!showSearchInput)}
+                      className="text-xs flex items-center justify-center h-5 w-5 rounded-md bg-background-secondary/80 hover:bg-hover-bg text-foreground/50 hover:text-foreground transition-colors duration-200 border border-subtle/40 dark:border-white/5"
+                      aria-label="Search agents"
+                    >
+                      <Search size={12} className="text-icon-color" />
+                    </button>
+                  )}
+                  <Link 
+                    href="/dashboard" 
+                    className="text-xs flex items-center justify-center px-1.5 h-5 rounded-md bg-background-secondary/80 hover:bg-hover-bg text-foreground/50 hover:text-foreground transition-colors duration-200 border border-subtle/40 dark:border-white/5"
+                  >
+                    + New
+                  </Link>
+                </div>
               </div>
+              
+              {/* Add search input for agents - only show when search is clicked */}
+              {!leftSidebarCollapsed && (
+                <div 
+                  className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                    showSearchInput ? 'max-h-10 opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'
+                  }`}
+                >
+                  <div className={`relative transition-transform duration-300 ${
+                    showSearchInput ? 'translate-y-0' : '-translate-y-4'
+                  }`}>
+                    <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                      <Search size={12} className="text-icon-color" />
+                    </div>
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search agents..."
+                      className="w-full py-1 pl-7 pr-2 text-xs bg-background-secondary border border-subtle dark:border-white/10 rounded-md placeholder-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary"
+                      autoFocus={showSearchInput}
+                      tabIndex={showSearchInput ? 0 : -1}
+                    />
+                    {searchQuery && (
+                      <button 
+                        className="absolute inset-y-0 right-0 pr-2 flex items-center"
+                        onClick={() => setSearchQuery("")}
+                      >
+                        <X size={12} className="text-icon-color" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               <div className="space-y-0.5">
                 {isLoadingAgents ? (
                   // Show skeleton loaders while loading
@@ -435,10 +531,10 @@ export default function DashboardLayout({
                     ))}
                     
                     {/* "See all agents" link */}
-                    {agents.length > 20 && (
+                    {filteredAgents.length > 20 && (
                       <Link 
                         href="/dashboard/agents" 
-                        className={`flex items-center gap-1 py-1.5 px-2 text-xs text-foreground/60 hover:text-foreground hover:bg-hover-bg dark:hover:bg-hover-bg-dark transition-all ${
+                        className={`flex items-center gap-1 py-1.5 px-2 text-xs text-foreground/60 hover:text-foreground hover:bg-hover-bg transition-all ${
                           leftSidebarCollapsed ? "justify-center" : ""
                         }`}
                       >
@@ -448,23 +544,13 @@ export default function DashboardLayout({
                     )}
                   </>
                 ) : (
-                  // Show message when no agents
+                  // Show empty state with search query info if applicable
                   <div className={`text-xs text-foreground/50 p-2 ${leftSidebarCollapsed ? "hidden" : "block"}`}>
-                    No agents yet
+                    {searchQuery ? `No agents matching "${searchQuery}"` : "No agents yet"}
                   </div>
                 )}
               </div>
             </div>
-          </div>
-
-          {/* User Account Panel at the bottom */}
-          <div className="mt-auto border-t border-subtle dark:border-white/10">
-            <UserAccountPanel
-              accountId={accountId}
-              userName={userName}
-              userEmail={userEmail}
-              isCollapsed={leftSidebarCollapsed}
-            />
           </div>
         </div>
       </div>
@@ -473,7 +559,7 @@ export default function DashboardLayout({
       <div className="flex flex-1 relative">
         {/* Main Content */}
         <div 
-          className={`flex flex-col h-screen overflow-hidden bg-background dark:bg-background transition-all duration-300 ease-in-out rounded-l-xl shadow-custom border-l border-subtle dark:border-white/10 ${
+          className={`flex flex-col h-screen overflow-hidden bg-background-secondary transition-all duration-300 ease-in-out rounded-l-xl shadow-sm border-l border-subtle dark:border-white/10 ${
             showRightSidebar && !rightSidebarCollapsed 
               ? "w-[calc(100%-40%)]" 
               : "w-full"
@@ -485,29 +571,71 @@ export default function DashboardLayout({
           }}
         >
           <header className="h-12 px-4 flex items-center justify-end">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {!showRightSidebar && effectiveRightPanelContent && (
                 <button
                   onClick={toggleRightSidebarVisibility}
-                  className="px-3 py-1.5 rounded-full hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/80 hover:text-foreground transition-all duration-200 text-xs border border-subtle dark:border-white/10"
+                  className="px-3 py-1.5 rounded-full hover:bg-hover-bg text-foreground/80 hover:text-foreground transition-all duration-200 text-xs border border-subtle dark:border-white/10"
                 >
                   {showPanel ? (
                     <span className="flex items-center gap-1">
-                      <Wrench className="h-3 w-3" />
-                      Tool Calls
+                      <Laptop className="h-3 w-3" />
+                      {`Suna's Computer`}
                     </span>
                   ) : (
                     effectiveRightPanelTitle
                   )}
                 </button>
               )}
+              
+              {/* User dropdown in header - always show */}
+              <div className="flex-shrink-0">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="relative h-8 w-8 rounded-full border border-subtle dark:border-white/10 hover:bg-hover-bg flex items-center justify-center">
+                      <UserIcon className="h-4 w-4 text-foreground/80" />
+                      <span className="sr-only">User menu</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56 border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-xl shadow-custom" align="end" forceMount>
+                    <DropdownMenuLabel className="font-normal border-b border-subtle dark:border-white/10">
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium leading-none text-foreground">{userName}</p>
+                        {userEmail && (
+                          <p className="text-xs leading-none text-foreground/70">
+                            {userEmail}
+                          </p>
+                        )}
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuGroup className="p-1">
+                      <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
+                        <Link href="/dashboard" className="flex w-full h-full text-foreground/90">My Account</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
+                        <Link href="/dashboard/settings" className="flex w-full h-full text-foreground/90">Settings</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
+                        <Link href="/dashboard/settings/teams" className="flex w-full h-full text-foreground/90">Teams</Link>
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator className="border-subtle dark:border-white/10" />
+                    <div className="p-1">
+                      <DropdownMenuItem asChild className="rounded-md hover:!bg-[#f1eee7] dark:hover:!bg-[#141413] cursor-pointer">
+                        <Link href="/api/auth/signout" className="flex w-full h-full text-foreground/90">Log out</Link>
+                      </DropdownMenuItem>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              
               <div className="relative">
                 <button
                   onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                  className="relative px-3 py-1.5 rounded-full hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/80 hover:text-foreground transition-all duration-200 text-xs border border-subtle dark:border-white/10"
+                  className="relative h-8 w-8 rounded-full border border-subtle dark:border-white/10 hover:bg-hover-bg flex items-center justify-center"
                 >
-                  <Sun className="h-3.5 w-3.5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                  <Moon className="absolute h-3.5 w-3.5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+                  <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                  <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
                   <span className="sr-only">Toggle theme</span>
                 </button>
               </div>
@@ -527,11 +655,11 @@ export default function DashboardLayout({
               {children}
             </div>
 
-            {/* Floating draggable right panel - only show when right sidebar is collapsed and visible */}
-            {showRightSidebar && rightSidebarCollapsed && effectiveRightPanelContent && (
+            {/* Floating draggable right panel */}
+            {showRightSidebar === true && rightSidebarCollapsed === true && effectiveRightPanelContent && (
               <div
                 ref={floatingPanelRef}
-                className={`absolute bg-card-bg dark:bg-background-secondary border border-subtle dark:border-white/10 rounded-lg shadow-custom flex flex-col w-72 overflow-hidden ${
+                className={`absolute bg-background border border-subtle dark:border-white/10 rounded-lg shadow-custom flex flex-col w-72 overflow-hidden ${
                   isDragging ? "cursor-grabbing" : ""
                 }`}
                 style={{
@@ -546,7 +674,7 @@ export default function DashboardLayout({
                   <div className="flex items-center gap-1.5">
                     <GripHorizontal
                       size={12}
-                      className="text-icon-color dark:text-icon-color-dark"
+                      className="text-icon-color"
                     />
                     <h3 className="font-medium text-foreground text-xs select-none">
                       {effectiveRightPanelTitle}
@@ -555,14 +683,14 @@ export default function DashboardLayout({
                   <div className="flex items-center gap-1">
                     <button
                       onClick={toggleRightSidebar}
-                      className="p-1 rounded-full hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/60 transition-all duration-200"
+                      className="p-1 rounded-full hover:bg-hover-bg text-foreground/60 transition-all duration-200"
                       aria-label="Expand panel"
                     >
                       <Maximize2 size={12} />
                     </button>
                     <button
                       onClick={toggleRightSidebarVisibility}
-                      className="p-1 rounded-full hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/60 transition-all duration-200"
+                      className="p-1 rounded-full hover:bg-hover-bg text-foreground/60 transition-all duration-200"
                       aria-label="Close panel"
                     >
                       <X size={12} />
@@ -575,7 +703,7 @@ export default function DashboardLayout({
                     <p className="mb-2 select-none text-xs">Content minimized</p>
                     <button
                       onClick={toggleRightSidebar}
-                      className="px-2 py-1 rounded-md bg-button-hover dark:bg-button-hover-dark text-primary text-xs"
+                      className="px-2 py-1 rounded-md text-primary text-xs"
                     >
                       Expand
                     </button>
@@ -593,10 +721,10 @@ export default function DashboardLayout({
           </main>
         </div>
 
-        {/* Right Sidebar - only show when visible */}
-        {showRightSidebar && effectiveRightPanelContent && (
+        {/* Right Sidebar */}
+        {showRightSidebar === true && effectiveRightPanelContent && (
           <div
-            className={`h-screen border-l border-subtle dark:border-white/10 bg-background-secondary dark:bg-background-secondary transition-all duration-300 ease-in-out rounded-l-xl shadow-custom ${
+            className={`h-screen border-l border-subtle dark:border-white/10 bg-background transition-all duration-300 ease-in-out rounded-l-xl shadow-custom ${
               rightSidebarCollapsed
                 ? "w-0 opacity-0 p-0 m-0 border-0"
                 : "w-[40%] opacity-100 flex-shrink-0"
@@ -613,14 +741,14 @@ export default function DashboardLayout({
               <div className="flex items-center gap-1">
                 <button
                   onClick={toggleRightSidebar}
-                  className="p-1 hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/60 transition-all duration-200"
+                  className="p-1 hover:bg-hover-bg text-foreground/60 transition-all duration-200"
                   aria-label="Collapse sidebar"
                 >
-                  <ChevronRight size={14} />
+                  <Minimize2 size={14} />
                 </button>
                 <button
                   onClick={toggleRightSidebarVisibility}
-                  className="p-1 hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/60 transition-all duration-200"
+                  className="p-1 hover:bg-hover-bg text-foreground/60 transition-all duration-200"
                   aria-label="Close sidebar"
                 >
                   <X size={14} />

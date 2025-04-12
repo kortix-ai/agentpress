@@ -24,7 +24,7 @@ export default async function ManageTeams() {
                 <Table>
                     <TableBody>
                         {teams.map((team) => (
-                            <TableRow key={team.account_id} className="hover:bg-hover-bg dark:hover:bg-hover-bg-dark border-subtle dark:border-white/10">
+                            <TableRow key={team.account_id} className="hover:bg-hover-bg border-subtle dark:border-white/10">
                                 <TableCell>
                                     <div className="flex items-center gap-x-2">
                                         <span className="font-medium text-card-title">{team.name}</span>

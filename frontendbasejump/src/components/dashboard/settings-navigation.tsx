@@ -32,7 +32,7 @@ export default function SettingsNavigation({ className, items, ...props }: Sideb
                         buttonVariants({ variant: "ghost" }),
                         pathname === item.href
                             ? "bg-hover-bg dark:bg-hover-bg-dark text-card-title"
-                            : "text-foreground/70 hover:bg-hover-bg dark:hover:bg-hover-bg-dark hover:text-card-title",
+                            : "text-foreground/70 hover:bg-hover-bg hover:text-card-title",
                         "justify-start rounded-lg h-10"
                     )}
                 >
