@@ -35,36 +35,6 @@ class WebSearchTool(Tool):
                         "description": "Whether to include a summary of each search result. Summaries provide key context about each page without requiring full content extraction. Set to true to get concise descriptions of each result.",
                         "default": True
                     },
-                    "start_published_date": {
-                        "type": "string",
-                        "description": "Optional start date to filter results by publication date (ISO format YYYY-MM-DDTHH:MM:SS.sssZ). Use this to find content published after a specific date, useful for recent news or updated information."
-                    },
-                    "end_published_date": {
-                        "type": "string",
-                        "description": "Optional end date to filter results by publication date (ISO format YYYY-MM-DDTHH:MM:SS.sssZ). Use this to limit results to content published before a specific date, helpful for historical information."
-                    },
-                    "start_crawl_date": {
-                        "type": "string",
-                        "description": "Optional start date to filter results by when they were crawled (ISO format YYYY-MM-DDTHH:MM:SS.sssZ). This can be useful for finding content that was recently indexed by search engines."
-                    },
-                    "end_crawl_date": {
-                        "type": "string",
-                        "description": "Optional end date to filter results by when they were crawled (ISO format YYYY-MM-DDTHH:MM:SS.sssZ). This can help filter out potentially outdated content."
-                    },
-                    "include_text": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "description": "A list of terms that must be included in the search results. Use this to ensure results contain specific keywords, making them more relevant to the query."
-                    },
-                    "exclude_text": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "description": "A list of terms that must be excluded from the search results. Use this to filter out irrelevant content or focus the search away from certain topics."
-                    },
                     "num_results": {
                         "type": "integer",
                         "description": "The number of search results to return. Increase for more comprehensive research or decrease for focused, high-relevance results.",
@@ -80,46 +50,32 @@ class WebSearchTool(Tool):
         mappings=[
             {"param_name": "query", "node_type": "attribute", "path": "."},
             {"param_name": "summary", "node_type": "attribute", "path": "."},
-            {"param_name": "start_published_date", "node_type": "attribute", "path": "."},
-            {"param_name": "end_published_date", "node_type": "attribute", "path": "."},
-            {"param_name": "start_crawl_date", "node_type": "attribute", "path": "."},
-            {"param_name": "end_crawl_date", "node_type": "attribute", "path": "."},
-            {"param_name": "include_text", "node_type": "attribute", "path": "."},
-            {"param_name": "exclude_text", "node_type": "attribute", "path": "."},
             {"param_name": "num_results", "node_type": "attribute", "path": "."}
         ],
         example='''
         <!-- 
         The web-search tool allows you to search the internet for real-time information.
-        It's ideal for:
-        - Finding current information not in your training data
-        - Researching specific topics, events, or entities
-        - Validating facts and claims
-        - Discovering recent developments and news
+        Use this tool when you need to find current information, research topics, or verify facts.
         
-        You can refine searches using:
-        - Date filters (start_published_date, end_published_date) for time-specific content
-        - Text inclusion/exclusion to narrow results to relevant content
-        - Number of results to control search breadth
-        
-        The tool returns organized information including titles, URLs, summaries, and publication dates.
+        The tool returns information including:
+        - Titles of relevant web pages
+        - URLs for accessing the pages
+        - Summaries of page content (if summary=true)
+        - Published dates (when available)
         -->
         
-        <!-- Basic search example -->
+        <!-- Simple search example -->
         <web-search 
-            query="latest developments in artificial intelligence" 
+            query="current weather in New York City" 
             summary="true"
             num_results="10">
         </web-search>
         
-        <!-- Advanced search with filters -->
+        <!-- Another search example -->
         <web-search 
-            query="renewable energy technology" 
+            query="healthy breakfast recipes" 
             summary="true"
-            start_published_date="2023-01-01T00:00:00.000Z"
-            include_text="solar,wind"
-            exclude_text="fossil"
-            num_results="15">
+            num_results="20">
         </web-search>
         '''
     )
@@ -127,12 +83,6 @@ class WebSearchTool(Tool):
         self, 
         query: str, 
         summary: bool = True,
-        start_published_date: Optional[str] = None,
-        end_published_date: Optional[str] = None,
-        start_crawl_date: Optional[str] = None,
-        end_crawl_date: Optional[str] = None,
-        include_text: Optional[List[str]] = None,
-        exclude_text: Optional[List[str]] = None,
         num_results: int = 20
     ) -> ToolResult:
         """
@@ -149,18 +99,9 @@ class WebSearchTool(Tool):
         - Published Date: When the content was published (if available)
         - Score: The relevance score of the result
         
-        Use this function to discover relevant web pages before potentially 
-        using crawl_webpage to extract their complete content.
-        
         Parameters:
         - query: The search query to find relevant web pages
         - summary: Whether to include a summary of the results (default: True)
-        - start_published_date: Optional start date for published results (ISO format)
-        - end_published_date: Optional end date for published results (ISO format)
-        - start_crawl_date: Optional start date for crawled results (ISO format)
-        - end_crawl_date: Optional end date for crawled results (ISO format)
-        - include_text: List of terms that must be included in the results
-        - exclude_text: List of terms that must be excluded from the results
         - num_results: The number of results to return (default: 20)
         """
         try:
@@ -255,27 +196,7 @@ class WebSearchTool(Tool):
         example='''
         <!-- 
         The crawl-webpage tool extracts the complete text content from web pages.
-        Use this tool when you need:
-        
-        - Detailed information from specific articles or pages
-        - The full text content rather than just summaries
-        - To analyze or process the contents of a webpage
-        - To extract information for further processing
-        
-        This tool returns:
-        - The webpage title
-        - The original URL
-        - Publication date (when available)
-        - The complete text content of the page
-        
-        Common use cases:
-        - Reading articles, blog posts, or news stories
-        - Extracting documentation or technical guides
-        - Gathering detailed product information
-        - Researching academic or scientific content
-        
-        Note: Some content may be inaccessible due to paywalls, access restrictions,
-        or dynamic content loading mechanisms.
+        Use this tool when you need detailed information from specific web pages.
         -->
         
         <!-- Basic webpage crawl example -->
