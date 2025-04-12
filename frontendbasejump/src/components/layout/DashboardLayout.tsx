@@ -14,9 +14,11 @@ import {
   MessagesSquare,
   ArrowRight,
   PanelLeft,
+  Wrench
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { getProjects, getThreads } from "@/lib/api";
+import { useToolsPanel } from "@/lib/hooks/use-tools-panel";
 
 import UserAccountPanel from "@/components/dashboard/user-account-panel";
 
@@ -81,6 +83,25 @@ export default function DashboardLayout({
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(true);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
 
+  // Use our tools panel hook
+  const { 
+    showPanel, 
+    renderToolsPanel,
+    toolCalls
+  } = useToolsPanel();
+
+  // Use tool panel as the right panel if it's available
+  const effectiveRightPanelContent = showPanel ? renderToolsPanel() : rightPanelContent;
+  const effectiveRightPanelTitle = showPanel ? `Suna's Computer (${toolCalls.length})` : rightPanelTitle;
+
+  // Update right sidebar visibility based on panel visibility
+  useEffect(() => {
+    if (showPanel) {
+      setShowRightSidebar(true);
+      setRightSidebarCollapsed(false);
+    }
+  }, [showPanel]);
+
   // State for draggable panel
   const [position, setPosition] = useState({ x: 20, y: 400 });
   const [isDragging, setIsDragging] = useState(false);
@@ -129,8 +150,8 @@ export default function DashboardLayout({
 
   // Set initial showRightSidebar based on rightPanelContent prop
   useEffect(() => {
-    setShowRightSidebar(!!rightPanelContent);
-  }, [rightPanelContent]);
+    setShowRightSidebar(!!effectiveRightPanelContent);
+  }, [effectiveRightPanelContent]);
 
   // Load layout state from localStorage on initial render
   useEffect(() => {
@@ -141,7 +162,7 @@ export default function DashboardLayout({
           const layout = JSON.parse(savedLayout);
           setLeftSidebarCollapsed(layout.leftSidebarCollapsed);
 
-          if (rightPanelContent) {
+          if (effectiveRightPanelContent) {
             setRightSidebarCollapsed(layout.rightSidebarCollapsed);
             setShowRightSidebar(layout.showRightSidebar);
           }
@@ -160,7 +181,7 @@ export default function DashboardLayout({
         console.error("Error loading layout from localStorage:", error);
       }
     }
-  }, [rightPanelContent]);
+  }, [effectiveRightPanelContent]);
 
   // Save layout state to localStorage whenever relevant state changes
   useEffect(() => {
@@ -465,12 +486,19 @@ export default function DashboardLayout({
         >
           <header className="h-12 px-4 flex items-center justify-end">
             <div className="flex items-center gap-2">
-              {!showRightSidebar && rightPanelContent && (
+              {!showRightSidebar && effectiveRightPanelContent && (
                 <button
                   onClick={toggleRightSidebarVisibility}
                   className="px-3 py-1.5 rounded-full hover:bg-hover-bg dark:hover:bg-hover-bg-dark text-foreground/80 hover:text-foreground transition-all duration-200 text-xs border border-subtle dark:border-white/10"
                 >
-                  {rightPanelTitle}
+                  {showPanel ? (
+                    <span className="flex items-center gap-1">
+                      <Wrench className="h-3 w-3" />
+                      Tool Calls
+                    </span>
+                  ) : (
+                    effectiveRightPanelTitle
+                  )}
                 </button>
               )}
               <div className="relative">
@@ -500,7 +528,7 @@ export default function DashboardLayout({
             </div>
 
             {/* Floating draggable right panel - only show when right sidebar is collapsed and visible */}
-            {showRightSidebar && rightSidebarCollapsed && rightPanelContent && (
+            {showRightSidebar && rightSidebarCollapsed && effectiveRightPanelContent && (
               <div
                 ref={floatingPanelRef}
                 className={`absolute bg-card-bg dark:bg-background-secondary border border-subtle dark:border-white/10 rounded-lg shadow-custom flex flex-col w-72 overflow-hidden ${
@@ -521,7 +549,7 @@ export default function DashboardLayout({
                       className="text-icon-color dark:text-icon-color-dark"
                     />
                     <h3 className="font-medium text-foreground text-xs select-none">
-                      {rightPanelTitle}
+                      {effectiveRightPanelTitle}
                     </h3>
                   </div>
                   <div className="flex items-center gap-1">
@@ -566,7 +594,7 @@ export default function DashboardLayout({
         </div>
 
         {/* Right Sidebar - only show when visible */}
-        {showRightSidebar && rightPanelContent && (
+        {showRightSidebar && effectiveRightPanelContent && (
           <div
             className={`h-screen border-l border-subtle dark:border-white/10 bg-background-secondary dark:bg-background-secondary transition-all duration-300 ease-in-out rounded-l-xl shadow-custom ${
               rightSidebarCollapsed
@@ -579,7 +607,9 @@ export default function DashboardLayout({
             }}
           >
             <div className="h-12 p-2 flex items-center justify-between rounded-t-xl">
-              <h2 className="font-medium text-sm text-card-title">{rightPanelTitle}</h2>
+              <h2 className="font-medium text-sm text-card-title">
+                {effectiveRightPanelTitle}
+              </h2>
               <div className="flex items-center gap-1">
                 <button
                   onClick={toggleRightSidebar}
@@ -599,7 +629,7 @@ export default function DashboardLayout({
             </div>
 
             <div className="p-3 overflow-y-auto h-[calc(100vh-48px)]">
-              {rightPanelContent || (
+              {effectiveRightPanelContent || (
                 <div className="flex flex-col items-center justify-center h-full text-foreground/40">
                   <p className="text-sm">No content selected</p>
                 </div>
