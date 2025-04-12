@@ -28,7 +28,7 @@ export default async function ManageTeamInvitations({ accountId }: Props) {
                 <Table>
                     <TableBody>
                         {invitations?.map((invitation: any) => (
-                            <TableRow key={invitation.invitation_id} className="hover:bg-hover-bg dark:hover:bg-hover-bg-dark border-subtle dark:border-white/10">
+                            <TableRow key={invitation.invitation_id} className="hover:bg-hover-bg border-subtle dark:border-white/10">
                                 <TableCell>
                                     <div className="flex items-center gap-x-2">
                                         <span className="text-card-title font-medium">{invitation.invitation_email || "Email invitation"}</span>

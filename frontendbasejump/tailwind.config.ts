@@ -61,11 +61,7 @@ const config = {
         'card-title': "var(--card-title)",
         'border-subtle': "var(--border-color)",
         'hover-bg': "var(--hover-bg)",
-        'hover-bg-dark': "var(--hover-bg-dark)",
         'icon-color': "var(--icon-color)",
-        'icon-color-dark': "var(--icon-color-dark)",
-        'button-hover': "var(--button-hover)",
-        'button-hover-dark': "var(--button-hover-dark)",
       },
       boxShadow: {
         'custom': '0 2px 10px 0 var(--shadow-color)',
