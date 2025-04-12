@@ -151,9 +151,7 @@ class SandboxShellTool(SandboxToolsBase):
                 return self.success_response({
                     "output": logs,
                     "exit_code": response.exit_code,
-                    "cwd": cwd,
-                    "session_id": session_id,
-                    "command_id": response.cmd_id
+                    "cwd": cwd
                 })
             else:
                 error_msg = f"Command failed with exit code {response.exit_code}"

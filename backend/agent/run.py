@@ -21,11 +21,10 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     
     if not thread_manager:
         thread_manager = ThreadManager()
-    
     client = await thread_manager.db.client
     ## probably want to move to api.py
     project = await client.table('projects').select('*').eq('project_id', project_id).execute()
-    if project.data[0]['sandbox_id']:
+    if project.data and project.data[0]['sandbox_id'] is not None:
         sandbox_id = project.data[0]['sandbox_id']
         sandbox_pass = project.data[0]['sandbox_pass']
         sandbox = await get_or_start_sandbox(sandbox_id)
@@ -37,7 +36,6 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
             'sandbox_id': sandbox_id,
             'sandbox_pass': sandbox_pass
         }).eq('project_id', project_id).execute()
-    
     # thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)

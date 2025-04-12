@@ -544,9 +544,28 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       loadData();
     }
 
+    // Handle visibility changes for more responsive streaming
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && agentRunId && agentStatus === 'running') {
+        console.log('[PAGE] Page became visible, checking stream health');
+        
+        // If we're supposed to be streaming but not receiving chunks, restart the stream
+        if (!isStreaming && streamCleanupRef.current === null) {
+          console.log('[PAGE] Stream appears disconnected, reconnecting');
+          handleStreamAgent(agentRunId);
+        }
+      }
+    };
+
+    // Add visibility change listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Cleanup function
     return () => {
       isMounted = false;
+      
+      // Remove visibility change listener
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       
       // Properly clean up stream
       if (streamCleanupRef.current) {
@@ -558,7 +577,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       // Reset component state to prevent memory leaks
       console.log('[PAGE] Resetting component state on unmount');
     };
-  }, [projectId, threadId, user, handleStreamAgent]);
+  }, [projectId, threadId, user, handleStreamAgent, agentRunId, agentStatus, isStreaming]);
 
   const handleSubmitMessage = async (message: string) => {
     if (!message.trim()) return;
