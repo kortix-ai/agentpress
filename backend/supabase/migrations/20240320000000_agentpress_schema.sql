@@ -277,26 +277,33 @@ GRANT ALL PRIVILEGES ON TABLE agent_runs TO authenticated, service_role;
 -- Create a function that matches the Python get_messages behavior
 CREATE OR REPLACE FUNCTION get_llm_formatted_messages(p_thread_id UUID)
 RETURNS JSONB
-SECURITY INVOKER
+SECURITY DEFINER -- Changed to SECURITY DEFINER to allow service role access
 LANGUAGE plpgsql
 AS $$
 DECLARE
     messages_array JSONB := '[]'::JSONB;
     has_access BOOLEAN;
+    current_role TEXT;
 BEGIN
-    -- Check if thread exists and user has access
-    SELECT EXISTS (
-        SELECT 1 FROM threads t
-        LEFT JOIN projects p ON t.project_id = p.project_id
-        WHERE t.thread_id = p_thread_id
-        AND (
-            basejump.has_role_on_account(t.account_id) = true OR 
-            basejump.has_role_on_account(p.account_id) = true
-        )
-    ) INTO has_access;
+    -- Get current role
+    SELECT current_user INTO current_role;
     
-    IF NOT has_access THEN
-        RAISE EXCEPTION 'Thread not found or access denied';
+    -- Skip access check for service_role
+    IF current_role = 'authenticated' THEN
+        -- Check if thread exists and user has access
+        SELECT EXISTS (
+            SELECT 1 FROM threads t
+            LEFT JOIN projects p ON t.project_id = p.project_id
+            WHERE t.thread_id = p_thread_id
+            AND (
+                basejump.has_role_on_account(t.account_id) = true OR 
+                basejump.has_role_on_account(p.account_id) = true
+            )
+        ) INTO has_access;
+        
+        IF NOT has_access THEN
+            RAISE EXCEPTION 'Thread not found or access denied';
+        END IF;
     END IF;
 
     -- Parse content if it's stored as a string and return proper JSON objects

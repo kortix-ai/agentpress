@@ -174,7 +174,7 @@ async def check_for_active_project_agent_run(client, project_id: str):
 
 async def get_agent_run_with_access_check(client, agent_run_id: str, user_id: str):
     """
-    Get an agent run's data after verifying the user has access to it.
+    Get an agent run's data after verifying the user has access to it through account membership.
     
     Args:
         client: The Supabase client
@@ -195,10 +195,10 @@ async def get_agent_run_with_access_check(client, agent_run_id: str, user_id: st
     agent_run_data = agent_run.data[0]
     thread_id = agent_run_data['thread_id']
     
-    # Verify user has access to this thread
+    # Verify user has access to this thread using the updated verify_thread_access function
     await verify_thread_access(client, thread_id, user_id)
     
-    return agent_run_data 
+    return agent_run_data
 
 async def _cleanup_agent_run(agent_run_id: str):
     """Clean up Redis keys when an agent run is done."""
@@ -219,12 +219,13 @@ async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id
     # Verify user has access to this thread
     await verify_thread_access(client, thread_id, user_id)
     
-    # Get the project_id for this thread
-    thread_result = await client.table('threads').select('project_id').eq('thread_id', thread_id).execute()
+    # Get the project_id and account_id for this thread
+    thread_result = await client.table('threads').select('project_id', 'account_id').eq('thread_id', thread_id).execute()
     if not thread_result.data:
         raise HTTPException(status_code=404, detail="Thread not found")
     
-    project_id = thread_result.data[0]['project_id']
+    thread_data = thread_result.data[0]
+    project_id = thread_data.get('project_id')
     
     # Check if there is already an active agent run for this project
     active_run_id = await check_for_active_project_agent_run(client, project_id)
