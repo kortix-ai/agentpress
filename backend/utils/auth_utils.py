@@ -1,7 +1,8 @@
 from fastapi import HTTPException, Request, Depends
-from typing import Optional
+from typing import Optional, List, Dict, Any
 import jwt
 from jwt.exceptions import PyJWTError
+from utils.logger import logger
 
 # This function extracts the user ID from Supabase JWT
 async def get_current_user_id(request: Request) -> str:
@@ -107,7 +108,7 @@ async def get_user_id_from_stream_auth(
 
 async def verify_thread_access(client, thread_id: str, user_id: str):
     """
-    Verify that a user has access to a specific thread.
+    Verify that a user has access to a specific thread based on account membership.
     
     Args:
         client: The Supabase client
@@ -120,9 +121,17 @@ async def verify_thread_access(client, thread_id: str, user_id: str):
     Raises:
         HTTPException: If the user doesn't have access to the thread
     """
-    thread = await client.table('threads').select('thread_id').eq('thread_id', thread_id).eq('user_id', user_id).execute()
+    # Query the thread to get account information
+    thread_result = await client.table('threads').select('*').eq('thread_id', thread_id).execute()
+
+    if not thread_result.data or len(thread_result.data) == 0:
+        raise HTTPException(status_code=404, detail="Thread not found")
     
-    if not thread.data or len(thread.data) == 0:
-        raise HTTPException(status_code=403, detail="Not authorized to access this thread")
-    
-    return True
+    thread_data = thread_result.data[0]
+    account_id = thread_data.get('account_id')
+    # When using service role, we need to manually check account membership instead of using current_user_account_role
+    if account_id:
+        account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
+        if account_user_result.data and len(account_user_result.data) > 0:
+            return True
+    raise HTTPException(status_code=403, detail="Not authorized to access this thread")

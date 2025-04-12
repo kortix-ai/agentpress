@@ -24,24 +24,27 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     client = await thread_manager.db.client
     ## probably want to move to api.py
     project = await client.table('projects').select('*').eq('project_id', project_id).execute()
-    if project.data and project.data[0]['sandbox_id'] is not None:
-        sandbox_id = project.data[0]['sandbox_id']
-        sandbox_pass = project.data[0]['sandbox_pass']
+    if project.data[0].get('sandbox', {}).get('id'):
+        sandbox_id = project.data[0]['sandbox']['id']
+        sandbox_pass = project.data[0]['sandbox']['pass']
         sandbox = await get_or_start_sandbox(sandbox_id)
     else:
         sandbox_pass = str(uuid4())
         sandbox = create_sandbox(sandbox_pass)
         sandbox_id = sandbox.id
         await client.table('projects').update({
-            'sandbox_id': sandbox_id,
-            'sandbox_pass': sandbox_pass
+            'sandbox': {
+                'id': sandbox_id,
+                'pass': sandbox_pass
+            }
         }).eq('project_id', project_id).execute()
-
-    thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
-    thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)
-    thread_manager.add_tool(WebSearchTool)
+    
+    # thread_manager.add_tool(SandboxBrowseTool, sandbox=sandbox)
+    thread_manager.add_tool(SandboxShellTool, sandbox=sandbox)
+    thread_manager.add_tool(SandboxFilesTool, sandbox=sandbox)
     thread_manager.add_tool(MessageTool)
-    thread_manager.add_tool(SandboxDeployTool, sandbox_id=sandbox_id, password=sandbox_pass)
+    thread_manager.add_tool(WebSearchTool)
+    thread_manager.add_tool(SandboxDeployTool, sandbox=sandbox)
 
     system_message = { "role": "system", "content": get_system_prompt() }
 
@@ -159,7 +162,21 @@ async def test_agent():
     client = await DBConnection().client
     
     try:
-        project_result = await client.table('projects').select('*').eq('name', 'test11').eq('user_id', '68e1da55-0749-49db-937a-ff56bf0269a0').execute()
+        # Get user's personal account
+        account_result = await client.rpc('get_personal_account').execute()
+        
+        # if not account_result.data:
+        #     print("Error: No personal account found")
+        #     return
+            
+        account_id = "a5fe9cb6-4812-407e-a61c-fe95b7320c59"
+        
+        if not account_id:
+            print("Error: Could not get account ID")
+            return
+        
+        # Find or create a test project in the user's account
+        project_result = await client.table('projects').select('*').eq('name', 'test11').eq('account_id', account_id).execute()
         
         if project_result.data and len(project_result.data) > 0:
             # Use existing test project
@@ -167,11 +184,18 @@ async def test_agent():
             print(f"\n🔄 Using existing test project: {project_id}")
         else:
             # Create new test project if none exists
-            project_result = await client.table('projects').insert({"name": "test11", "user_id": "68e1da55-0749-49db-937a-ff56bf0269a0"}).execute()
+            project_result = await client.table('projects').insert({
+                "name": "test11", 
+                "account_id": account_id
+            }).execute()
             project_id = project_result.data[0]['project_id']
             print(f"\n✨ Created new test project: {project_id}")
         
-        thread_result = await client.table('threads').insert({'project_id': project_id}).execute()
+        # Create a thread for this project
+        thread_result = await client.table('threads').insert({
+            'project_id': project_id,
+            'account_id': account_id
+        }).execute()
         thread_data = thread_result.data[0] if thread_result.data else None
         
         if not thread_data:
