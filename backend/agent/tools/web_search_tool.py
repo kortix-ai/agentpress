@@ -164,53 +164,71 @@ class WebSearchTool(Tool):
         - num_results: The number of results to return (default: 20)
         """
         try:
-            # Handle string to boolean conversion for the summary parameter
-            if isinstance(summary, str):
-                summary = summary.lower() == "true"
-                
-            # Handle string to integer conversion for the num_results parameter
-            if isinstance(num_results, str):
-                num_results = int(num_results)
-                
-            # Prepare parameters, only including non-None values
-            params = {"query": query, "summary": summary, "num_results": num_results, "type": "auto"}
+            # Ensure we have a valid query
+            if not query or not isinstance(query, str):
+                return self.fail_response("A valid search query is required.")
             
-            if start_published_date:
-                params["start_published_date"] = start_published_date
-            if end_published_date:
-                params["end_published_date"] = end_published_date
-            if start_crawl_date:
-                params["start_crawl_date"] = start_crawl_date
-            if end_crawl_date:
-                params["end_crawl_date"] = end_crawl_date
-            if include_text:
-                params["include_text"] = include_text
-            if exclude_text:
-                params["exclude_text"] = exclude_text
+            # Basic parameters - use only the minimum required to avoid API errors
+            params = {
+                "query": query,
+                "type": "auto",
+                "livecrawl": "auto"
+            }
             
-            # Execute the search
+            # Handle summary parameter (boolean conversion)
+            if summary is None:
+                params["summary"] = True
+            elif isinstance(summary, bool):
+                params["summary"] = summary
+            elif isinstance(summary, str):
+                params["summary"] = summary.lower() == "true"
+            else:
+                params["summary"] = True
+                
+            # Handle num_results parameter (integer conversion)
+            if num_results is None:
+                params["num_results"] = 20
+            elif isinstance(num_results, int):
+                params["num_results"] = max(1, min(num_results, 50))
+            elif isinstance(num_results, str):
+                try:
+                    params["num_results"] = max(1, min(int(num_results), 50))
+                except ValueError:
+                    params["num_results"] = 20
+            else:
+                params["num_results"] = 20
+                
+            # Execute the search with minimal parameters
             search_response = self.exa.search_and_contents(**params)
-
-            # print(search_response)
             
-            # Format the results to include only specified fields
+            # Format the results
             formatted_results = []
             for result in search_response.results:
                 formatted_result = {
                     "Title": result.title,
-                    "URL": result.url,
-                    "Summary": result.summary if hasattr(result, 'summary') else None,
-                    "Published Date": result.published_date,
-                    "Score": result.score
+                    "URL": result.url
                 }
+                
+                # Add optional fields if they exist
+                if hasattr(result, 'summary') and result.summary:
+                    formatted_result["Summary"] = result.summary
+                    
+                if hasattr(result, 'published_date') and result.published_date:
+                    formatted_result["Published Date"] = result.published_date
+                    
+                if hasattr(result, 'score'):
+                    formatted_result["Score"] = result.score
+                    
                 formatted_results.append(formatted_result)
-
-            # print(formatted_results)
             
             return self.success_response(formatted_results)
         
         except Exception as e:
-            return self.fail_response(f"Error performing web search: {str(e)}")
+            error_message = str(e)
+            simplified_message = f"Error performing web search: {error_message[:200]}"
+            if len(error_message) > 200:
+                simplified_message += "..."
+            return self.fail_response(simplified_message)
 
     @openapi_schema({
         "type": "function",
@@ -290,29 +308,49 @@ class WebSearchTool(Tool):
         - url: The URL of the webpage to crawl
         """
         try:
-            # Execute the content extraction
+            # Parse the URL parameter exactly as it would appear in XML
+            if not url:
+                return self.fail_response("A valid URL is required.")
+                
+            # Handle url parameter (as it would appear in XML)
+            if isinstance(url, str):
+                # Add protocol if missing
+                if not (url.startswith('http://') or url.startswith('https://')):
+                    url = 'https://' + url
+            else:
+                return self.fail_response("URL must be a string.")
+                
+            # Execute the crawl with the parsed URL
             result = self.exa.get_contents(
                 [url],
-                text=True
+                text=True,
+                livecrawl="auto"
             )
             
-            # print(result)
-
-            # Format the results to include only specified fields
+            # Format the results to include all available fields
             formatted_results = []
             for content in result.results:
                 formatted_result = {
                     "Title": content.title,
                     "URL": content.url,
-                    "Published Date": content.published_date,
                     "Text": content.text
                 }
+                
+                # Add optional fields if they exist
+                if hasattr(content, 'published_date') and content.published_date:
+                    formatted_result["Published Date"] = content.published_date
+                    
                 formatted_results.append(formatted_result)
             
             return self.success_response(formatted_results)
         
         except Exception as e:
-            return self.fail_response(f"Error crawling webpage: {str(e)}")
+            error_message = str(e)
+            # Truncate very long error messages
+            simplified_message = f"Error crawling webpage: {error_message[:200]}"
+            if len(error_message) > 200:
+                simplified_message += "..."
+            return self.fail_response(simplified_message)
 
 
 if __name__ == "__main__":
