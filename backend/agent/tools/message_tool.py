@@ -129,7 +129,7 @@ if __name__ == "__main__":
         
         # Test question
         ask_result = await message_tool.ask(
-            "Would you like to proceed with the next phase?",
+            text="Would you like to proceed with the next phase?",
             attachments="summary.pdf"
         )
         print("Question result:", ask_result)

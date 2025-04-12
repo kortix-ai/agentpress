@@ -39,7 +39,7 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     # thread_manager.add_tool(SandboxBrowseTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxShellTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)
-    # thread_manager.add_tool(MessageTool)
+    thread_manager.add_tool(MessageTool)
     
 
     system_message = { "role": "system", "content": get_system_prompt() }
