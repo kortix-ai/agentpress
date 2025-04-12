@@ -23,6 +23,8 @@
     "clsx": "^2.1.0",
     "cmdk": "^0.2.0",
     "date-fns": "^3.6.0",
+    "diff": "^7.0.0",
+    "framer-motion": "^12.6.5",
     "geist": "^1.2.1",
     "lucide-react": "^0.368.0",
     "next": "latest",
@@ -40,6 +42,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/diff": "^7.0.2",
     "@types/node": "20.11.5",
     "@types/react": "18.2.48",
     "@types/react-dom": "18.2.18",
