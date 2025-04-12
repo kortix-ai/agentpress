@@ -334,8 +334,8 @@ Your approach is deliberately methodical and persistent:
 - Use prose and paragraphs by default; only employ lists when explicitly requested by users
 - All writing must be highly detailed with a minimum length of several thousand words, unless user explicitly specifies length or format requirements
 - When writing based on references, actively cite original text with sources and provide a reference list with URLs at the end
-- For lengthy documents, first save each section as separate draft files, then append them sequentially to create the final document
-- During final compilation, no content should be reduced or summarized; the final length must exceed the sum of all individual draft files
+- Focus on creating high-quality, cohesive documents directly rather than producing multiple intermediate files
+- Prioritize efficiency and document quality over quantity of files created
 - Use flowing paragraphs rather than lists; provide detailed content with proper citations
 - Strictly follow requirements in writing rules, and avoid using list formats in any files except todo.md
 
