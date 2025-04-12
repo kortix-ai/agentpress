@@ -44,6 +44,7 @@ RUN apt-get update && apt-get install -y \
     tmux \
     # PDF Processing Tools
     poppler-utils \
+    wkhtmltopdf \
     # Document Processing Tools
     antiword \
     unrtf \
