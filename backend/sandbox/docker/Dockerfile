@@ -67,7 +67,16 @@ RUN apt-get update && apt-get install -y \
     lsof \
     iputils-ping \
     dnsutils \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js and npm
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g npm@latest
+
+# Install Cloudflare Wrangler CLI globally
+RUN npm install -g wrangler
 
 # Install noVNC
 RUN git clone https://github.com/novnc/noVNC.git /opt/novnc \
@@ -84,10 +93,18 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy server script
+COPY server.py /app/server.py
+
 # Install Playwright and browsers with system dependencies
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN playwright install --with-deps chromium
+# Install Playwright package first
+RUN pip install playwright
+# Then install dependencies and browsers
 RUN playwright install-deps
+RUN playwright install chromium
+# Verify installation
+RUN python -c "from playwright.sync_api import sync_playwright; print('Playwright installation verified')"
 
 # Copy the application code
 # COPY . .

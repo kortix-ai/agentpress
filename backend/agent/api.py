@@ -234,7 +234,6 @@ async def start_agent(thread_id: str, user_id: str = Depends(get_current_user_id
         logger.info(f"Stopping existing agent run {active_run_id} before starting new one")
         await stop_agent_run(active_run_id)
     
-    # Create a new agent run without responses field
     agent_run = await client.table('agent_runs').insert({
         "thread_id": thread_id,
         "status": "running",
@@ -304,17 +303,14 @@ async def get_agent_run(agent_run_id: str, user_id: str = Depends(get_current_us
     logger.info(f"Fetching agent run details: {agent_run_id}")
     client = await db.client
     
-    # Verify user has access to the agent run and get run data
     agent_run_data = await get_agent_run_with_access_check(client, agent_run_id, user_id)
     
-    # Return the agent run data with responses from the database
     return {
         "id": agent_run_data['id'],
         "threadId": agent_run_data['thread_id'],
         "status": agent_run_data['status'],
         "startedAt": agent_run_data['started_at'],
         "completedAt": agent_run_data['completed_at'],
-        "responses": agent_run_data['responses'],
         "error": agent_run_data['error']
     }
 
@@ -336,13 +332,13 @@ async def stream_agent_run(
     
     # Define a streaming generator that uses in-memory responses
     async def stream_generator():
-        logger.info(f"Streaming responses for agent run: {agent_run_id}")
+        logger.debug(f"Streaming responses for agent run: {agent_run_id}")
         
         # Check if this is an active run with stored responses
         if agent_run_id in active_agent_runs:
             # First, send all existing responses
             stored_responses = active_agent_runs[agent_run_id]
-            logger.info(f"Sending {len(stored_responses)} existing responses for agent run: {agent_run_id}")
+            logger.debug(f"Sending {len(stored_responses)} existing responses for agent run: {agent_run_id}")
             
             for response in stored_responses:
                 yield f"data: {json.dumps(response)}\n\n"
@@ -374,7 +370,7 @@ async def stream_agent_run(
         
         # Always send a completion status at the end
         yield f"data: {json.dumps({'type': 'status', 'status': 'completed'})}\n\n"
-        logger.info(f"Streaming complete for agent run: {agent_run_id}")
+        logger.debug(f"Streaming complete for agent run: {agent_run_id}")
     
     # Return a streaming response
     return StreamingResponse(
@@ -391,7 +387,7 @@ async def stream_agent_run(
 
 async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: str, project_id: str):
     """Run the agent in the background and handle status updates."""
-    logger.info(f"Starting background agent run: {agent_run_id} for thread: {thread_id} (instance: {instance_id})")
+    logger.debug(f"Starting background agent run: {agent_run_id} for thread: {thread_id} (instance: {instance_id})")
     client = await db.client
     
     # Tracking variables
@@ -555,8 +551,7 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
                 try:
                     update_result = await client.table('agent_runs').update({
                         "status": "completed",
-                        "completed_at": completion_timestamp,
-                        "responses": json.dumps(all_responses)
+                        "completed_at": completion_timestamp
                     }).eq("id", agent_run_id).execute()
                     
                     if hasattr(update_result, 'data') and update_result.data:
@@ -623,8 +618,7 @@ async def run_agent_background(agent_run_id: str, thread_id: str, instance_id: s
                 update_result = await client.table('agent_runs').update({
                     "status": "failed",
                     "error": f"{error_message}\n{traceback_str}",
-                    "completed_at": completion_timestamp,
-                    "responses": json.dumps(all_responses if 'all_responses' in locals() else [])
+                    "completed_at": completion_timestamp
                 }).eq("id", agent_run_id).execute()
                 
                 if hasattr(update_result, 'data') and update_result.data:

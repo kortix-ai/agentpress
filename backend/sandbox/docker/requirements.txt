@@ -1,8 +1,2 @@
-pyperclip==1.9.0
-gradio==5.23.1
-json-repair
-langchain-mistralai==0.2.4
-langchain-google-genai==2.0.8
-MainContentExtractor==0.0.4
 fastapi==0.115.12
 uvicorn==0.34.0

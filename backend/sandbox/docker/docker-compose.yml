@@ -6,7 +6,7 @@ services:
       dockerfile: ${DOCKERFILE:-Dockerfile}
       args:
         TARGETPLATFORM: ${TARGETPLATFORM:-linux/amd64}
-    image: kortixmarko/kortix-suna:0.0.2
+    image: kortixmarko/kortix-suna:0.0.3
     ports:
       - "7788:7788"  # Gradio default port
       - "6080:6080"  # noVNC web interface

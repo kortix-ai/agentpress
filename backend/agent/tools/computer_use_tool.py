@@ -24,8 +24,8 @@ KEYBOARD_KEYS = [
 class ComputerUseTool(Tool):
     """VNC control tool for remote desktop automation."""
     
-    def __init__(self, host: str = 'sandbox-ip-go-here', port: int = 5900, 
-                 password: str = 'admin'):
+    def __init__(self, host: str = '0.tcp.eu.ngrok.io', port: int = 12805, 
+                 password: str = '5c8e8451-9a5e-4de5-bf8b-6150c68a662d'):
         """Initialize VNC tool basic attributes."""
         super().__init__()
         self._loop = None  # Store reference to event loop
@@ -35,10 +35,10 @@ class ComputerUseTool(Tool):
         self.client = None
         self.mouse_x = 0  # Track current mouse position
         self.mouse_y = 0
-        
+    
     @classmethod
-    async def create(cls, host: str = 'sandbox-ip-go-here', port: int = 5900, 
-                    password: str = 'admin'):
+    async def create(cls, host: str = '0.tcp.eu.ngrok.io', port: int = 12805, 
+                    password: str = '5c8e8451-9a5e-4de5-bf8b-6150c68a662d'):
         """Create and initialize a VNC tool instance."""
         instance = cls(host, port, password)
         await instance._connect()

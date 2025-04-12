@@ -3,14 +3,13 @@ from uuid import uuid4
 from typing import Optional
 
 from agent.tools.message_tool import MessageTool
+from agent.tools.sb_deploy_tool import SandboxDeployTool
 from agent.tools.web_search_tool import WebSearchTool
 from dotenv import load_dotenv
 
 from agentpress.thread_manager import ThreadManager
 from agentpress.response_processor import ProcessorConfig
-from agent.tools.sb_browse_tool import SandboxBrowseTool
 from agent.tools.sb_shell_tool import SandboxShellTool
-# from agent.tools.sb_website_tool import SandboxWebsiteTool
 from agent.tools.sb_files_tool import SandboxFilesTool
 from agent.prompt import get_system_prompt
 from sandbox.sandbox import daytona, create_sandbox, get_or_start_sandbox
@@ -42,7 +41,7 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     thread_manager.add_tool(SandboxFilesTool, sandbox_id=sandbox_id, password=sandbox_pass)
     thread_manager.add_tool(WebSearchTool)
     thread_manager.add_tool(MessageTool)
-    
+    thread_manager.add_tool(SandboxDeployTool, sandbox_id=sandbox_id, password=sandbox_pass)
 
     system_message = { "role": "system", "content": get_system_prompt() }
 

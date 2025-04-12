@@ -36,7 +36,7 @@ CREATE TABLE agent_runs (
     status TEXT NOT NULL DEFAULT 'running',
     started_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     completed_at TIMESTAMP WITH TIME ZONE,
-    responses JSONB NOT NULL DEFAULT '[]'::jsonb,
+    responses JSONB NOT NULL DEFAULT '[]'::jsonb, -- TO BE REMOVED, NOT USED 
     error TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
