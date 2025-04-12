@@ -552,6 +552,8 @@ export const streamAgent = (agentRunId: string, callbacks: {
 }): () => void => {
   let eventSourceInstance: EventSource | null = null;
   let isClosing = false;
+  let wasHidden = false;
+  let reconnectTimeout: NodeJS.Timeout | null = null;
   
   console.log(`[STREAM] Setting up stream for agent run ${agentRunId}`);
   
@@ -560,6 +562,12 @@ export const streamAgent = (agentRunId: string, callbacks: {
       if (isClosing) {
         console.log(`[STREAM] Already closing, not setting up stream for ${agentRunId}`);
         return;
+      }
+      
+      // Clear any pending reconnect timeout
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
       }
       
       const supabase = createClient();
@@ -574,6 +582,12 @@ export const streamAgent = (agentRunId: string, callbacks: {
       
       const url = new URL(`${API_URL}/agent-run/${agentRunId}/stream`);
       url.searchParams.append('token', session.access_token);
+      
+      // Close existing EventSource if it exists
+      if (eventSourceInstance) {
+        console.log(`[STREAM] Closing existing EventSource before creating a new one`);
+        eventSourceInstance.close();
+      }
       
       console.log(`[STREAM] Creating EventSource for ${agentRunId}`);
       eventSourceInstance = new EventSource(url.toString());
@@ -645,6 +659,22 @@ export const streamAgent = (agentRunId: string, callbacks: {
           return;
         }
         
+        // If the page was hidden and now visible again, we might need to reconnect
+        if (wasHidden && document.visibilityState === 'visible') {
+          console.log(`[STREAM] Page became visible after being hidden, attempting to reconnect`);
+          wasHidden = false;
+          
+          // Close the current connection if it exists
+          if (eventSourceInstance) {
+            eventSourceInstance.close();
+            eventSourceInstance = null;
+          }
+          
+          // Try to set up a new stream
+          setupStream();
+          return;
+        }
+        
         // Only log as error for unexpected closures
         console.log(`[STREAM] EventSource connection closed for ${agentRunId}`);
         
@@ -674,12 +704,51 @@ export const streamAgent = (agentRunId: string, callbacks: {
     }
   };
   
-  // Set up the stream once
+  // Handle page visibility changes
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') {
+      console.log(`[STREAM] Page hidden, marking stream as potentially stale for ${agentRunId}`);
+      wasHidden = true;
+    } else if (document.visibilityState === 'visible') {
+      console.log(`[STREAM] Page visible again for ${agentRunId}`);
+      
+      // If we were previously hidden and now visible, check if we need to reconnect
+      if (wasHidden) {
+        wasHidden = false;
+        
+        // Check if the EventSource is in a good state
+        if (!eventSourceInstance || eventSourceInstance.readyState === EventSource.CLOSED) {
+          console.log(`[STREAM] Stream appears stale after visibility change, reconnecting for ${agentRunId}`);
+          
+          // Schedule reconnect with a small delay to allow for better state synchronization
+          reconnectTimeout = setTimeout(() => {
+            setupStream();
+          }, 50);
+        } else {
+          console.log(`[STREAM] Stream appears to be in good state after visibility change for ${agentRunId}`);
+        }
+      }
+    }
+  };
+  
+  // Set up visibility change listener
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  
+  // Set up the stream initially
   setupStream();
   
   // Return cleanup function
   return () => {
     console.log(`[STREAM] Manual cleanup called for ${agentRunId}`);
+    
+    // Remove visibility change listener
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Clear any pending reconnect timeout
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
     
     if (isClosing) {
       console.log(`[STREAM] Already closing, ignoring duplicate cleanup for ${agentRunId}`);

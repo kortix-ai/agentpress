@@ -118,6 +118,9 @@ class ResponseProcessor:
         # For tracking pending tool executions
         pending_tool_executions = []
         
+        # Set to track already yielded tool results by their index
+        yielded_tool_indices = set()
+        
         # Tool index counter for tracking all tool executions
         tool_index = 0
         
@@ -130,6 +133,7 @@ class ResponseProcessor:
         # logger.debug(f"Starting to process streaming response for thread {thread_id}")
         logger.info(f"Config: XML={config.xml_tool_calling}, Native={config.native_tool_calling}, " 
                    f"Execute on stream={config.execute_on_stream}, Execution strategy={config.tool_execution_strategy}")
+        logger.info(f"Avoiding duplicate tool results using tracking mechanism")
         
         # if config.max_xml_tool_calls > 0:
         #     logger.info(f"XML tool call limit enabled: {config.max_xml_tool_calls}")
@@ -313,59 +317,6 @@ class ResponseProcessor:
                     logger.info("Stopping stream due to XML tool call limit")
                     break
             
-                # Check for completed tool executions
-                completed_executions = []
-                for i, execution in enumerate(pending_tool_executions):
-                    if execution["task"].done():
-                        try:
-                            # Get the result
-                            result = execution["task"].result()
-                            tool_call = execution["tool_call"]
-                            tool_index = execution.get("tool_index", -1)
-                            
-                            # Store result for later database updates
-                            tool_results_buffer.append((tool_call, result))
-                            
-                            # Get or create the context
-                            if "context" in execution:
-                                context = execution["context"]
-                                context.result = result
-                            else:
-                                context = self._create_tool_context(tool_call, tool_index)
-                                context.result = result
-                            
-                            # Yield tool status message first
-                            yield self._yield_tool_completed(context)
-                            
-                            # Yield tool execution result
-                            yield self._yield_tool_result(context)
-                            
-                            # Mark for removal
-                            completed_executions.append(i)
-                            
-                        except Exception as e:
-                            logger.error(f"Error getting tool execution result: {str(e)}")
-                            tool_call = execution["tool_call"]
-                            tool_index = execution.get("tool_index", -1)
-                            
-                            # Get or create the context
-                            if "context" in execution:
-                                context = execution["context"]
-                                context.error = e
-                            else:
-                                context = self._create_tool_context(tool_call, tool_index)
-                                context.error = e
-                            
-                            # Yield error status for the tool
-                            yield self._yield_tool_error(context)
-                            
-                            # Mark for removal
-                            completed_executions.append(i)
-                
-                # Remove completed executions from pending list (in reverse to maintain indices)
-                for i in sorted(completed_executions, reverse=True):
-                    pending_tool_executions.pop(i)
-            
             # After streaming completes or is stopped due to limit, wait for any remaining tool executions
             if pending_tool_executions:
                 logger.info(f"Waiting for {len(pending_tool_executions)} pending tool executions to complete")
@@ -383,7 +334,7 @@ class ResponseProcessor:
                             tool_index = execution.get("tool_index", -1)
                             
                             # Store result for later
-                            tool_results_buffer.append((tool_call, result))
+                            tool_results_buffer.append((tool_call, result, tool_index))
                             
                             # Get or create the context
                             if "context" in execution:
@@ -393,17 +344,31 @@ class ResponseProcessor:
                                 context = self._create_tool_context(tool_call, tool_index)
                                 context.result = result
                             
+                            # Skip yielding if already yielded during streaming
+                            if tool_index in yielded_tool_indices:
+                                logger.info(f"Skipping duplicate yield for tool index {tool_index}")
+                                continue
+                                
                             # Yield tool status message first
                             yield self._yield_tool_completed(context)
                             
                             # Yield tool execution result
                             yield self._yield_tool_result(context)
+                            
+                            # Track that we've yielded this tool result
+                            yielded_tool_indices.add(tool_index)
                     except Exception as e:
                         logger.error(f"Error processing remaining tool execution: {str(e)}")
                         # Yield error status for the tool
                         if "tool_call" in execution:
                             tool_call = execution["tool_call"]
                             tool_index = execution.get("tool_index", -1)
+                            
+                            # Skip yielding if already yielded during streaming
+                            if tool_index in yielded_tool_indices:
+                                logger.info(f"Skipping duplicate yield for remaining tool error index {tool_index}")
+                                continue
+                                
                             # Get or create the context
                             if "context" in execution:
                                 context = execution["context"]
@@ -411,14 +376,12 @@ class ResponseProcessor:
                             else:
                                 context = self._create_tool_context(tool_call, tool_index)
                                 context.error = e
-                            formatted_result = self._format_xml_tool_result(tool_call, result)
-                            yield {
-                                "type": "tool_result",
-                                "function_name": context.function_name,
-                                "xml_tag_name": context.xml_tag_name,
-                                "result": formatted_result,
-                                "tool_index": tool_index
-                            }
+                                
+                            # Yield error status for the tool
+                            yield self._yield_tool_error(context)
+                            
+                            # Track that we've yielded this tool error
+                            yielded_tool_indices.add(tool_index)
             
             # If stream was stopped due to XML limit, report custom finish reason
             if finish_reason == "xml_tool_limit_reached":
@@ -464,9 +427,9 @@ class ResponseProcessor:
                     is_llm_message=True
                 )
                 
-                # Now add all buffered tool results AFTER the assistant message
-                for tool_call, result in tool_results_buffer:
-                    # Add result based on tool type
+                # Now add all buffered tool results AFTER the assistant message, but don't yield if already yielded
+                for tool_call, result, result_tool_index in tool_results_buffer:
+                    # Add result based on tool type to the conversation history
                     await self._add_tool_result(
                         thread_id, 
                         tool_call, 
@@ -474,8 +437,13 @@ class ResponseProcessor:
                         config.xml_adding_strategy
                     )
                     
+                    # We don't need to yield again for tools that were already yielded during streaming
+                    if result_tool_index in yielded_tool_indices:
+                        logger.info(f"Skipping duplicate yield for tool index {result_tool_index}")
+                        continue
+                        
                     # Create context for tool result
-                    context = self._create_tool_context(tool_call, tool_index)
+                    context = self._create_tool_context(tool_call, result_tool_index)
                     context.result = result
                     
                     # Yield tool execution result
@@ -575,6 +543,8 @@ class ResponseProcessor:
             tool_index = 0
             # XML tool call counter
             xml_tool_call_count = 0
+            # Set to track yielded tool results
+            yielded_tool_indices = set()
             
             # Extract finish_reason if available
             finish_reason = None
@@ -666,6 +636,9 @@ class ResponseProcessor:
                     
                     # Yield tool execution result
                     yield self._yield_tool_result(context)
+                    
+                    # Track that we've yielded this tool result
+                    yielded_tool_indices.add(tool_index)
                     
                     # Increment tool index for next tool
                     tool_index += 1

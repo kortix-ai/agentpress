@@ -57,15 +57,10 @@ class ExaWebSearchTool(Tool):
                         },
                         "description": "A list of terms that must be excluded from the results"
                     },
-                    # "livecrawl": {
-                    #     "type": "string",
-                    #     "description": "Whether to perform a live crawl - 'always', 'fallback', or 'never'",
-                    #     "default": "always"
-                    # },
                     "num_results": {
                         "type": "integer",
                         "description": "The number of results to return",
-                        "default": 10
+                        "default": 20
                     },
                     "type": {
                         "type": "string",
@@ -88,7 +83,6 @@ class ExaWebSearchTool(Tool):
             {"param_name": "end_crawl_date", "node_type": "attribute", "path": "."},
             {"param_name": "include_text", "node_type": "attribute", "path": "."},
             {"param_name": "exclude_text", "node_type": "attribute", "path": "."},
-            # {"param_name": "livecrawl", "node_type": "attribute", "path": "."},
             {"param_name": "num_results", "node_type": "attribute", "path": "."},
             {"param_name": "type", "node_type": "attribute", "path": "."}
         ],
@@ -98,7 +92,7 @@ class ExaWebSearchTool(Tool):
             summary="true" 
             include_text="important term"
             exclude_text="unwanted term"
-            num_results="10" 
+            num_results="20" 
             type="auto">
         </web-search>
         '''
@@ -113,8 +107,7 @@ class ExaWebSearchTool(Tool):
         end_crawl_date: Optional[str] = None,
         include_text: Optional[List[str]] = None,
         exclude_text: Optional[List[str]] = None,
-        # livecrawl: str = "always",
-        num_results: int = 10,
+        num_results: int = 20,
         type: str = "auto"
     ) -> ToolResult:
         """
@@ -129,7 +122,7 @@ class ExaWebSearchTool(Tool):
         - end_crawl_date: Optional end date for crawled results (ISO format)
         - include_text: List of terms that must be included in the results
         - exclude_text: List of terms that must be excluded from the results
-        - num_results: The number of results to return (default: 10)
+        - num_results: The number of results to return (default: 20)
         - type: The type of search to perform - 'auto', 'keyword', or 'neural' (default: 'auto')
         """
         try:
@@ -148,8 +141,6 @@ class ExaWebSearchTool(Tool):
                 params["include_text"] = include_text
             if exclude_text:
                 params["exclude_text"] = exclude_text
-            # if livecrawl:
-            #     params["livecrawl"] = livecrawl
             if type:
                 params["type"] = type
             
@@ -174,7 +165,7 @@ if __name__ == "__main__":
         result = await search_tool.web_search(
             query="rubber gym mats best prices comparison",
             summary=False,
-            num_results=10
+            num_results=20
         )
         print(result)
         

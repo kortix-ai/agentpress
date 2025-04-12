@@ -194,33 +194,72 @@ def start_sandbox_browser_api(sandbox):
     try:
         # Create tmux session for browser API
         logger.debug("Creating tmux session for browser API")
+        
+        # Create a session ID for this browser API
+        session_id = 'browser_api_session'
+        
+        # First create the session properly using create_session
         try:
-            # Check if session already exists
-            sandbox.process.execute_session_command('sandbox_browser_api', SessionExecuteRequest(
-                command="tmux has-session -t browser_api 2>/dev/null || tmux new-session -d -s browser_api",
-                var_async=True
-            ))
+            # Create a new session
+            logger.debug(f"Creating new session with ID: {session_id}")
+            sandbox.process.create_session(session_id)
+            sleep(2)  # Wait for session initialization
         except Exception as session_e:
-            logger.debug(f"Error creating tmux session, might already exist: {str(session_e)}")
+            logger.debug(f"Error creating session: {str(session_e)}")
+            # Try to delete and recreate if it exists
+            try:
+                sandbox.process.delete_session(session_id)
+                sleep(1)
+                sandbox.process.create_session(session_id)
+                sleep(2)
+            except Exception as e:
+                logger.debug(f"Error recreating session: {str(e)}")
         
-        # Kill any existing process in the session
-        sandbox.process.execute_session_command('sandbox_browser_api', SessionExecuteRequest(
-            command="tmux send-keys -t browser_api C-c",
-            var_async=True
-        ))
+        # Now execute commands in the created session
+        max_retries = 3
+        retry_count = 0
+        success = False
         
-        logger.debug("Executing browser API command in tmux session")
-        rsp = sandbox.process.execute_session_command('sandbox_browser_api', SessionExecuteRequest(
-            command="tmux send-keys -t browser_api 'python " + sandbox.get_user_root_dir() + "/browser_api.py' C-m",
-            var_async=True
-        ))
-        logger.debug(f"Browser API command execution result: {rsp}")
-        
-        # Verify the process is running
-        sandbox.process.execute_session_command('sandbox_browser_api', SessionExecuteRequest(
-            command="tmux list-panes -t browser_api -F '#{pane_pid}'",
-            var_async=True
-        ))
+        while retry_count < max_retries and not success:
+            try:
+                # Execute tmux command in the session
+                logger.debug(f"Creating tmux in session {session_id}")
+                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
+                    command="tmux new-session -d -s browser_api || true",
+                    var_async=True
+                ))
+                sleep(2)
+                
+                # Kill any existing process in the tmux session
+                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
+                    command="tmux send-keys -t browser_api C-c",
+                    var_async=True
+                ))
+                
+                logger.debug("Executing browser API command in tmux session")
+                rsp = sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
+                    command="tmux send-keys -t browser_api 'python " + sandbox.get_user_root_dir() + "/browser_api.py' C-m",
+                    var_async=True
+                ))
+                logger.debug(f"Browser API command execution result: {rsp}")
+                
+                # Verify the process is running
+                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
+                    command="tmux list-panes -t browser_api -F '#{pane_pid}'",
+                    var_async=True
+                ))
+                
+                success = True
+                logger.debug("Browser API started successfully")
+                
+            except Exception as e:
+                retry_count += 1
+                logger.warning(f"Attempt {retry_count}/{max_retries} to start browser API failed: {str(e)}")
+                sleep(2)  # Wait before retrying
+                
+                if retry_count >= max_retries:
+                    logger.error(f"Error starting browser API after {max_retries} attempts: {str(e)}")
+                    raise e
         
     except Exception as e:
         logger.error(f"Error starting browser API: {str(e)}")
@@ -232,36 +271,75 @@ def start_http_server(sandbox):
     try:
         # Create tmux session for HTTP server
         logger.debug("Creating tmux session for HTTP server")
+        
+        # Create a session ID for this HTTP server
+        session_id = 'http_server_session'
+        
+        # First create the session properly using create_session
         try:
-            # Check if session already exists
-            sandbox.process.execute_session_command('http_server', SessionExecuteRequest(
-                command="tmux has-session -t http_server 2>/dev/null || tmux new-session -d -s http_server",
-                var_async=True
-            ))
+            # Create a new session
+            logger.debug(f"Creating new session with ID: {session_id}")
+            sandbox.process.create_session(session_id)
+            sleep(2)  # Wait for session initialization
         except Exception as session_e:
-            logger.debug(f"Error creating tmux session, might already exist: {str(session_e)}")
-            
+            logger.debug(f"Error creating session: {str(session_e)}")
+            # Try to delete and recreate if it exists
+            try:
+                sandbox.process.delete_session(session_id)
+                sleep(1)
+                sandbox.process.create_session(session_id)
+                sleep(2)
+            except Exception as e:
+                logger.debug(f"Error recreating session: {str(e)}")
+        
         # Create the server script file
         sandbox.fs.upload_file(sandbox.get_user_root_dir() + "/server.py", SERVER_SCRIPT.encode())
         
-        # Kill any existing process in the session
-        sandbox.process.execute_session_command('http_server', SessionExecuteRequest(
-            command="tmux send-keys -t http_server C-c",
-            var_async=True
-        ))
+        # Now execute commands in the created session
+        max_retries = 3
+        retry_count = 0
+        success = False
         
-        # Start the HTTP server using uvicorn with auto-reload in tmux session
-        http_server_rsp = sandbox.process.execute_session_command('http_server', SessionExecuteRequest(
-            command="cd " + sandbox.get_user_root_dir() + " && tmux send-keys -t http_server 'pip install uvicorn fastapi && python server.py' C-m",
-            var_async=True
-        ))
-        logger.info(f"HTTP server started: {http_server_rsp}")
-        
-        # Verify the process is running
-        sandbox.process.execute_session_command('http_server', SessionExecuteRequest(
-            command="tmux list-panes -t http_server -F '#{pane_pid}'",
-            var_async=True
-        ))
+        while retry_count < max_retries and not success:
+            try:
+                # Execute tmux command in the session
+                logger.debug(f"Creating tmux in session {session_id}")
+                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
+                    command="tmux new-session -d -s http_server || true",
+                    var_async=True
+                ))
+                sleep(2)
+                
+                # Kill any existing process in the tmux session
+                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
+                    command="tmux send-keys -t http_server C-c",
+                    var_async=True
+                ))
+                
+                # Start the HTTP server using uvicorn with auto-reload in tmux session
+                http_server_rsp = sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
+                    command="cd " + sandbox.get_user_root_dir() + " && tmux send-keys -t http_server 'pip install uvicorn fastapi && python server.py' C-m",
+                    var_async=True
+                ))
+                logger.info(f"HTTP server started: {http_server_rsp}")
+                
+                # Verify the process is running
+                sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
+                    command="tmux list-panes -t http_server -F '#{pane_pid}'",
+                    var_async=True
+                ))
+                
+                success = True
+                logger.debug("HTTP server started successfully")
+                
+            except Exception as e:
+                retry_count += 1
+                logger.warning(f"Attempt {retry_count}/{max_retries} to start HTTP server failed: {str(e)}")
+                sleep(2)  # Wait before retrying
+                
+                if retry_count >= max_retries:
+                    logger.error(f"Error starting HTTP server after {max_retries} attempts: {str(e)}")
+                    raise e
     
     except Exception as e:
         logger.error(f"Error starting HTTP server: {str(e)}")
@@ -387,6 +465,7 @@ def create_sandbox(password: str):
         ports=[
             7788,  # Gradio default port
             6080,  # noVNC web interface
+            5900,  # VNC port
             5901,  # VNC port
             9222,  # Chrome remote debugging port
             8000,  # FastAPI port
