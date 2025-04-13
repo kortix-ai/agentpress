@@ -46,6 +46,7 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     system_message = { "role": "system", "content": get_system_prompt() }
 
     model_name = "anthropic/claude-3-7-sonnet-latest"
+    # model_name = "groq/llama-3.3-70b-versatile"
     # model_name = "openrouter/qwen/qwen2.5-vl-72b-instruct"
     # model_name = "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0"         
     # model_name = "anthropic/claude-3-5-sonnet-latest" 
@@ -97,7 +98,8 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
             # temporary_message=state_message,
             llm_model=model_name,
             llm_temperature=0,
-            llm_max_tokens=64000,
+            # llm_max_tokens=64000,
+            llm_max_tokens=32768,
             tool_choice="auto",
             max_xml_tool_calls=1,
             processor_config=ProcessorConfig(
