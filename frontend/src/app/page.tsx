@@ -1,222 +1,224 @@
-'use client';
-
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/auth-context';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Search, Image, Calculator } from 'lucide-react';
+import NavBar from './components/NavBar';
 
-export default function HomePage() {
-  const { user, isLoading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    // Redirect authenticated users to dashboard
-    if (!isLoading && user) {
-      router.push('/dashboard');
-    }
-  }, [user, isLoading, router]);
-
-  // If still loading or user is authenticated (redirecting), show loading
-  if (isLoading || user) {
-    return null;
-  }
-
+export default function Index() {
   return (
-    <div className="flex flex-col overflow-auto min-h-screen">
-      {/* Hero Section */}
-      <section className="py-16 md:py-24 px-6 text-center">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-3xl md:text-4xl font-medium tracking-tight mb-6">AgentPress</h1>
-          <p className="text-xl text-zinc-600 mb-6 max-w-2xl mx-auto">
-            A meticulously AI-powered search engine with RAG and search grounding capabilities. Clean interface and built for everyone.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
-            <Button size="lg" className="bg-black hover:bg-zinc-800" asChild>
-              <Link href="/auth/signup">Get Started</Link>
-            </Button>
-            <Button size="lg" variant="outline" className="border-zinc-200" asChild>
-              <Link href="/auth/login">Try Now</Link>
-            </Button>
-          </div>
-        </div>
-      </section>
+    <div className="min-h-screen bg-white">
+      {/* Navigation Bar */}
+      <NavBar />
 
-      {/* RAG & Search Grounding */}
-      <section className="py-16 bg-zinc-50 px-6">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl font-medium text-center mb-10">RAG & Search Grounding</h2>
-          <div className="bg-white rounded-lg shadow-sm border border-zinc-100 p-8">
-            <div className="space-y-6">
-              <div className="flex items-start gap-4 p-3 rounded-lg">
-                <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center mt-1">
-                  <span className="text-zinc-500">1</span>
-                </div>
-                <div>
-                  <h3 className="font-medium mb-1">Enable modern RAG capabilities in your real-world applications</h3>
-                  <p className="text-zinc-500 text-sm">Semantic search provides better context for AI agents</p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-4 p-3 rounded-lg bg-green-50">
-                <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mt-1 text-green-600">
-                  <span>2</span>
-                </div>
-                <div>
-                  <h3 className="font-medium mb-1 text-green-700">Prioritized instant search</h3>
-                  <p className="text-green-600 text-sm">Get results as you type for a responsive experience</p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-4 p-3 rounded-lg">
-                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mt-1 text-blue-600">
-                  <span>3</span>
-                </div>
-                <div>
-                  <h3 className="font-medium mb-1">Integration is just a few lines of code for &quot;information access&quot;</h3>
-                  <p className="text-zinc-500 text-sm">Simple API to connect to your comprehensive search</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Powered By */}
-      <section className="py-16 px-6 text-center">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-xl font-medium mb-10">Powered By</h2>
-          <div className="flex justify-center gap-12">
-            <div className="flex flex-col items-center">
-              <div className="border border-zinc-200 rounded-lg p-6 bg-white shadow-sm w-40 h-20 flex items-center justify-center">
-                <svg className="h-6" viewBox="0 0 76 65" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" fill="#000000"/>
-                </svg>
-              </div>
-              <p className="text-xs text-zinc-500 mt-3">Deployed on Vercel</p>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="border border-zinc-200 rounded-lg p-6 bg-white shadow-sm w-40 h-20 flex items-center justify-center">
-                <svg className="h-6" viewBox="0 0 95 95" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect width="95" height="95" rx="47.5" fill="#F0F0F0"/>
-                  <path d="M30 47.5C30 37.835 37.835 30 47.5 30V65C37.835 65 30 57.165 30 47.5Z" fill="#000000"/>
-                  <path d="M47.5 30C57.165 30 65 37.835 65 47.5C65 57.165 57.165 65 47.5 65V30Z" fill="#666666"/>
-                </svg>
-              </div>
-              <p className="text-xs text-zinc-500 mt-3">Design by Tekky</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-12 px-6 border-t border-zinc-100">
-        <div className="max-w-4xl mx-auto grid grid-cols-3 gap-4">
-          <div className="text-center">
-            <h3 className="text-2xl font-bold">350K+</h3>
-            <p className="text-sm text-zinc-500">Requests Processed</p>
-          </div>
-          <div className="text-center">
-            <h3 className="text-2xl font-bold">100K+</h3>
-            <p className="text-sm text-zinc-500">Active Users</p>
-          </div>
-          <div className="text-center">
-            <h3 className="text-2xl font-bold">7K+</h3>
-            <p className="text-sm text-zinc-500">Connections Built</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Featured on Vercel&apos;s Blog */}
-      <section className="py-16 px-6 bg-zinc-50">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-xl font-medium mb-6">Featured on Vercel&apos;s Blog</h2>
-          <div className="flex flex-col md:flex-row gap-12">
-            <div className="md:w-1/2">
-              <p className="text-sm mb-4">
-                Recognized for our innovative use of AI technology and its integration for a seamless experience. Our approach to developer community growth stands out.
-              </p>
-              <Link href="#" className="text-sm text-black font-medium hover:underline">
-                Read the feature →
+      {/* Hero Section with centered gradient and rounded bottom */}
+      <section className="relative">
+        <div className="absolute inset-0 bg-gradient-to-b from-white via-blue-50 to-white" />
+        <div id="intro" className="relative container mx-auto px-4 py-20 sm:py-32 flex flex-col items-center text-center">
+          <div className="bg-gradient-to-b from-transparent via-blue-50/50 to-transparent px-8 py-16 rounded-3xl backdrop-blur-sm">
+            <h1 className="text-4xl sm:text-6xl font-bold text-gray-900 mb-6">
+              Welcome to <span className="text-blue-600">Kortix Suna</span>
+            </h1>
+            <p className="text-xl text-gray-600 max-w-2xl mb-10">
+              The intelligent platform that transforms how you interact with data, automate workflows, and make decisions.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/dashboard" className="px-8 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-all duration-300">
+                Start Free Trial
+              </Link>
+              <Link href="#use-cases" className="px-8 py-3 bg-white text-blue-600 font-medium rounded-lg border border-blue-200 hover:bg-gray-50 transition-all duration-300">
+                See Examples
               </Link>
             </div>
-            <div className="md:w-1/2 bg-zinc-100 h-48 rounded-lg"></div>
+          </div>
+        </div>
+        <div className="absolute bottom-0 w-full h-24 bg-gradient-to-b from-white/0 to-white"></div>
+      </section>
+
+      {/* Use Cases Section */}
+      <section id="use-cases" className="relative bg-gradient-to-b from-white via-gray-50 to-white py-20">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">Use Cases & Examples</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[
+              {
+                title: "Data Processing",
+                description: "Process and analyze large datasets with intelligent automation that adapts to your specific needs."
+              },
+              {
+                title: "Workflow Optimization",
+                description: "Streamline complex workflows with AI-powered optimization that reduces manual steps by up to 80%."
+              },
+              {
+                title: "Decision Support",
+                description: "Get actionable insights and recommendations based on your data, helping you make better decisions faster."
+              },
+              {
+                title: "Customer Analytics",
+                description: "Understand customer behavior patterns and preferences to create personalized experiences."
+              },
+              {
+                title: "Predictive Maintenance",
+                description: "Anticipate equipment failures before they happen, reducing downtime and maintenance costs."
+              },
+              {
+                title: "Supply Chain Optimization",
+                description: "Improve efficiency and reduce costs by optimizing your entire supply chain with intelligent forecasting."
+              }
+            ].map((useCase, index) => (
+              <div key={index} className="bg-white/80 backdrop-blur-sm p-6 rounded-xl border border-gray-100 hover:border-blue-100 transition-all duration-300">
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">{useCase.title}</h3>
+                <p className="text-gray-600">{useCase.description}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Advanced Features */}
-      <section className="py-16 px-6">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-xl font-medium text-center mb-12">Advanced Search Features</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="border border-zinc-100 rounded-lg p-6 bg-white">
-              <div className="mb-4 w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center">
-                <Search className="h-5 w-5 text-zinc-600" />
+      {/* Pricing Section */}
+      <section id="pricing" className="relative bg-gradient-to-b from-white via-blue-50 to-white py-20">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">Pricing Plans</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {[
+              {
+                name: "Starter",
+                price: "$49",
+                period: "per month",
+                description: "Perfect for individuals and small teams just getting started.",
+                features: [
+                  "Up to 5 users",
+                  "10GB storage",
+                  "Basic analytics",
+                  "Standard support"
+                ],
+                cta: "Start with Starter",
+                featured: false
+              },
+              {
+                name: "Professional",
+                price: "$99",
+                period: "per month",
+                description: "Ideal for growing businesses with more advanced needs.",
+                features: [
+                  "Up to 20 users",
+                  "50GB storage",
+                  "Advanced analytics",
+                  "Priority support",
+                  "Workflow automation"
+                ],
+                cta: "Choose Professional",
+                featured: true
+              },
+              {
+                name: "Enterprise",
+                price: "Custom",
+                period: "pricing",
+                description: "Tailored solutions for large organizations with complex requirements.",
+                features: [
+                  "Unlimited users",
+                  "Unlimited storage",
+                  "Custom integrations",
+                  "Dedicated support",
+                  "Advanced security",
+                  "On-premise options"
+                ],
+                cta: "Contact Sales",
+                featured: false
+              }
+            ].map((plan, index) => (
+              <div key={index} className={`${
+                plan.featured 
+                  ? 'bg-gradient-to-b from-blue-600 to-blue-700 text-white border-2 border-blue-300' 
+                  : 'bg-white/80 backdrop-blur-sm text-gray-900 border border-gray-100'
+                } p-8 rounded-xl flex flex-col transition-all duration-300 ${
+                  plan.featured ? 'translate-y-[-8px]' : 'hover:translate-y-[-4px]'
+                }`}>
+                <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
+                <div className="mb-4">
+                  <span className="text-3xl font-bold">{plan.price}</span>
+                  <span className={`${plan.featured ? 'text-blue-100' : 'text-gray-500'}`}> {plan.period}</span>
+                </div>
+                <p className={`${plan.featured ? 'text-blue-100' : 'text-gray-600'} mb-6`}>{plan.description}</p>
+                <ul className="mb-8 flex-grow">
+                  {plan.features.map((feature, i) => (
+                    <li key={i} className="flex items-center mb-3">
+                      <svg className={`h-5 w-5 ${plan.featured ? 'text-blue-300' : 'text-blue-500'} mr-2`} fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <button className={`w-full py-3 rounded-lg font-medium transition-all duration-300 ${
+                  plan.featured 
+                    ? 'bg-white text-blue-600 hover:bg-gray-100' 
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}>
+                  {plan.cta}
+                </button>
               </div>
-              <h3 className="text-md font-medium mb-2">Smart Understanding</h3>
-              <p className="text-sm text-zinc-500">Easily analyze content and context for better search results</p>
-            </div>
-            
-            <div className="border border-zinc-100 rounded-lg p-6 bg-white">
-              <div className="mb-4 w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center">
-                <Image className="h-5 w-5 text-zinc-600" aria-label="Image understanding icon" />
-              </div>
-              <h3 className="text-md font-medium mb-2">Image Understanding</h3>
-              <p className="text-sm text-zinc-500">Get contextual responses based on visual inputs</p>
-            </div>
-            
-            <div className="border border-zinc-100 rounded-lg p-6 bg-white">
-              <div className="mb-4 w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center">
-                <Calculator className="h-5 w-5 text-zinc-600" />
-              </div>
-              <h3 className="text-md font-medium mb-2">Smart Calculations</h3>
-              <p className="text-sm text-zinc-500">Perform complex math and calculations in real-time</p>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Built For Everyone */}
-      <section className="py-16 px-6 bg-zinc-50">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-xl font-medium text-center mb-12">Built For Everyone</h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="font-medium mb-4">Students</h3>
-              <ul className="space-y-2">
-                <li className="text-sm text-zinc-600">• Research paper analysis</li>
-                <li className="text-sm text-zinc-600">• Complex calculations</li>
-                <li className="text-sm text-zinc-600">• Study guidance</li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="font-medium mb-4">Researchers</h3>
-              <ul className="space-y-2">
-                <li className="text-sm text-zinc-600">• Access to paper archives</li>
-                <li className="text-sm text-zinc-600">• Data visualization</li>
-                <li className="text-sm text-zinc-600">• Citation formatting</li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="font-medium mb-4">Professionals</h3>
-              <ul className="space-y-2">
-                <li className="text-sm text-zinc-600">• Market research</li>
-                <li className="text-sm text-zinc-600">• Technical troubleshooting</li>
-                <li className="text-sm text-zinc-600">• Code reviews</li>
-              </ul>
-            </div>
-          </div>
+      {/* CTA Section */}
+      <section className="container mx-auto px-4 py-16 sm:py-24">
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-600 rounded-2xl p-8 sm:p-12 text-center">
+          <h2 className="text-3xl font-bold text-white mb-6">Ready to transform your workflow?</h2>
+          <p className="text-blue-100 max-w-2xl mx-auto mb-8">
+            Join thousands of satisfied users who have revolutionized their processes with Kortix Suna.
+          </p>
+          <Link href="/dashboard" className="inline-block px-8 py-3 bg-white text-blue-600 font-medium rounded-lg hover:bg-gray-100 transition-all duration-300">
+            Start Your Free Trial
+          </Link>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-8 px-6 border-t border-zinc-100 text-center text-sm text-zinc-500">
-        <p>© 2023 AgentPress. All rights reserved.</p>
+      <footer id="footer" className="bg-gradient-to-b from-gray-900 to-gray-950 text-white pt-12 pb-6">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+            <div>
+              <h3 className="text-xl font-bold mb-4">Kortix Suna</h3>
+              <p className="text-gray-400">Intelligent solutions for modern businesses.</p>
+            </div>
+            <div>
+              <h4 className="text-lg font-semibold mb-4">Product</h4>
+              <ul className="space-y-2">
+                <li><Link href="#" className="text-gray-400 hover:text-white transition-all">Features</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white transition-all">Integrations</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white transition-all">Documentation</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white transition-all">API</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-lg font-semibold mb-4">Company</h4>
+              <ul className="space-y-2">
+                <li><Link href="#" className="text-gray-400 hover:text-white transition-all">About Us</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white transition-all">Careers</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white transition-all">Blog</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white transition-all">Press</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-lg font-semibold mb-4">Contact</h4>
+              <ul className="space-y-2">
+                <li><Link href="#" className="text-gray-400 hover:text-white transition-all">Support</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white transition-all">Sales</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white transition-all">Partnerships</Link></li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-gray-800 pt-6 flex flex-col md:flex-row justify-between items-center">
+            <div className="text-gray-500 mb-4 md:mb-0">
+              © 2023 Kortix Suna. All rights reserved.
+            </div>
+            <div className="flex gap-6">
+              <Link href="#" className="text-gray-500 hover:text-white transition-all">Terms</Link>
+              <Link href="#" className="text-gray-500 hover:text-white transition-all">Privacy</Link>
+              <Link href="#" className="text-gray-500 hover:text-white transition-all">Cookies</Link>
+            </div>
+          </div>
+        </div>
       </footer>
     </div>
-  );
+  )
 }
