@@ -1,2 +1,5 @@
 fastapi==0.115.12
 uvicorn==0.34.0
+pyautogui==0.9.54
+pillow==10.2.0
+pydantic==2.6.1
