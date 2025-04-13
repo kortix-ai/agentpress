@@ -1,54 +1,31 @@
 'use client';
 
 import React from 'react';
-import { ParsedTag, ToolComponentProps, ToolDisplayMode, ToolStatusLabels } from '@/lib/types/tool-calls';
+import { ParsedTag, ToolComponentProps } from '@/lib/types/tool-calls';
 import { 
   File, FileText, Terminal, FolderPlus, Folder, Code, Search as SearchIcon, 
-  Bell, Replace, ChevronDown, ChevronRight, Plus, Minus
+  Bell, Replace, Plus, Minus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { diffLines } from 'diff';
-import { useTheme } from 'next-themes';
 
-interface BaseToolProps {
-  tag: ParsedTag;
-  mode: ToolDisplayMode;
-  title: string;
-  children: React.ReactNode;
-  icon?: React.ReactNode;
-}
-
-/**
- * Base Tool Component
- */
-export const BaseTool: React.FC<BaseToolProps> = ({ tag, mode, title, children, icon }) => {
-  // Determine if we should use dark mode based on the display mode
-  const isDark = mode === 'detailed';
-  const isRunning = tag.status === 'running';
-  
+// Shared compact mode component
+const CompactToolDisplay: React.FC<{
+  icon: React.ReactNode,
+  name: string,
+  input: string,
+  isRunning?: boolean
+}> = ({ icon, name, input, isRunning }) => {
   return (
-    <div className="border rounded-lg overflow-hidden border-subtle dark:border-white/10">
-      <div className={cn(
-        "flex items-center px-2 py-1 text-xs font-medium border-b border-subtle dark:border-white/10",
-        isDark
-          ? "bg-background-secondary dark:bg-background-secondary text-foreground"
-          : "bg-background-secondary dark:bg-background-secondary text-foreground"
-      )}>
-        {icon}
-        <div className="flex-1">{title}</div>
-        {isRunning && (
-          <div className="flex items-center gap-2">
-            <span className="text-amber-500">Running</span>
-            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></div>
-          </div>
-        )}
-      </div>
-      <div className={cn(
-        "p-3",
-        isDark ? "bg-card-bg dark:bg-background-secondary text-foreground" : "bg-card-bg dark:bg-background-secondary text-foreground"
-      )}>
-        {children}
-      </div>
+    <div className="flex items-center gap-2 px-2 py-1 text-xs bg-muted/30 rounded">
+      {icon}
+      <span className="font-medium">{name}: {input}</span>
+      {isRunning && (
+        <div className="flex items-center gap-1">
+          <span className="text-amber-500">Running</span>
+          <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></div>
+        </div>
+      )}
     </div>
   );
 };
@@ -59,56 +36,89 @@ export const BaseTool: React.FC<BaseToolProps> = ({ tag, mode, title, children, 
 export const CreateFileTool: React.FC<ToolComponentProps> = ({ tag, mode }) => {
   const filePath = tag.attributes.file_path || '';
   const fileContent = tag.content || '';
+  const isRunning = tag.status === 'running';
   
+  if (mode === 'compact') {
+    return (
+      <CompactToolDisplay 
+        icon={<FileText className="h-4 w-4 mr-2" />}
+        name={isRunning ? "Creating file" : "Created file"}
+        input={filePath}
+        isRunning={isRunning}
+      />
+    );
+  }
+
   return (
-    <BaseTool
-      tag={tag}
-      mode={mode}
-      title={`Creating file: ${filePath}`}
-      icon={<FileText className="h-4 w-4 mr-2" />}
-    >
-      <div className="space-y-2">
-        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-          <FileText className="h-3 w-3" />
-          <span className="font-mono">{filePath}</span>
-        </div>
-        <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs overflow-x-auto max-h-60">
-          {fileContent}
-        </pre>
+    <div className="border rounded-lg overflow-hidden border-subtle dark:border-white/10">
+      <div className="flex items-center px-2 py-1 text-xs font-medium border-b border-subtle dark:border-white/10 bg-background-secondary dark:bg-background-secondary text-foreground">
+        <FileText className="h-4 w-4 mr-2" />
+        <div className="flex-1">{isRunning ? "Creating file" : "Created file"}: {filePath}</div>
+        {isRunning && (
+          <div className="flex items-center gap-2">
+            <span className="text-amber-500">Running</span>
+            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></div>
+          </div>
+        )}
       </div>
-    </BaseTool>
+      <div className="p-3 bg-card-bg dark:bg-background-secondary text-foreground">
+        <div className="space-y-2">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+            <FileText className="h-3 w-3" />
+            <span className="font-mono">{filePath}</span>
+          </div>
+          <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs overflow-x-auto max-h-60">
+            {fileContent}
+          </pre>
+        </div>
+      </div>
+    </div>
   );
 };
 
 /**
  * Full File Rewrite Tool Component
  */
-
 export const FullFileRewriteTool: React.FC<ToolComponentProps> = ({ tag, mode }) => {
   const filePath = tag.attributes.file_path || '';
   const fileContent = tag.content || '';
+  const isRunning = tag.status === 'running';
   
-  return (
-    <BaseTool
-      tag={tag}
-      mode={mode}
-      title={`Full file rewrite: ${filePath}`}
-      icon={<FileText className="h-4 w-4 mr-2" />}
-    >
-      <div className="space-y-2">
-        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-          <FileText className="h-3 w-3" />
-          <span className="font-mono">{filePath}</span>
-          </div>
-        <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs overflow-x-auto max-h-60">
-          {fileContent}
-        </pre>
-      </div>
-    </BaseTool>
-  );
-};
+  if (mode === 'compact') {
+    return (
+      <CompactToolDisplay
+        icon={<FileText className="h-4 w-4 mr-2" />}
+        name={isRunning ? "Rewriting file" : "Rewrote file"}
+        input={filePath}
+        isRunning={isRunning}
+      />
+    );
+  }
 
-/**
+  return (
+    <div className="border rounded-lg overflow-hidden border-subtle dark:border-white/10">
+      <div className="flex items-center px-2 py-1 text-xs font-medium border-b border-subtle dark:border-white/10 bg-background-secondary dark:bg-background-secondary text-foreground">
+        <FileText className="h-4 w-4 mr-2" />
+        <div className="flex-1">{isRunning ? "Rewriting file" : "Rewrote file"}: {filePath}</div>
+        {isRunning && (
+          <div className="flex items-center gap-2">
+            <span className="text-amber-500">Running</span>
+            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></div>
+          </div>
+        )}
+      </div>
+      <div className="p-3 bg-card-bg dark:bg-background-secondary text-foreground">
+        <div className="space-y-2">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+            <FileText className="h-3 w-3" />
+            <span className="font-mono">{filePath}</span>
+          </div>
+          <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs overflow-x-auto max-h-60">
+            {fileContent}
+          </pre>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -118,24 +128,43 @@ export const FullFileRewriteTool: React.FC<ToolComponentProps> = ({ tag, mode })
 export const ReadFileTool: React.FC<ToolComponentProps> = ({ tag, mode }) => {
   const filePath = tag.attributes.file_path || '';
   const fileContent = tag.content || '';
+  const isRunning = tag.status === 'running';
   
+  if (mode === 'compact') {
+    return (
+      <CompactToolDisplay
+        icon={<File className="h-4 w-4 mr-2" />}
+        name={isRunning ? "Reading file" : "Read file"}
+        input={filePath}
+        isRunning={isRunning}
+      />
+    );
+  }
+
   return (
-    <BaseTool
-      tag={tag}
-      mode={mode}
-      title={`Reading file: ${filePath}`}
-      icon={<File className="h-4 w-4 mr-2" />}
-    >
-      <div className="space-y-2">
-        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-          <File className="h-3 w-3" />
-          <span className="font-mono">{filePath}</span>
-        </div>
-        <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs overflow-x-auto max-h-60">
-          {fileContent}
-        </pre>
+    <div className="border rounded-lg overflow-hidden border-subtle dark:border-white/10">
+      <div className="flex items-center px-2 py-1 text-xs font-medium border-b border-subtle dark:border-white/10 bg-background-secondary dark:bg-background-secondary text-foreground">
+        <File className="h-4 w-4 mr-2" />
+        <div className="flex-1">{isRunning ? "Reading file" : "Read file"}: {filePath}</div>
+        {isRunning && (
+          <div className="flex items-center gap-2">
+            <span className="text-amber-500">Running</span>
+            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></div>
+          </div>
+        )}
       </div>
-    </BaseTool>
+      <div className="p-3 bg-card-bg dark:bg-background-secondary text-foreground">
+        <div className="space-y-2">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+            <File className="h-3 w-3" />
+            <span className="font-mono">{filePath}</span>
+          </div>
+          <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs overflow-x-auto max-h-60">
+            {fileContent}
+          </pre>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -143,60 +172,77 @@ export const ReadFileTool: React.FC<ToolComponentProps> = ({ tag, mode }) => {
  * Execute Command Tool Component
  */
 export const ExecuteCommandTool: React.FC<ToolComponentProps> = ({ tag, mode }) => {
-  const command = tag.attributes.command || '';
   const output = tag.content || '';
-  const resultOutput = tag.resultTag?.content || '';
-  
-  // Only show paired view if explicitly paired
-  const showPairedView = tag.isPaired && tag.resultTag?.content;
-  
-  // Check status
+  const command = tag.resultTag?.content || '';
   const isRunning = tag.status === 'running';
-  
+
+  if (mode === 'compact') {
+    return (
+      <CompactToolDisplay
+        icon={<Terminal className="h-4 w-4 mr-2" />}
+        name={isRunning ? "Executing" : "Executed"}
+        input={tag.content}  // in compact mode, the command is in the content
+        isRunning={isRunning}
+      />
+    );
+  }
+
   return (
-    <BaseTool
-      tag={tag}
-      mode={mode}
-      title={isRunning ? `Executing: ${command}` : `Executed: ${command}`}
-      icon={<Terminal className="h-4 w-4 mr-2" />}
-    >
-      <div className="space-y-2">
-        <div className="flex items-start gap-1 text-xs">
-          <span className="text-green-500 font-mono">$</span>
-          <span className="font-mono text-green-500 dark:text-green-400">{command}</span>
-        </div>
-        
-        {showPairedView ? (
-          <div className="space-y-3">
-            {output && (
-              <div>
-                <div className="text-xs font-medium mb-1 text-amber-500 dark:text-amber-400">Command Output</div>
-                <div className="bg-muted dark:bg-gray-900 rounded-md p-2 text-xs font-mono text-green-500 dark:text-green-400 overflow-x-auto max-h-60">
-                  <pre className="whitespace-pre-wrap">{output}</pre>
-                </div>
-              </div>
-            )}
-            <div>
-              <div className="text-xs font-medium mb-1 text-green-500 dark:text-green-400">Result</div>
-              <div className="bg-muted dark:bg-gray-900 rounded-md p-2 text-xs font-mono text-green-500 dark:text-green-400 overflow-x-auto max-h-60">
-                <pre className="whitespace-pre-wrap">{resultOutput}</pre>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-muted dark:bg-gray-900 rounded-md p-2 text-xs font-mono text-green-500 dark:text-green-400 overflow-x-auto max-h-60">
-            <pre className="whitespace-pre-wrap">{output}</pre>
+    <div className="border rounded-lg overflow-hidden border-subtle dark:border-white/10">
+      <div className="flex items-center px-2 py-1 text-xs font-medium border-b border-subtle dark:border-white/10 bg-background-secondary dark:bg-background-secondary text-foreground">
+        <Terminal className="h-4 w-4 mr-2" />
+        <div className="flex-1">{isRunning ? `Executing: ${command}` : `Executed: ${command}`}</div>
+        {isRunning && (
+          <div className="flex items-center gap-2">
+            <span className="text-amber-500">Running</span>
+            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></div>
           </div>
         )}
       </div>
-    </BaseTool>
+      <div className="p-3 bg-card-bg dark:bg-background-secondary text-foreground">
+        <div className="font-mono text-xs bg-black text-green-400 p-3 rounded-md">
+          <div className="flex items-center gap-2 mb-2 text-white/80">
+            <div className="w-3 h-3 rounded-full bg-red-500" />
+            <div className="w-3 h-3 rounded-full bg-yellow-500" />
+            <div className="w-3 h-3 rounded-full bg-green-500" />
+            <div className="flex-1 text-center text-xs">Terminal</div>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex items-start gap-2">
+              <span className="text-blue-400">user@localhost</span>
+              <span className="text-white/60">:</span>
+              <span className="text-purple-400">~</span>
+              <span className="text-white/60">$</span>
+              <span>{command}</span>
+            </div>
+            
+            {output && (
+              <pre className="whitespace-pre-wrap pl-4 text-white/90">{output}</pre>
+            )}
+
+            {!isRunning && (
+              <div className="flex items-start gap-2">
+                <span className="text-blue-400">user@localhost</span>
+                <span className="text-white/60">:</span>
+                <span className="text-purple-400">~</span>
+                <span className="text-white/60">$</span>
+                <span className="animate-pulse">█</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
+
 /**
  * String Replace Tool Component
  */
 export const StringReplaceTool: React.FC<ToolComponentProps> = ({ tag, mode }) => {
   const content = tag.content || '';
+  const isRunning = tag.status === 'running';
   
   // Parse the old and new strings from the content
   const oldStrMatch = content.match(/<old_str>([\s\S]*?)<\/old_str>/);
@@ -213,37 +259,55 @@ export const StringReplaceTool: React.FC<ToolComponentProps> = ({ tag, mode }) =
     removed?: boolean;
     value: string;
   }
+
+  if (mode === 'compact') {
+    return (
+      <CompactToolDisplay
+        icon={<Replace className="h-4 w-4 mr-2" />}
+        name={isRunning ? "Updating file" : "Updated file"}
+        input=""
+        isRunning={isRunning}
+      />
+    );
+  }
   
   return (
-    <BaseTool
-      tag={tag}
-      mode={mode}
-      title="File update"
-      icon={<Replace className="h-4 w-4 mr-2" />}
-    >
-      <div className="space-y-2">
-        <div className="border border-subtle dark:border-white/10 rounded-md overflow-hidden font-mono text-xs">
-          {diff.map((part: DiffPart, index: number) => (
-            <div 
-              key={index}
-              className={cn(
-                "px-2 py-0.5 flex items-start",
-                part.added ? "bg-green-500/10 text-green-700 dark:text-green-400" : 
-                part.removed ? "bg-red-500/10 text-red-700 dark:text-red-400" : 
-                "text-foreground"
-              )}
-            >
-              <span className="mr-2">
-                {part.added ? <Plus className="h-3 w-3" /> : 
-                 part.removed ? <Minus className="h-3 w-3" /> : 
-                 <span className="w-3" />}
-              </span>
-              <pre className="whitespace-pre-wrap flex-1">{part.value}</pre>
-            </div>
-          ))}
+    <div className="border rounded-lg overflow-hidden border-subtle dark:border-white/10">
+      <div className="flex items-center px-2 py-1 text-xs font-medium border-b border-subtle dark:border-white/10 bg-background-secondary dark:bg-background-secondary text-foreground">
+        <Replace className="h-4 w-4 mr-2" />
+        <div className="flex-1">{isRunning ? "Updating file" : "Updated file"}</div>
+        {isRunning && (
+          <div className="flex items-center gap-2">
+            <span className="text-amber-500">Running</span>
+            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></div>
+          </div>
+        )}
+      </div>
+      <div className="p-3 bg-card-bg dark:bg-background-secondary text-foreground">
+        <div className="space-y-2">
+          <div className="border border-subtle dark:border-white/10 rounded-md overflow-hidden font-mono text-xs">
+            {diff.map((part: DiffPart, index: number) => (
+              <div 
+                key={index}
+                className={cn(
+                  "px-2 py-0.5 flex items-start",
+                  part.added ? "bg-green-500/10 text-green-700 dark:text-green-400" : 
+                  part.removed ? "bg-red-500/10 text-red-700 dark:text-red-400" : 
+                  "text-foreground"
+                )}
+              >
+                <span className="mr-2">
+                  {part.added ? <Plus className="h-3 w-3" /> : 
+                   part.removed ? <Minus className="h-3 w-3" /> : 
+                   <span className="w-3" />}
+                </span>
+                <pre className="whitespace-pre-wrap flex-1">{part.value}</pre>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-    </BaseTool>
+    </div>
   );
 };
 
@@ -253,24 +317,43 @@ export const StringReplaceTool: React.FC<ToolComponentProps> = ({ tag, mode }) =
 export const NotifyTool: React.FC<ToolComponentProps> = ({ tag, mode }) => {
   const message = tag.attributes.message || '';
   const type = tag.attributes.type || 'info';
+  const isRunning = tag.status === 'running';
   
+  if (mode === 'compact') {
+    return (
+      <CompactToolDisplay
+        icon={<Bell className="h-4 w-4 mr-2" />}
+        name={isRunning ? "Sending notification" : "Sent notification"}
+        input={message.substring(0, 30) + (message.length > 30 ? '...' : '')}
+        isRunning={isRunning}
+      />
+    );
+  }
+
   return (
-    <BaseTool
-      tag={tag}
-      mode={mode}
-      title={`Notification: ${message.substring(0, 30)}${message.length > 30 ? '...' : ''}`}
-      icon={<Bell className="h-4 w-4 mr-2" />}
-    >
-      <div className={cn(
-        "p-2 rounded-md",
-        type === 'error' ? 'bg-red-500/10 text-red-600 dark:text-red-400' :
-        type === 'warning' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
-        type === 'success' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
-        'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-      )}>
-        {message}
+    <div className="border rounded-lg overflow-hidden border-subtle dark:border-white/10">
+      <div className="flex items-center px-2 py-1 text-xs font-medium border-b border-subtle dark:border-white/10 bg-background-secondary dark:bg-background-secondary text-foreground">
+        <Bell className="h-4 w-4 mr-2" />
+        <div className="flex-1">{isRunning ? "Sending notification" : "Sent notification"}: {message.substring(0, 30)}{message.length > 30 ? '...' : ''}</div>
+        {isRunning && (
+          <div className="flex items-center gap-2">
+            <span className="text-amber-500">Running</span>
+            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></div>
+          </div>
+        )}
       </div>
-    </BaseTool>
+      <div className="p-3 bg-card-bg dark:bg-background-secondary text-foreground">
+        <div className={cn(
+          "p-2 rounded-md",
+          type === 'error' ? 'bg-red-500/10 text-red-600 dark:text-red-400' :
+          type === 'warning' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+          type === 'success' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+          'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+        )}>
+          {message}
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -281,26 +364,51 @@ export const DirectoryTool: React.FC<ToolComponentProps> = ({ tag, mode }) => {
   const path = tag.attributes.path || '';
   const content = tag.content || '';
   const isListDirectory = tag.tagName === 'list-directory';
+  const isRunning = tag.status === 'running';
   
+  if (mode === 'compact') {
+    return (
+      <CompactToolDisplay
+        icon={isListDirectory ? <Folder className="h-4 w-4 mr-2" /> : <FolderPlus className="h-4 w-4 mr-2" />}
+        name={isListDirectory ? 
+          (isRunning ? "Listing directory" : "Listed directory") : 
+          (isRunning ? "Creating directory" : "Created directory")}
+        input={path}
+        isRunning={isRunning}
+      />
+    );
+  }
+
   return (
-    <BaseTool
-      tag={tag}
-      mode={mode}
-      title={isListDirectory ? `Listing directory: ${path}` : `Creating directory: ${path}`}
-      icon={isListDirectory ? <Folder className="h-4 w-4 mr-2" /> : <FolderPlus className="h-4 w-4 mr-2" />}
-    >
-      <div className="space-y-2">
-        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-          <Folder className="h-3 w-3" />
-          <span className="font-mono">{path}</span>
+    <div className="border rounded-lg overflow-hidden border-subtle dark:border-white/10">
+      <div className="flex items-center px-2 py-1 text-xs font-medium border-b border-subtle dark:border-white/10 bg-background-secondary dark:bg-background-secondary text-foreground">
+        {isListDirectory ? <Folder className="h-4 w-4 mr-2" /> : <FolderPlus className="h-4 w-4 mr-2" />}
+        <div className="flex-1">
+          {isListDirectory ? 
+            (isRunning ? `Listing directory: ${path}` : `Listed directory: ${path}`) : 
+            (isRunning ? `Creating directory: ${path}` : `Created directory: ${path}`)}
         </div>
-        {isListDirectory && content && (
-          <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs overflow-x-auto max-h-60">
-            {content}
-          </pre>
+        {isRunning && (
+          <div className="flex items-center gap-2">
+            <span className="text-amber-500">Running</span>
+            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></div>
+          </div>
         )}
       </div>
-    </BaseTool>
+      <div className="p-3 bg-card-bg dark:bg-background-secondary text-foreground">
+        <div className="space-y-2">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+            <Folder className="h-3 w-3" />
+            <span className="font-mono">{path}</span>
+          </div>
+          {isListDirectory && content && (
+            <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs overflow-x-auto max-h-60">
+              {content}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -310,24 +418,43 @@ export const DirectoryTool: React.FC<ToolComponentProps> = ({ tag, mode }) => {
 export const SearchCodeTool: React.FC<ToolComponentProps> = ({ tag, mode }) => {
   const query = tag.attributes.query || '';
   const content = tag.content || '';
+  const isRunning = tag.status === 'running';
   
+  if (mode === 'compact') {
+    return (
+      <CompactToolDisplay
+        icon={<SearchIcon className="h-4 w-4 mr-2" />}
+        name={isRunning ? "Searching code" : "Searched code"}
+        input={query}
+        isRunning={isRunning}
+      />
+    );
+  }
+
   return (
-    <BaseTool
-      tag={tag}
-      mode={mode}
-      title={`Searching code: ${query}`}
-      icon={<SearchIcon className="h-4 w-4 mr-2" />}
-    >
-      <div className="space-y-2">
-        <div className="flex items-center gap-1 text-xs bg-primary/10 p-1 rounded">
-          <SearchIcon className="h-3 w-3" />
-          <span className="font-mono">{query}</span>
-        </div>
-        <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs overflow-x-auto max-h-60">
-          {content}
-        </pre>
+    <div className="border rounded-lg overflow-hidden border-subtle dark:border-white/10">
+      <div className="flex items-center px-2 py-1 text-xs font-medium border-b border-subtle dark:border-white/10 bg-background-secondary dark:bg-background-secondary text-foreground">
+        <SearchIcon className="h-4 w-4 mr-2" />
+        <div className="flex-1">{isRunning ? "Searching code" : "Searched code"}: {query}</div>
+        {isRunning && (
+          <div className="flex items-center gap-2">
+            <span className="text-amber-500">Running</span>
+            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></div>
+          </div>
+        )}
       </div>
-    </BaseTool>
+      <div className="p-3 bg-card-bg dark:bg-background-secondary text-foreground">
+        <div className="space-y-2">
+          <div className="flex items-center gap-1 text-xs bg-primary/10 p-1 rounded">
+            <SearchIcon className="h-3 w-3" />
+            <span className="font-mono">{query}</span>
+          </div>
+          <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs overflow-x-auto max-h-60">
+            {content}
+          </pre>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -355,15 +482,35 @@ export function getComponentForTag(tag: ParsedTag): React.FC<ToolComponentProps>
     // Fallback component for unknown tag types
     (({tag, mode}) => {
       console.log(`Rendering fallback component for tag: ${tag.tagName}`, tag);
+      const isRunning = tag.status === 'running';
+      
+      if (mode === 'compact') {
+        return (
+          <CompactToolDisplay
+            icon={<Code className="h-4 w-4 mr-2" />}
+            name={isRunning ? `${tag.tagName} operation running` : `${tag.tagName} operation complete`}
+            input=""
+            isRunning={isRunning}
+          />
+        );
+      }
+
       return (
-        <BaseTool
-          tag={tag}
-          mode={mode}
-          title={`${tag.tagName} operation`}
-          icon={<Code className="h-4 w-4 mr-2" />}
-        >
-          <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs">{tag.content || ''}</pre>
-        </BaseTool>
+        <div className="border rounded-lg overflow-hidden border-subtle dark:border-white/10">
+          <div className="flex items-center px-2 py-1 text-xs font-medium border-b border-subtle dark:border-white/10 bg-background-secondary dark:bg-background-secondary text-foreground">
+            <Code className="h-4 w-4 mr-2" />
+            <div className="flex-1">{isRunning ? `${tag.tagName} operation running` : `${tag.tagName} operation complete`}</div>
+            {isRunning && (
+              <div className="flex items-center gap-2">
+                <span className="text-amber-500">Running</span>
+                <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></div>
+              </div>
+            )}
+          </div>
+          <div className="p-3 bg-card-bg dark:bg-background-secondary text-foreground">
+            <pre className="whitespace-pre-wrap bg-muted p-2 rounded-md text-xs">{tag.content || ''}</pre>
+          </div>
+        </div>
       );
     });
-} 
+}
