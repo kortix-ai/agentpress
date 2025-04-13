@@ -1,10 +1,14 @@
 import './globals.css';
+import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { AuthProvider } from '@/context/auth-context';
-import { Toaster } from 'sonner';
-import { LayoutContent } from '@/components/layout-content';
+import { Providers } from './providers';
 
 const inter = Inter({ subsets: ['latin'] });
+
+export const metadata: Metadata = {
+  title: 'AgentPress',
+  description: 'Run AI agents in your company or personally',
+};
 
 export default function RootLayout({
   children,
@@ -12,14 +16,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full">
-      <body className={`${inter.className} h-full`}>
-        <AuthProvider>
-          <LayoutContent>
-            {children}
-          </LayoutContent>
-          <Toaster position="top-right" />
-        </AuthProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
