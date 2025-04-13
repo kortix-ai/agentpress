@@ -156,8 +156,13 @@ class ResponseProcessor:
                         accumulated_content += chunk_content
                         current_xml_content += chunk_content
                         
-                        # Always yield the content chunk first
-                        yield {"type": "content", "content": chunk_content}
+                        # Check if we've reached the XML tool call limit before yielding content
+                        if config.max_xml_tool_calls > 0 and xml_tool_call_count >= config.max_xml_tool_calls:
+                            # We've reached the limit, don't yield any more content
+                            logger.info("XML tool call limit reached - not yielding more content")
+                        else:
+                            # Always yield the content chunk if we haven't reached the limit
+                            yield {"type": "content", "content": chunk_content}
                         
                         # Parse XML tool calls if enabled
                         if config.xml_tool_calling:
@@ -394,6 +399,18 @@ class ResponseProcessor:
             # After streaming completes, process any remaining content and tool calls
             # IMPORTANT: Always process accumulated content even when XML tool limit is reached
             if accumulated_content:
+                # If we've reached the XML tool call limit, we need to truncate accumulated_content
+                # to end right after the last XML tool call that was processed
+                if config.max_xml_tool_calls > 0 and xml_tool_call_count >= config.max_xml_tool_calls and xml_chunks_buffer:
+                    # Find the last processed XML chunk
+                    last_xml_chunk = xml_chunks_buffer[-1]
+                    # Find its position in the accumulated content
+                    last_chunk_end_pos = accumulated_content.find(last_xml_chunk) + len(last_xml_chunk)
+                    if last_chunk_end_pos > 0:
+                        # Truncate the accumulated content to end right after the last XML chunk
+                        logger.info(f"Truncating accumulated content after XML tool call limit reached")
+                        accumulated_content = accumulated_content[:last_chunk_end_pos]
+                
                 # Extract final complete tool calls for native format
                 complete_native_tool_calls = []
                 if config.native_tool_calling:
@@ -559,13 +576,28 @@ class ResponseProcessor:
                     if hasattr(response_message, 'content') and response_message.content:
                         content = response_message.content
                         
-                        # Parse XML tool calls if enabled
+                        # Process XML tool calls
                         if config.xml_tool_calling:
                             xml_tool_calls = self._parse_xml_tool_calls(content)
                             
                             # Apply XML tool call limit if configured
                             if config.max_xml_tool_calls > 0 and len(xml_tool_calls) > config.max_xml_tool_calls:
                                 logger.info(f"Limiting XML tool calls from {len(xml_tool_calls)} to {config.max_xml_tool_calls}")
+                                
+                                # Truncate the content after the last XML tool call that will be processed
+                                if xml_tool_calls and config.max_xml_tool_calls > 0:
+                                    # Get XML chunks that will be processed
+                                    xml_chunks = self._extract_xml_chunks(content)[:config.max_xml_tool_calls]
+                                    if xml_chunks:
+                                        # Find position of the last XML chunk that will be processed
+                                        last_chunk = xml_chunks[-1]
+                                        last_chunk_pos = content.find(last_chunk)
+                                        if last_chunk_pos >= 0:
+                                            # Truncate content to end after the last processed XML chunk
+                                            content = content[:last_chunk_pos + len(last_chunk)]
+                                            logger.info(f"Truncated content after XML tool call limit")
+                                
+                                # Limit the tool calls to process
                                 xml_tool_calls = xml_tool_calls[:config.max_xml_tool_calls]
                                 # Set a custom finish reason
                                 finish_reason = "xml_tool_limit_reached"

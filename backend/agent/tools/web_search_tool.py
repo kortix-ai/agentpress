@@ -5,6 +5,8 @@ import os
 from dotenv import load_dotenv
 from agentpress.tool import Tool, ToolResult, openapi_schema, xml_schema
 
+# TODO: add subpages, etc... in filters as sometimes its necessary 
+
 class WebSearchTool(Tool):
     """Tool for performing web searches using the Exa API."""
 
