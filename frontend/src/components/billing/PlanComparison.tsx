@@ -7,7 +7,7 @@ import { setupNewSubscription } from "@/lib/actions/billing";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 
-const SUBSCRIPTION_PLANS = {
+export const SUBSCRIPTION_PLANS = {
   FREE: 'price_1RDQbOG6l1KZGqIrgrYzMbnL',
   BASIC: 'price_1RC2PYG6l1KZGqIrpbzFB9Lp', // Example price ID
   PRO: 'price_1RDQWqG6l1KZGqIrChli4Ys4'
@@ -60,7 +60,11 @@ export function PlanComparison({
           .eq('status', 'active')
           .single();
         
-        setCurrentPlanId(data?.price_id);
+        // Set to FREE plan if no active subscription found, otherwise use the subscription's plan
+        setCurrentPlanId(data?.price_id || SUBSCRIPTION_PLANS.FREE);
+      } else {
+        // Default to FREE plan if no accountId
+        setCurrentPlanId(SUBSCRIPTION_PLANS.FREE);
       }
     }
     

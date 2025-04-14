@@ -3,7 +3,7 @@ import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { createClient } from "@/lib/supabase/server";
 import { SubmitButton } from "../ui/submit-button";
 import { manageSubscription } from "@/lib/actions/billing";
-import { PlanComparison } from "../billing/PlanComparison";
+import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/PlanComparison";
 
 type Props = {
     accountId: string;
@@ -80,7 +80,9 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                             <div className="flex flex-col gap-2">
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm font-medium text-foreground/90">Status</span>
-                                    <span className="text-sm font-medium text-card-title">{billingData.status === 'active' ? 'Active' : 'Inactive'}</span>
+                                    <span className="text-sm font-medium text-card-title">
+                                        {(!currentPlanId || currentPlanId === SUBSCRIPTION_PLANS.FREE) ? 'Active (Free)' : billingData.status === 'active' ? 'Active' : 'Inactive'}
+                                    </span>
                                 </div>
                                 {billingData.plan_name && (
                                     <div className="flex justify-between items-center">
