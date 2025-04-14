@@ -553,15 +553,16 @@ class ResponseProcessor:
         
         finally:
             # track the cost and token count
-            await self.add_message(
-                thread_id=thread_id, 
-                type="cost", 
-                content={
-                    "cost": accumulated_cost,
-                    "token_count": accumulated_token_count
-                },
-                is_llm_message=False
-            )
+            # todo: there is a bug as it adds every chunk to db because finally will run every time even in yield
+            # await self.add_message(
+            #     thread_id=thread_id, 
+            #     type="cost", 
+            #     content={
+            #         "cost": accumulated_cost,
+            #         "token_count": accumulated_token_count
+            #     },
+            #     is_llm_message=False
+            # )
 
 
     async def process_non_streaming_response(
