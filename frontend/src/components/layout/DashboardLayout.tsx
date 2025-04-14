@@ -22,6 +22,7 @@ import { getProjects, getThreads } from "@/lib/api";
 import { useToolsPanel } from "@/lib/hooks/use-tools-panel";
 
 import UserAccountPanel from "@/components/dashboard/user-account-panel";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
