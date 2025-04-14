@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useContext } from "react";
 import { getProject, getMessages, getThread, addUserMessage, startAgent, stopAgent, getAgentRuns, streamAgent, type Message, type Project, type Thread, type AgentRun } from "@/lib/api";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, Play, Square, Send, User, Plus } from "lucide-react";
+import { AlertCircle, Square, Send, User, Plus } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SUPPORTED_XML_TAGS, ParsedTag } from "@/lib/types/tool-calls";
 import { ToolCallsContext } from "@/app/providers";
 import { getComponentForTag } from "@/components/tools/tool-components";
+import { BillingErrorAlert } from "@/components/billing/BillingErrorAlert";
+import { useBillingError } from "@/hooks/useBillingError";
 
 interface AgentPageProps {
   params: {
@@ -232,7 +234,7 @@ export default function AgentPage({ params }: AgentPageProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<React.ReactNode | null>(null);
   const [userMessage, setUserMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -241,6 +243,7 @@ export default function AgentPage({ params }: AgentPageProps) {
   
   // Get tool calls context
   const { toolCalls, setToolCalls } = useContext(ToolCallsContext);
+  const { billingError, handleBillingError, clearBillingError } = useBillingError();
   
   // Process messages and stream for tool calls
   useEffect(() => {
@@ -484,6 +487,7 @@ export default function AgentPage({ params }: AgentPageProps) {
             type?: string;
             status?: string;
             content?: string;
+            message?: string;
           } | null = null;
           
           if (rawData.startsWith('data: ')) {
@@ -496,6 +500,37 @@ export default function AgentPage({ params }: AgentPageProps) {
             
             // Handle status messages
             if (jsonData?.type === 'status') {
+              // Handle billing limit reached
+              if (jsonData?.status === 'stopped' && jsonData?.message?.includes('Billing limit reached')) {
+                console.log("[PAGE] Detected billing limit status event");
+                setIsStreaming(false);
+                setCurrentAgentRunId(null);
+                
+                // Use the billing error hook
+                handleBillingError({
+                  status: 402,
+                  data: {
+                    detail: {
+                      message: jsonData.message
+                    }
+                  }
+                });
+                
+                // Update agent runs and messages
+                if (threadId) {
+                  Promise.all([
+                    getMessages(threadId),
+                    getAgentRuns(threadId)
+                  ]).then(([updatedMsgs, updatedRuns]) => {
+                    setMessages(updatedMsgs);
+                    setAgentRuns(updatedRuns);
+                    setStreamContent("");
+                  }).catch(err => console.error("[PAGE] Failed to update after billing limit:", err));
+                }
+                
+                return;
+              }
+              
               if (jsonData?.status === 'completed') {
                 console.log("[PAGE] Detected completion status event");
                 
@@ -547,6 +582,7 @@ export default function AgentPage({ params }: AgentPageProps) {
       onError: (error: Error | string) => {
         console.error("[PAGE] Streaming error:", error);
         setIsStreaming(false);
+        setCurrentAgentRunId(null);
       },
       onClose: async () => {
         console.log("[PAGE] Stream connection closed");
@@ -577,6 +613,7 @@ export default function AgentPage({ params }: AgentPageProps) {
           // If there was streaming content, add it as a message
           if (streamContent) {
             const assistantMessage: Message = {
+              type: 'assistant',
               role: 'assistant',
               content: streamContent + "\n\n[Connection to agent lost]",
             };
@@ -592,7 +629,7 @@ export default function AgentPage({ params }: AgentPageProps) {
     
     // Store cleanup function
     streamCleanupRef.current = cleanup;
-  }, [threadId]);
+  }, [threadId, conversation, handleBillingError]);
   
   // Handle sending a message
   const handleSendMessage = async () => {
@@ -600,9 +637,13 @@ export default function AgentPage({ params }: AgentPageProps) {
     if (!conversation) return;
     
     setIsSending(true);
+    setError(null); // Clear any previous errors
+    clearBillingError(); // Clear any previous billing errors
+    
     try {
       // Add user message optimistically to UI
       const userMsg: Message = {
+        type: 'user',
         role: 'user',
         content: userMessage,
       };
@@ -620,9 +661,25 @@ export default function AgentPage({ params }: AgentPageProps) {
         setCurrentAgentRunId(agentResponse.agent_run_id);
         handleStreamAgent(agentResponse.agent_run_id);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error sending message:", err);
-      setError(err instanceof Error ? err.message : "Failed to send message");
+      
+      // Handle billing errors with the hook
+      if (!handleBillingError(err)) {
+        // For non-billing errors, show a simpler error message
+        setError(
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              {err instanceof Error ? err.message : "Failed to send message"}
+            </AlertDescription>
+          </Alert>
+        );
+      }
+      
+      // Remove the optimistically added message on error
+      setMessages(prev => prev.slice(0, -1));
     } finally {
       setIsSending(false);
     }
@@ -669,17 +726,165 @@ export default function AgentPage({ params }: AgentPageProps) {
   // Check if agent is running either from agent runs list or streaming state
   const isAgentRunning = isStreaming || currentAgentRunId !== null || agentRuns.some(run => run.status === "running");
   
+  if (billingError) {
+    return (
+      <>
+        <BillingErrorAlert
+          message={billingError?.message}
+          currentUsage={billingError?.currentUsage}
+          limit={billingError?.limit}
+          accountId={conversation?.account_id}
+          onDismiss={clearBillingError}
+          isOpen={true}
+        />
+        <div className="flex flex-col h-[calc(100vh-10rem)] max-h-[calc(100vh-10rem)] overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-4 pb-[120px] space-y-4" id="messages-container">
+            {messages.length === 0 && !streamContent ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <h3 className="text-lg font-medium">Start a conversation</h3>
+                  <p className="text-sm text-muted-foreground mt-2 mb-4">
+                    Send a message to start talking with {agent?.name || "the AI agent"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {messages.map((message, index) => {
+                  // Skip messages containing "ToolResult("
+                  if (message.content.includes("ToolResult(")) {
+                    return null;
+                  }
+                  
+                  return (
+                    <div
+                      key={index}
+                      className={`flex ${
+                        message.role === "user" ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      <div
+                        className={`max-w-[80%] p-4 rounded-lg ${
+                          message.role === "user"
+                            ? "bg-[#f0efe7] text-foreground flex items-start"
+                            : ""
+                        }`}
+                      >
+                        {message.role === "user" && (
+                          <User className="h-5 w-5 mr-2 shrink-0 mt-0.5" />
+                        )}
+                        <MessageContent content={message.content} />
+                      </div>
+                    </div>
+                  );
+                })}
+                
+                {/* Show streaming content if available */}
+                {streamContent && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[80%] p-4">
+                      <div className="whitespace-pre-wrap">
+                        <MessageContent content={streamContent} />
+                        {isStreaming && (
+                          <span 
+                            className="inline-block h-4 w-0.5 bg-foreground/50 mx-px"
+                            style={{ 
+                              opacity: 0.7,
+                              animation: 'cursorBlink 1s ease-in-out infinite',
+                            }}
+                          />
+                        )}
+                        <style jsx global>{`
+                          @keyframes cursorBlink {
+                            0%, 100% { opacity: 1; }
+                            50% { opacity: 0; }
+                          }
+                        `}</style>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Show a loading indicator if the agent is running but no stream yet */}
+                {isAgentRunning && !streamContent && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[80%] p-4">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-2 w-2 bg-foreground rounded-full animate-pulse"></div>
+                        <div className="h-2 w-2 bg-foreground rounded-full animate-pulse delay-150"></div>
+                        <div className="h-2 w-2 bg-foreground rounded-full animate-pulse delay-300"></div>
+                        <span className="text-sm text-muted-foreground ml-2">AI is thinking...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            <div ref={messagesEndRef} id="messages-end"></div>
+          </div>
+          
+          <div className="absolute bottom-0 left-0 right-0 z-10 bg-background pb-6">
+            <div className="relative bg-white border border-gray-200 rounded-2xl p-2 mx-4">
+              <Textarea
+                value={userMessage}
+                onChange={(e) => setUserMessage(e.target.value)}
+                placeholder="Type your message..."
+                className="resize-none min-h-[100px] pr-12 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                disabled={isAgentRunning || isSending || !conversation}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.shiftKey === false) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+              />
+              <div className="absolute bottom-3 right-3 flex space-x-2">
+                <Button 
+                  variant="outline"
+                  className="h-10 w-10 p-0 rounded-2xl border border-gray-200"
+                  disabled={isAgentRunning || isSending || !conversation}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+                <Button 
+                  onClick={isAgentRunning ? handleStopAgent : handleSendMessage}
+                  className="h-10 w-10 p-0 rounded-2xl" 
+                  disabled={(!userMessage.trim() && !isAgentRunning) || isSending || !conversation}
+                >
+                  {isAgentRunning ? (
+                    <Square className="h-4 w-4" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+  
   if (error) {
     return (
-      <div className="space-y-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-        <Button variant="outline" onClick={() => router.push(`/dashboard/agent`)}>
-          Back to Agents
-        </Button>
+      <div className="max-w-2xl mx-auto py-8 space-y-6">
+        {typeof error === 'string' ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : (
+          error
+        )}
+        <div className="flex space-x-4">
+          <Button variant="outline" onClick={() => router.push(`/dashboard/agents`)}>
+            Back to Agents
+          </Button>
+          <Button variant="outline" onClick={() => setError(null)}>
+            Dismiss
+          </Button>
+        </div>
       </div>
     );
   }
@@ -795,7 +1000,6 @@ export default function AgentPage({ params }: AgentPageProps) {
       
       <div className="absolute bottom-0 left-0 right-0 z-10 bg-background pb-6">
         <div className="relative bg-white border border-gray-200 rounded-2xl p-2 mx-4">
-            {/* style={{ boxShadow: '0 0 15px rgba(0, 0, 0, 0.1), 0 0 8px rgba(0, 0, 0, 0.07)' }}> */}
           <Textarea
             value={userMessage}
             onChange={(e) => setUserMessage(e.target.value)}
@@ -833,4 +1037,4 @@ export default function AgentPage({ params }: AgentPageProps) {
       </div>
     </div>
   );
-} 
+}

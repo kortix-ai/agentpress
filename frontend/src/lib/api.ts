@@ -95,6 +95,7 @@ export type Thread = {
 export type Message = {
   role: string;
   content: string;
+  type: string;
 }
 
 export type AgentRun = {
@@ -369,6 +370,7 @@ export const getMessages = async (threadId: string, hideToolMsgs: boolean = fals
       .from('messages')
       .select('*')
       .eq('thread_id', threadId)
+      .neq('type', 'cost')
       .order('created_at', { ascending: true });
     
     if (error) {
