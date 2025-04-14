@@ -2,7 +2,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { createClient } from "@/lib/supabase/server";
 import { SubmitButton } from "../ui/submit-button";
-import { manageSubscription, setupNewSubscription } from "@/lib/actions/billing";
+import { manageSubscription } from "@/lib/actions/billing";
+import { PlanComparison } from "../billing/PlanComparison";
 
 type Props = {
     accountId: string;
@@ -12,7 +13,7 @@ type Props = {
 export default async function AccountBillingStatus({ accountId, returnUrl }: Props) {
     const supabaseClient = createClient();
 
-    const { data, error } = await supabaseClient.functions.invoke('billing-functions', {
+    const { data: billingData, error: billingError } = await supabaseClient.functions.invoke('billing-functions', {
         body: {
             action: "get_billing_status",
             args: {
@@ -20,6 +21,42 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
             }
         }
     });
+
+    // Get current subscription details
+    const { data: subscriptionData } = await supabaseClient
+        .schema('basejump')
+        .from('billing_subscriptions')
+        .select('price_id')
+        .eq('account_id', accountId)
+        .eq('status', 'active')
+        .single();
+
+    const currentPlanId = subscriptionData?.price_id;
+
+    // Get agent run hours for current month
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const { data: agentRunData, error: agentRunError } = await supabaseClient
+        .from('agent_runs')
+        .select('started_at, completed_at')
+        .gte('started_at', startOfMonth.toISOString());
+
+    let totalSeconds = 0;
+    if (agentRunData) {
+        totalSeconds = agentRunData.reduce((acc, run) => {
+            const start = new Date(run.started_at);
+            const end = run.completed_at ? new Date(run.completed_at) : new Date();
+            const seconds = (end.getTime() - start.getTime()) / 1000;
+            return acc + seconds;
+        }, 0);
+    }
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    const usageDisplay = `${hours}h ${minutes}m ${seconds}s`;
 
     return (
         <Card className="border-subtle dark:border-white/10 bg-white dark:bg-background-secondary shadow-none rounded-xl">
@@ -30,7 +67,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                {!Boolean(data?.billing_enabled) ? (
+                {!Boolean(billingData?.billing_enabled) ? (
                     <Alert variant="destructive" className="border-red-300 dark:border-red-800 rounded-xl">
                         <AlertTitle>Billing Not Enabled</AlertTitle>
                         <AlertDescription>
@@ -38,47 +75,49 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                         </AlertDescription>
                     </Alert>
                 ) : (
-                    <div className="p-4 border border-subtle dark:border-white/10 rounded-lg bg-card-bg dark:bg-background-secondary">
-                        <div className="flex flex-col gap-2">
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-foreground/90">Status</span>
-                                <span className="text-sm font-medium text-card-title">{data.status === 'active' ? 'Active' : 'Inactive'}</span>
-                            </div>
-                            {data.plan_name && (
+                    <>
+                        <div className="p-4 border border-subtle dark:border-white/10 rounded-lg bg-card-bg dark:bg-background-secondary mb-6">
+                            <div className="flex flex-col gap-2">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-foreground/90">Plan</span>
-                                    <span className="text-sm font-medium text-card-title">{data.plan_name}</span>
+                                    <span className="text-sm font-medium text-foreground/90">Status</span>
+                                    <span className="text-sm font-medium text-card-title">{billingData.status === 'active' ? 'Active' : 'Inactive'}</span>
                                 </div>
-                            )}
+                                {billingData.plan_name && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm font-medium text-foreground/90">Plan</span>
+                                        <span className="text-sm font-medium text-card-title">{billingData.plan_name}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
+                                    <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                )}
-            </CardContent>
-            {Boolean(data?.billing_enabled) && (
-                <CardFooter>
-                    <form className="w-full">
-                        <input type="hidden" name="accountId" value={accountId} />
-                        <input type="hidden" name="returnUrl" value={returnUrl} />
-                        {data.status === 'not_setup' ? (
-                            <SubmitButton 
-                                pendingText="Loading..." 
-                                formAction={setupNewSubscription}
-                                className="w-full rounded-lg bg-primary hover:bg-primary/90 text-white h-10"
-                            >
-                                Set Up Subscription
-                            </SubmitButton>
-                        ) : (
-                            <SubmitButton 
-                                pendingText="Loading..." 
+
+                        {/* Plans Comparison */}
+                        <PlanComparison
+                            accountId={accountId}
+                            returnUrl={returnUrl}
+                            className="mb-6"
+                        />
+
+                        {/* Manage Subscription Button */}
+                        <form>
+                            <input type="hidden" name="accountId" value={accountId} />
+                            <input type="hidden" name="returnUrl" value={returnUrl} />
+                            <SubmitButton
+                                pendingText="Loading..."
                                 formAction={manageSubscription}
-                                className="w-full rounded-lg bg-primary hover:bg-primary/90 text-white h-10"
+                                className="w-full"
+                                variant="outline"
                             >
                                 Manage Subscription
                             </SubmitButton>
-                        )}
-                    </form>
-                </CardFooter>
-            )}
+                        </form>
+                    </>
+                )}
+            </CardContent>
         </Card>
     )
 }
