@@ -1,6 +1,7 @@
 import json
 from uuid import uuid4
-from typing import Optional
+from typing import Optional, List, Any
+from datetime import datetime, timezone
 
 from agent.tools.message_tool import MessageTool
 from agent.tools.sb_deploy_tool import SandboxDeployTool
@@ -13,6 +14,8 @@ from agent.tools.sb_shell_tool import SandboxShellTool
 from agent.tools.sb_files_tool import SandboxFilesTool
 from agent.prompt import get_system_prompt
 from sandbox.sandbox import daytona, create_sandbox, get_or_start_sandbox
+from utils.billing import check_billing_status, get_account_id_from_thread
+from utils.db import update_agent_run_status
 
 load_dotenv()
 
@@ -22,6 +25,24 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     if not thread_manager:
         thread_manager = ThreadManager()
     client = await thread_manager.db.client
+
+    # Get account ID from thread for billing checks
+    account_id = await get_account_id_from_thread(client, thread_id)
+    if not account_id:
+        raise ValueError("Could not determine account ID for thread")
+
+    # Initial billing check
+    can_run, message, subscription = await check_billing_status(client, account_id)
+    if not can_run:
+        error_msg = f"Billing limit reached: {message}"
+        # Yield a special message to indicate billing limit reached
+        yield {
+            "type": "status",
+            "status": "stopped",
+            "message": error_msg
+        }
+        raise Exception(message)
+
     ## probably want to move to api.py
     project = await client.table('projects').select('*').eq('project_id', project_id).execute()
     if project.data[0].get('sandbox', {}).get('id'):
@@ -66,6 +87,18 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
     while continue_execution and iteration_count < max_iterations:
         iteration_count += 1
         print(f"Running iteration {iteration_count}...")
+
+        # Billing check on each iteration
+        can_run, message, subscription = await check_billing_status(client, account_id)
+        if not can_run:
+            error_msg = f"Billing limit reached: {message}"
+            # Yield a special message to indicate billing limit reached
+            yield {
+                "type": "status",
+                "status": "stopped",
+                "message": error_msg
+            }
+            break
         
         # Check if last message is from assistant using direct Supabase query
         latest_message = await client.table('messages').select('*').eq('thread_id', thread_id).order('created_at', desc=True).limit(1).execute()  
@@ -76,33 +109,13 @@ async def run_agent(thread_id: str, project_id: str, stream: bool = True, thread
                 continue_execution = False
                 break
 
-        # files_tool = SandboxFilesTool(sandbox_id=sandbox_id, password=sandbox_pass)
-        # files_state = await files_tool.get_workspace_state()
-        
-#         # Simple string representation
-#         state_str = str(files_state)
-
-#         state_message = {
-#             "role": "user",
-#             "content": f"""
-# Current workspace state:
-# <current_workspace_state>
-# {state_str}
-# </current_workspace_state>
-#             """
-#         }
-
-        # print(f"State message: {state_message}")
-
         response = await thread_manager.run_thread(
             thread_id=thread_id,
             system_prompt=system_message,
             stream=stream,
-            # temporary_message=state_message,
             llm_model=model_name,
             llm_temperature=0,
             llm_max_tokens=64000,
-            # llm_max_tokens=32768,
             tool_choice="auto",
             max_xml_tool_calls=1,
             processor_config=ProcessorConfig(
