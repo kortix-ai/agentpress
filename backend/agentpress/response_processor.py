@@ -552,6 +552,7 @@ class ResponseProcessor:
             yield {"type": "error", "message": str(e)}
         
         finally:
+            pass
             # track the cost and token count
             # todo: there is a bug as it adds every chunk to db because finally will run every time even in yield
             # await self.add_message(
