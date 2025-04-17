@@ -573,6 +573,27 @@ class ResponseProcessor:
                         "thread_run_id": thread_run_id
                     }
         
+            # Calculate and store cost AFTER adding the main assistant message
+            if accumulated_content: # Calculate cost if there was content (now includes reasoning)
+                try:
+                    final_cost = completion_cost(
+                        model=llm_model, # Use the passed model name
+                        messages=prompt_messages,
+                        completion=accumulated_content
+                    )
+                    if final_cost is not None and final_cost > 0:
+                        logger.info(f"Calculated final cost for stream: {final_cost}")
+                        await self.add_message(
+                            thread_id=thread_id,
+                            type="cost",
+                            content={"cost": final_cost},
+                            is_llm_message=False # Cost is metadata, not LLM content
+                        )
+                    else:
+                        logger.info("Cost calculation resulted in zero or None, not storing cost message.")
+                except Exception as e:
+                    logger.error(f"Error calculating final cost for stream: {str(e)}")
+        
         except Exception as e:
             logger.error(f"Error processing stream: {str(e)}", exc_info=True)
             yield {"type": "error", "message": str(e), "thread_run_id": thread_run_id if 'thread_run_id' in locals() else None}
@@ -741,10 +762,10 @@ class ResponseProcessor:
                         # Fall back to calculating cost if direct cost not available
                         final_cost = completion_cost(
                             completion_response=llm_response,
-                            model=llm_model, 
+                            model=llm_model,
                             call_type="completion" # Assuming 'completion' type for this context
                         )
-                    
+
                     if final_cost is not None and final_cost > 0:
                         logger.info(f"Calculated final cost for non-stream: {final_cost}")
                         await self.add_message(
