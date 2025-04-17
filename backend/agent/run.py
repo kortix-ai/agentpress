@@ -86,10 +86,6 @@ async def run_agent(
     if os.getenv("RAPID_API_KEY"):
         thread_manager.add_tool(DataProvidersTool)
 
-    xml_examples = ""
-    for tag_name, example in thread_manager.tool_registry.get_xml_examples().items():
-        xml_examples += f"{example}\n"
-
     iteration_count = 0
     continue_execution = True
     
@@ -131,12 +127,6 @@ async def run_agent(
         # Construct System Message Conditionally
         base_system_prompt_content = get_system_prompt()
         system_message_content = base_system_prompt_content
-
-        # Conditionally add XML examples based on the config
-        if processor_config.xml_tool_calling:
-            # Use the already loaded xml_examples from outside the loop
-            if xml_examples:
-                system_message_content += "\n\n" + f"<tool_examples>\n{xml_examples}\n</tool_examples>"
 
         system_message = { "role": "system", "content": system_message_content }
 

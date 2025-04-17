@@ -237,7 +237,22 @@ class ThreadManager:
                     logger.error(f"Error counting tokens or summarizing: {str(e)}")
                 
                 # 3. Prepare messages for LLM call + add temporary message if it exists
-                prepared_messages = [system_prompt]
+                # Start with the base system prompt content
+                current_system_prompt_content = system_prompt['content']
+
+                # Conditionally add XML examples if requested
+                if include_xml_examples:
+                    xml_examples_dict = self.tool_registry.get_xml_examples()
+                    if xml_examples_dict:
+                        xml_examples_str = "\n".join(xml_examples_dict.values())
+                        current_system_prompt_content += f"\n\n<tool_examples>\n{xml_examples_str}\n</tool_examples>"
+                        logger.debug("Added XML examples to system prompt.")
+
+                # Create the final system prompt object for this run
+                current_system_prompt = {"role": "system", "content": current_system_prompt_content}
+
+                # Prepare messages for LLM call
+                prepared_messages = [current_system_prompt]
                 
                 # Find the last user message index
                 last_user_index = -1
