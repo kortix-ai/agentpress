@@ -7,6 +7,8 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { useState, useEffect, useRef } from "react";
 import { useScroll } from "motion/react";
 import Link from "next/link";
+import { useAuth } from "@/components/AuthProvider";
+import { useRouter } from "next/navigation";
 
 export function HeroSection() {
   const { hero } = siteConfig;
@@ -16,6 +18,8 @@ export function HeroSection() {
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
   const { scrollY } = useScroll();
   const [inputValue, setInputValue] = useState("");
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
@@ -44,6 +48,26 @@ export function HeroSection() {
       }
     };
   }, [scrollY]);
+
+  // Handler for the hero input form submission
+  const handleHeroSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const request = inputValue.trim();
+    if (!request) return;
+
+    if (!isLoading && !user) {
+      // User is logged out
+      localStorage.setItem('suna-pending-request', request);
+      // Redirect to login, preserving the intended destination (dashboard)
+      router.push('/auth?returnUrl=/dashboard');
+    } else if (!isLoading && user) {
+      // User is logged in, potentially redirect to dashboard or handle differently
+      // For now, let's redirect to dashboard, assuming the main interaction starts there
+      // If we want to *start* the process from here for logged-in users, we'd need API calls
+      router.push('/dashboard');
+    }
+    // If still loading, do nothing yet
+  };
 
   return (
     <section id="hero" className="w-full relative overflow-hidden">
@@ -122,7 +146,7 @@ export function HeroSection() {
             </p>
           </div>
           <div className="flex items-center w-full max-w-xl gap-2 flex-wrap justify-center">
-            <div className="w-full relative">
+            <form onSubmit={handleHeroSubmit} className="w-full relative">
               {/* ChatGPT-like input with glow effect */}
               <div className="relative z-10">
                 <div className="flex items-center rounded-full border border-border bg-background/80 backdrop-blur px-4 shadow-lg transition-all duration-200 hover:border-secondary/50 focus-within:border-secondary/50 focus-within:shadow-[0_0_15px_rgba(var(--secondary),0.3)]">
@@ -134,12 +158,13 @@ export function HeroSection() {
                     className="flex-1 h-12 md:h-14 rounded-full px-2 bg-transparent focus:outline-none text-sm md:text-base py-2"
                   />
                   <button 
+                    type="submit"
                     className={`rounded-full p-2 md:p-3 transition-all duration-200 ${
                       inputValue.trim() 
                         ? "bg-secondary text-secondary-foreground hover:bg-secondary/80" 
-                        : "bg-muted text-muted-foreground"
+                        : "bg-muted text-muted-foreground cursor-not-allowed"
                     }`}
-                    disabled={!inputValue.trim()}
+                    disabled={!inputValue.trim() || isLoading}
                   >
                     <ArrowRight className="size-4 md:size-5" />
                   </button>
@@ -147,7 +172,7 @@ export function HeroSection() {
               </div>
               {/* Subtle glow effect */}
               <div className="absolute -bottom-4 inset-x-0 h-6 bg-secondary/20 blur-xl rounded-full -z-10 opacity-70"></div>
-            </div>
+            </form>
           </div>
         </div>
       </div>
