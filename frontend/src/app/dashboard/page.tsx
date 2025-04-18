@@ -1,46 +1,70 @@
 "use client";
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, Suspense, useEffect } from 'react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter } from 'next/navigation';
 import { ChatInput } from '@/components/thread/chat-input';
-import { createProject, addUserMessage, startAgent, createThread } from "@/lib/api";
+import { createProject, addUserMessage, startAgent, createThread, getProjects } from "@/lib/api";
 import { generateThreadName } from "@/lib/actions/threads";
+import { useAuth } from "@/components/AuthProvider";
 
 function DashboardContent() {
   const [inputValue, setInputValue] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      const pendingRequest = localStorage.getItem('suna-pending-request');
+      
+      if (pendingRequest) {
+        console.log("Found pending request:", pendingRequest);
+        getProjects()
+          .then(projects => {
+            if (projects.length === 0) {
+              console.log("No existing projects, processing pending request...");
+              localStorage.removeItem('suna-pending-request'); 
+              handleSubmit(pendingRequest);
+            } else {
+              console.log("User has existing projects, ignoring pending request.");
+              localStorage.removeItem('suna-pending-request');
+            }
+          })
+          .catch(error => {
+            console.error("Error checking projects for pending request:", error);
+            localStorage.removeItem('suna-pending-request');
+          });
+      }
+    }
+  }, [authLoading, user, router]);
 
   const handleSubmit = async (message: string, options?: { model_name?: string; enable_thinking?: boolean }) => {
-    if (!message.trim() || isSubmitting) return;
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage || isSubmitting) return;
     
     setIsSubmitting(true);
     
     try {
-      // Generate a name for the project using GPT
-      const projectName = await generateThreadName(message);
+      const projectName = await generateThreadName(trimmedMessage);
       
-      // 1. Create a new project with the GPT-generated name
       const newAgent = await createProject({
         name: projectName,
         description: "",
       });
       
-      // 2. Create a new thread for this project
       const thread = await createThread(newAgent.id);
       
-      // 3. Add the user message to the thread
-      await addUserMessage(thread.thread_id, message.trim());
+      await addUserMessage(thread.thread_id, trimmedMessage);
       
-      // 4. Start the agent with the thread ID
-      const agentRun = await startAgent(thread.thread_id, {
+      await startAgent(thread.thread_id, {
         model_name: options?.model_name,
         enable_thinking: options?.enable_thinking,
         stream: true
       });
       
-      // 5. Navigate to the new agent's thread page
+      localStorage.removeItem('suna-pending-request');
+      
       router.push(`/dashboard/agents/${thread.thread_id}`);
     } catch (error) {
       console.error("Error creating agent:", error);
