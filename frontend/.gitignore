@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+.gitignore
+gitignore
+
 # dependencies
 /node_modules
 /.pnp
